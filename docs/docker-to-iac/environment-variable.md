@@ -42,6 +42,71 @@ const result = translate(dockerConfig, {
 });
 ```
 
+## Default Values
+
+The docker-to-iac module supports Docker's default value syntax for environment variables. This allows you to specify fallback values that are used when environment variables are not provided or are undefined.
+
+### Syntax
+
+Default values can be specified using the `${VARIABLE:-default}` syntax, where:
+
+- `VARIABLE` is the environment variable name
+- `default` is the value used if `VARIABLE` is not set
+
+### Docker Compose Example
+
+```yaml
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-defaultuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret123}
+      POSTGRES_DB: ${DB_NAME:-myapp}
+```
+
+### Docker Run Example
+
+```bash
+docker run -d \
+  --name db \
+  -e POSTGRES_USER=${DB_USER:-defaultuser} \
+  -e POSTGRES_PASSWORD=${DB_PASSWORD:-secret123} \
+  -e POSTGRES_DB=${DB_NAME:-myapp} \
+  postgres:15-alpine
+```
+
+### How Default Values Work
+
+The module processes default values in this order:
+
+1. If an environment variable is provided via `.env` file or `environmentVariables` option, that value is used
+2. If no environment variable is found, the default value after `:-` is used
+3. If neither exists, an empty string is used
+
+For example:
+
+```javascript
+// With this .env file:
+DB_USER=johndoe
+// DB_PASSWORD is not set
+
+// And this docker-compose.yml:
+environment:
+  POSTGRES_USER: ${DB_USER:-defaultuser}
+  POSTGRES_PASSWORD: ${DB_PASSWORD:-secret123}
+
+// The resolved values will be:
+POSTGRES_USER: "johndoe"      // From .env file
+POSTGRES_PASSWORD: "secret123" // Default value used
+```
+
+Default values provide a way to:
+
+- Make your configurations more robust by handling missing variables
+- Set sensible defaults for development environments
+- Ensure required values always have a fallback
+
 ## Complete Example
 
 Here's a complete example showing how to use environment variables with a MariaDB container:
