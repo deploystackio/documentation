@@ -51,7 +51,7 @@ docker run -d -p 80:80 nginx:alpine
 
 ### Environment Variables
 
-Please read more from our [environment variables](/docs/deploystack/environment-variables.md) page.
+Please read more from our [environment variables](/docs/deploystack/docker-environment-variables.md) page.
 
 ## Automatic Updates
 
@@ -66,5 +66,5 @@ When the [DeployStack GitHub App](/docs/deploystack/github-application.md) is in
 - The `.deploystack` directory is **optional**
 - Without this directory, automatic template updates are **not** available
 - You can add the directory and install the [DeployStack GitHub Sync App](/docs/deploystack/github-application.md) at any time
-- [Environment variables](/docs/deploystack/environment-variables.md) and [DeployStack config](/docs/deploystack/deploystack-config-file.md) are optional components
+- [Environment variables](/docs/deploystack/docker-environment-variables.md) and [DeployStack config](/docs/deploystack/deploystack-config-file.md) are optional components
 - Only one Docker configuration file should be used (either compose or run)
