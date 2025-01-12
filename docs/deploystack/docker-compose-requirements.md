@@ -73,10 +73,7 @@ Currently, DeployStack only supports public images from Docker Hub. If you need 
 
 ## Environment Variables
 
-A few notes about environment variables:
-
-- We support environment variables defined in your docker-compose.yml
-- Sensitive information should not be included in the docker-compose.yml
+Please read more from our [environment variables](/docs/deploystack/environment-variables.md) page.
 
 ## Validation
 

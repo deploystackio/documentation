@@ -17,10 +17,13 @@ The `.deploystack` directory in your repository contains configuration files tha
 ├── docker-compose.yml  # Docker Compose configuration
 ├── docker-run.txt      # Docker run command
 ├── env                 # Environment variables (optional)
-└── logo.webp           # Project / app logo (optional)
 ```
 
 ## Configuration Files
+
+### DeployStack Configuration File
+
+Please read more at [DeployStack Configuration File Reference](/docs/deploystack/deploystack-config-file.md).
 
 ### Docker Configuration
 
@@ -48,28 +51,7 @@ docker run -d -p 80:80 nginx:alpine
 
 ### Environment Variables
 
-- File: `env` (optional)
-- Used with both Docker Compose and Docker run configurations
-- Contains key-value pairs for environment variables
-
-Example `env`:
-
-```bash
-DB_USER=admin
-DB_PASSWORD=secretpassword
-NGINX_PORT=80
-```
-
-### Repository Logo
-
-- Supported formats: `.png`, `.jpg`, `.jpeg`, `.webp`
-- Filename must be: `logo.<extension>`
-- Image will be minified to:
-  - Maximum width: 500px
-  - Maximum height: 500px
-- Automatically converted to WebP format for optimization
-
-Your logo will be stored on our CDN and converted to `webp` format. Please note that we will minimize your logo to max width 500px and max height 500px if it is larger than 500px w and 500px h.
+Please read more from our [environment variables](/docs/deploystack/environment-variables.md) page.
 
 ## Automatic Updates
 
@@ -83,6 +65,6 @@ When the [DeployStack GitHub App](/docs/deploystack/github-application.md) is in
 
 - The `.deploystack` directory is **optional**
 - Without this directory, automatic template updates are **not** available
-- You can add the directory and install the GitHub App at any time
-- Environment variables and logo are optional components
+- You can add the directory and install the [DeployStack GitHub Sync App](/docs/deploystack/github-application.md) at any time
+- [Environment variables](/docs/deploystack/environment-variables.md) and [DeployStack config](/docs/deploystack/deploystack-config-file.md) are optional components
 - Only one Docker configuration file should be used (either compose or run)
