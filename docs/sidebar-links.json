@@ -11,7 +11,15 @@
       {
         "text": "Configuration Directory",
         "link": "/docs/deploystack/deploystack-configuration-directory.md"
-      },      
+      },
+      {
+        "text": "Configuration File",
+        "link": "/docs/deploystack/deploystack-config-file.md"
+      },
+      {
+        "text": "Application Logo Configuration",
+        "link": "/docs/deploystack/application-logo-configuration.md"
+      },
       {
         "text": "IaC Lifecycle",
         "link": "/docs/deploystack/iac-lifecycle.md"
@@ -19,7 +27,7 @@
       {
         "text": "GitHub Applicaton",
         "link": "/docs/deploystack/github-application.md"
-      },      
+      },
       {
         "text": "One Click Deploy",
         "link": "/docs/deploystack/one-click-deploy.md"
@@ -28,6 +36,10 @@
         "text": "Docker Compose Requirements",
         "link": "/docs/deploystack/docker-compose-requirements.md"
       },
+      {
+        "text": "Docker Environment Variables",
+        "link": "/docs/deploystack/docker-environment-variables.md"
+      },      
       {
         "text": "Troubleshooting",
         "link": "/docs/deploystack/troubleshooting.md"        
