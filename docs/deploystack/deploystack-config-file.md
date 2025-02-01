@@ -51,6 +51,56 @@ The override process follows this order:
 1. DeployStack first uses your repository name and description
 2. If present, values in `.deploystack/config.yml` override the repository metadata
 
+### Branch Deployment Settings
+
+Before configuring multiple branch deployments, ensure you have installed the [DeployStack Repository Sync GitHub App](/docs/deploystack/github-application.md), as it's required for branch monitoring and template updates.
+
+You can configure multiple branch deployments using the `deployment.branches` section:
+
+| Property | Type | Description | Constraints |
+|----------|------|-------------|-------------|
+| `label` | String | Display name for the branch | Maximum 20 characters |
+| `description` | String | Explain the branch's purpose or version | Maximum 100 characters |
+| `active` | Boolean | Whether this branch is available for deployment | Optional, defaults to true |
+| `priority` | Number | Order in which branches appear (lower numbers first) | Minimum value: 1 |
+
+The default branch always has `priority: 0` and appears first in the deployment options, regardless of other branch priorities.
+
+Example configuration for multiple branches:
+
+```yaml
+application:
+  name: "My Application"
+  description: "A scalable web application"
+
+deployment:
+  branches:
+    v2:
+      label: "Beta (v2.x)"
+      description: "Preview of upcoming v2.x release"
+      priority: 1
+    v3:
+      label: "Alpha (v3.x)"
+      description: "Early preview of v3.x"
+      priority: 2
+```
+
+Each branch configuration allows you to:
+
+- Provide a user-friendly label for the version
+- Include a description explaining the branch's purpose
+- Control deployment availability with the `active` flag
+- Set display order using `priority`
+
+When multiple branches are configured:
+
+- DeployStack generates separate deployment templates for each branch
+- Users can choose which version to deploy
+- The GitHub App monitors all configured branches for updates
+- The default branch is always listed first with implicit `priority: 0`
+
+This is especially useful for projects that maintain multiple active versions simultaneously, such as stable and beta releases.
+
 ## Schema Validation
 
 The configuration file is automatically validated against our JSON Schema when using supported IDEs (VS Code, IntelliJ, etc.). The schema is available at:
