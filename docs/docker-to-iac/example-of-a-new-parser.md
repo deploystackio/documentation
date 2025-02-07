@@ -4,9 +4,8 @@ description: Example code for adding a new parser to docker-to-iac, supporting b
 
 # Adding a New Parser
 
-::content-alert{type="tip"}
-__Thank you__ for your interest in collaborating! The docker-to-iac module will remain open source forever, helping simplify deployments across cloud providers without vendor lock-in.
-::
+> [!TIP]
+> __Thank you__ for your interest in collaborating! The docker-to-iac module will remain open source forever, helping simplify deployments across cloud providers without vendor lock-in.
 
 ## Parser Implementation
 

@@ -15,9 +15,8 @@ When you install the [DeployStack Repository Sync](https://github.com/apps/deplo
 
 When changes are detected in these files, the app automatically triggers an update of your IaC templates in our [deploy-templates](https://github.com/deploystackio/deploy-templates){:target="_blank"} repository.
 
-::content-alert{type="important"}
-Changes are only processed when they occur on your repository's **default branch**. Modifications in other branches will not trigger template, logo, config or any other updates.
-::
+> [!IMPORTANT]
+> Changes are only processed when they occur on your repository's **default branch**. Modifications in other branches will not trigger template, logo, config or any other updates.
 
 ## Installation
 
