@@ -238,9 +238,8 @@ Optional. The desired output format:
 - `'yaml'` - YAML format
 - `'text'` - Plain text
 
-::content-alert{type="important"}
-Not all template formats are valid for every IaC language. For example, AWS CloudFormation only accepts YAML or JSON formats. Choose a format compatible with your target IaC language.
-::
+> [!IMPORTANT]
+> Not all template formats are valid for every IaC language. For example, AWS CloudFormation only accepts YAML or JSON formats. Choose a format compatible with your target IaC language.
 
 #### `options.environmentVariableGeneration?: EnvironmentVariableGenerationConfig`
 
@@ -284,9 +283,8 @@ Version matching:
 - Use "*" for all versions
 - Use "latest" for latest version
 
-::content-alert{type="important"}
-Environment variables in your docker-compose.yml must use the `${VARIABLE_NAME}` syntax to be processed by the generator.
-::
+> [!IMPORTANT]
+> Environment variables in your docker-compose.yml must use the `${VARIABLE_NAME}` syntax to be processed by the generator.
 
 #### `environmentVariables?: Record<string, string>`
 

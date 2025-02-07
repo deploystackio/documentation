@@ -63,9 +63,8 @@ For __services__:
 - ports
 - command
 
-::content-alert{type="note"}
-The supported variables that are not on this list are ignored. This means that they are not translated by the parser in Infrastructure as Code from `docker-compose.yml` or docker run command.
-::
+> [!NOTE]
+> The supported variables that are not on this list are ignored. This means that they are not translated by the parser in Infrastructure as Code from `docker-compose.yml` or docker run command.
 
 ## Storage Support
 
@@ -83,6 +82,5 @@ Multi `services` support for CloudFormation: __yes__
 
 Please read more about [multi service support here](/docs/docker-to-iac/multi-services-support.md).
 
-::content-alert{type="important"}
-This CloudFormation template is designed for development and testing environments. For production deployments, review and adjust security groups, storage configuration, and other security settings according to your requirements.
-::
+> [!IMPORTANT]
+> This CloudFormation template is designed for development and testing environments. For production deployments, review and adjust security groups, storage configuration, and other security settings according to your requirements.
