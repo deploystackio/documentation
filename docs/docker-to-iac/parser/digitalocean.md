@@ -65,9 +65,8 @@ This parser supports the following Docker Compose variables for services:
 - ports
 - command
 
-::content-alert{type="note"}
-Supported variables not listed above will be ignored. They will not be translated into the Infrastructure as Code from `docker-compose.yml` or docker run command.
-::
+> [!NOTE]
+> Supported variables not listed above will be ignored. They will not be translated into the Infrastructure as Code from `docker-compose.yml` or docker run command.
 
 ## Database Support
 
@@ -142,9 +141,8 @@ spec:
         - path: /
 ```
 
-::content-alert{type="important"}
-While running databases as App Platform services works well for development and testing, for production workloads consider using DigitalOcean's managed database offerings for better reliability and maintenance.
-::
+> [!IMPORTANT]
+> While running databases as App Platform services works well for development and testing, for production workloads consider using DigitalOcean's managed database offerings for better reliability and maintenance.
 
 ### Understanding TCP Services
 
@@ -167,9 +165,8 @@ DigitalOcean App Platform supports ephemeral files only. This means:
 - Each container instance has its own separate filesystem
 - Changes to the filesystem are lost when instances are scaled or redeployed
 
-::content-alert{type="warning"}
-Any `volumes` directives in your docker-compose.yml or docker run command will be ignored during the translation to App Platform specifications.
-::
+> [!WARNING]
+> Any `volumes` directives in your docker-compose.yml or docker run command will be ignored during the translation to App Platform specifications.
 
 ## Multi Services Support
 

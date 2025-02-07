@@ -6,9 +6,8 @@ description: Technical guide for setting up the .deploystack directory to manage
 
 The `.deploystack` directory in your repository contains configuration files that DeployStack uses to generate and maintain your Infrastructure as Code templates. Creating this repo allows you to enable the [lifecycle of IaC](/docs/deploystack/iac-lifecycle.md). The deploystack configurations repo only makes sense if you also [install DeployStack GitHub app](/docs/deploystack/github-application.md). Otherwise, changes to DeployStack backend will not be recognized.
 
-::content-alert{type="note"}
-`.deploystack` directory is optional. You don't need to create it to submit your repository to deploystack.io.
-::
+> [!NOTE]
+> `.deploystack` directory is optional. You don't need to create it to submit your repository to deploystack.io.
 
 ## Directory Structure
 

@@ -43,9 +43,8 @@ For __services__:
 - ports
 - command
 
-::content-alert{type="note"}
-The supported variables that are not on this list are ignored. This means that they are not translated by the parser in Infrastructure as Code from `docker-compose.yml` or docker run command.
-::
+> [!NOTE]
+> The supported variables that are not on this list are ignored. This means that they are not translated by the parser in Infrastructure as Code from `docker-compose.yml` or docker run command.
 
 ## Volume Support
 
