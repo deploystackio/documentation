@@ -55,9 +55,9 @@ DeployStack is open source and we welcome contributions. Here's how you can help
 - Enhance documentation
 - Report issues and suggest improvements
 
-Visit our [GitHub repository](https://github.com/deploystackio/docker-to-iac){:target="_blank"} to get started.
+Visit our [GitHub repository](https://github.com/deploystackio/docker-to-iac) to get started.
 
 ## Community and Support
 
-- Join our [Discord community](https://discord.gg/UjFWwByB){:target="_blank"}
+- Join our [Discord community](https://discord.gg/UjFWwByB)
 - Check our [troubleshooting guide](/docs/deploystack/troubleshooting.md)

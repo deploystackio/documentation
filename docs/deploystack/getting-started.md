@@ -37,7 +37,7 @@ The Recommended path provides additional features through a `.deploystack` confi
    - Check that your compose file uses supported configuration options
 
 2. **Submission**
-   - Visit [deploystack.io/submit](https://deploystack.io/submit){:target="_blank"}
+   - Visit [deploystack.io/submit](https://deploystack.io/submit)
    - Enter your GitHub repository URL
    - Our system automatically detects your compose file
    - Review the detected configuration
@@ -66,7 +66,7 @@ The Recommended path provides additional features through a `.deploystack` confi
    - Test the command locally if possible
 
 2. **Submission**
-   - Visit [deploystack.io/submit](https://deploystack.io/submit){:target="_blank"}
+   - Visit [deploystack.io/submit](https://deploystack.io/submit)
    - Enter your GitHub repository URL
    - Paste your Docker run command
    - Review the parsed configuration
@@ -102,7 +102,7 @@ For more configuration options please check our [.deploystack Directory Referenc
 
 ### GitHub App Integration
 
-The [DeployStack Repository Sync](https://github.com/apps/deploystack-repository-sync){:target="_blank"} app enables:
+The [DeployStack Repository Sync](https://github.com/apps/deploystack-repository-sync) app enables:
 
 1. **Automatic Updates**
    - Monitors changes to your Docker configurations
@@ -124,7 +124,7 @@ The [DeployStack Repository Sync](https://github.com/apps/deploystack-repository
 
 ### The docker-to-iac Module
 
-Our open-source [docker-to-iac](https://github.com/deploystackio/docker-to-iac){:target="_blank"} module:
+Our open-source [docker-to-iac](https://github.com/deploystackio/docker-to-iac) module:
 
 - Parses your Docker configurations
 - Handles multiple cloud provider translations
@@ -143,7 +143,7 @@ Our open-source [docker-to-iac](https://github.com/deploystackio/docker-to-iac){
    - Resource mappings optimized
 
 3. **Template Storage**
-   - Templates stored in [deploy-templates](https://github.com/deploystackio/deploy-templates){:target="_blank"}
+   - Templates stored in [deploy-templates](https://github.com/deploystackio/deploy-templates)
    - Version controlled for tracking
    - Publicly accessible
 
@@ -151,7 +151,7 @@ Our open-source [docker-to-iac](https://github.com/deploystackio/docker-to-iac){
 
 After template generation:
 
-1. Visit [deploystack.io/deploy-button](https://deploystack.io/deploy-button){:target="_blank"}
+1. Visit [deploystack.io/deploy-button](https://deploystack.io/deploy-button)
 2. Select your preferred button style
 3. Copy the generated code
 4. Add to your README.md
@@ -189,5 +189,5 @@ After template generation:
 ## Need Additional Help?
 
 - Review our detailed [Troubleshooting Guide](/docs/deploystack/troubleshooting.md)
-- Join our active [Discord Community](https://discord.gg/UjFWwByB){:target="_blank"}
-- Submit issues on GitHub to our [Feedback repository](https://github.com/deploystackio/feedback){:target="_blank"}
+- Join our active [Discord Community](https://discord.gg/UjFWwByB)
+- Submit issues on GitHub to our [Feedback repository](https://github.com/deploystackio/feedback)
