@@ -58,7 +58,7 @@ When the [DeployStack GitHub App](/docs/deploystack/github-application.md) is in
 
 1. Changes to specific (`docker-compose.yml` & `docker-run.txt`) file in `.deploystack/` trigger template updates
 2. Updates only process when changes occur on the default branch
-3. New templates are generated and stored in the [deploy-templates](https://github.com/deploystackio/deploy-templates){:target="_blank"} repository
+3. New templates are generated and stored in the [deploy-templates](https://github.com/deploystackio/deploy-templates) repository
 
 ## Important Notes
 
