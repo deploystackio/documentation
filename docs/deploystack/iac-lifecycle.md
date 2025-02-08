@@ -14,8 +14,8 @@ This guide explains how DeployStack manages and updates your Infrastructure as C
 2. Add your Docker configuration files:
    - `docker-compose.yml` for Compose configurations
    - `docker-run.txt` for Docker run commands
-3. Submit your repository to [deploystack.io/submit](https://deploystack.io/submit){:target="_blank"}
-4. Initial IaC templates are generated and stored in our [deploy-templates](https://github.com/deploystackio/deploy-templates){:target="_blank"} repository
+3. Submit your repository to [deploystack.io/submit](https://deploystack.io/submit)
+4. Initial IaC templates are generated and stored in our [deploy-templates](https://github.com/deploystackio/deploy-templates) repository
 
 ### Enabling Automatic Updates
 
@@ -56,7 +56,7 @@ DeployStack initiates template updates when:
 
 ## Template Versioning
 
-All template updates are version controlled in our [deploy-templates repository](https://github.com/deploystackio/deploy-templates){:target="_blank"}, allowing you to:
+All template updates are version controlled in our [deploy-templates repository](https://github.com/deploystackio/deploy-templates), allowing you to:
 
 - Track template changes over time
 - Review modification history
