@@ -1,5 +1,6 @@
 ---
 description: Introduction to the node module docker-to-iac which allows you to transfer docker-compose into IaC templates
+menuTitle: Docker-to-IaC
 ---
 
 # Docker to Infrastructure as Code Module

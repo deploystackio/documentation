@@ -1,5 +1,6 @@
 ---
 description: Guide to how DeployStack manages Infrastructure as Code template updates, including automatic synchronization, update triggers, and version control.
+menuTitle: Iac Lifecycle
 ---
 
 # Infrastructure as Code Lifecycle

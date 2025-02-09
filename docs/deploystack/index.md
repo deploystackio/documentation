@@ -1,5 +1,6 @@
 ---
 description: Official DeployStack documentation - Learn how to automate Docker Compose and run deployments across cloud providers. Clear guides and technical references for effective deployment automation.
+menuTitle: DeployStack
 ---
 
 # DeployStack - Open Source Cloud Deployment Guide

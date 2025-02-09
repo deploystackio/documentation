@@ -1,5 +1,6 @@
 ---
 description: Start deploying Docker applications across cloud providers with DeployStack. Step-by-step guide to generating infrastructure templates from Docker configurations.
+menuTitle: Getting Started
 ---
 
 # Getting Started with DeployStack

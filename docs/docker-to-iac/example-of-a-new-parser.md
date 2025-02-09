@@ -1,5 +1,6 @@
 ---
 description: Example code for adding a new parser to docker-to-iac, supporting both Docker run commands and Docker Compose files
+menuTitle: Adding a New Parser
 ---
 
 # Adding a New Parser

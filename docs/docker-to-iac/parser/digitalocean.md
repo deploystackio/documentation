@@ -1,5 +1,6 @@
 ---
 description: Translate docker docker-compose.yml file into DigitalOcean Infrastructure as Code with DeployStack
+menuTitle: DigitalOcean
 ---
 
 # DigitalOcean - Parser Full Documentation

@@ -1,5 +1,6 @@
 ---
 description: Guide for contributing to Render.com service type configurations in docker-to-iac
+menuTitle: Render Service Types Contributing 
 ---
 
 # Render: Contributing to Render Service Types

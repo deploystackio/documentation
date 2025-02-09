@@ -1,5 +1,6 @@
 ---
 description: Directory structure and organization of the docker-to-iac module, including guidance for adding new parsers and source handlers.
+menuTitle: Project Structure
 ---
 
 # Project Structure of docker-to-iac Module

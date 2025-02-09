@@ -1,5 +1,6 @@
 ---
 description: Documentation for DeployStack's config.yml schema. Customize your application's presentation with automatic IDE validation and flexible repository metadata overrides.
+menuTitle: DeployStack Config File
 ---
 
 # DeployStack Configuration File Reference
