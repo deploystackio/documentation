@@ -1,5 +1,6 @@
 ---
 description: Technical requirements for using Docker Compose with DeployStack's cloud deployment automation. Includes supported properties, registry options, and validation rules.
+menuTitle: Docker Compose Requirements
 ---
 
 # Docker Compose Requirements

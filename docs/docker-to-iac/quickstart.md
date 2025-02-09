@@ -1,5 +1,6 @@
 ---
 description: Quickstart guide for using docker-to-iac to translate Docker run commands and Docker Compose files into infrastructure as code templates
+menuTitle: Quickstart
 ---
 
 # Quickstart Guide

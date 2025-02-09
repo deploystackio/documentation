@@ -1,5 +1,6 @@
 ---
 description: Keep Docker configurations and deployment templates in sync with DeployStack's GitHub App. Updates templates automatically when files change.
+menuTitle: GitHub Application
 ---
 
 # GitHub App Integration

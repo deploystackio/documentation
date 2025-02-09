@@ -1,5 +1,6 @@
 ---
 description: Understand how parsers translate Docker run commands and Docker Compose files into cloud-specific Infrastructure as Code templates. Learn about provider configurations and language support.
+menuTitle: Parser Explanation
 ---
 
 # Parser Explanation in docker-to-iac

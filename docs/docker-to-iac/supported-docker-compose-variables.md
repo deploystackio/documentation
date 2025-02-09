@@ -1,5 +1,6 @@
 ---
 description: Detailed reference for Docker Compose variables compatible with docker-to-iac translations. Find supported service properties, registry options, and configuration examples for successful IaC deployments.
+menuTitle: Docker Compose Variables
 ---
 
 # Supported Docker Compose Variables

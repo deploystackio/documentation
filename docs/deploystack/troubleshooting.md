@@ -1,5 +1,6 @@
 ---
 description: Technical solutions for common DeployStack deployment issues. Find answers to repository submission errors, license restrictions, and Docker Compose validation problems.
+menuTitle: Troubleshooting
 ---
 
 # Troubleshooting
