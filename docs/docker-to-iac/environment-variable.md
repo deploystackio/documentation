@@ -1,5 +1,6 @@
 ---
 description: Learn how to manage environment variables in docker-to-iac. Pass configuration values from .env files to your Infrastructure as Code templates and keep your sensitive data secure.
+menuTitle: Environment Variables
 ---
 
 # Environment Variables

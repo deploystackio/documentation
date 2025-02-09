@@ -1,5 +1,6 @@
 ---
 description: Translate docker docker-compose.yml file into Render.com Infrastructure as Code with DeployStack
+menuTitle: Render.com
 ---
 
 # Render.com - Parser Full Documentation

@@ -1,5 +1,6 @@
 ---
 description: Explore our automated NPM publishing workflow for docker-to-iac. From pull request to package release, understand how we ensure quality through CI/CD.
+menuTitle: Publishing to NPM
 ---
 
 # Publishing docker-to-iac module to NPM

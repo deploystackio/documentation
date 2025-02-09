@@ -1,5 +1,6 @@
 ---
 description: Translate docker docker-compose.yml file into AWS Cloud Formation with DeployStack
+menuTitle: AWS CloudFormation
 ---
 
 # AWS CloudFormation - Parser Full Documentation

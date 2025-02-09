@@ -1,5 +1,6 @@
 ---
 description: Guide to implementing multi-branch deployment strategies with DeployStack, enabling version-specific deployments and automated template management.
+menuTitle: Branch Strategy
 ---
 
 # Branch Strategy

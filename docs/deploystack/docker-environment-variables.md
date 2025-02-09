@@ -1,5 +1,6 @@
 ---
 description: Learn how to manage environment variables in DeployStack using the .deploystack/env file. Support for Docker Compose, Docker run commands, and default values.
+menuTitle: Environment Variables
 ---
 
 # Environment Variables in DeployStack

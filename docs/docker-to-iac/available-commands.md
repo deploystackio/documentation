@@ -1,5 +1,6 @@
 ---
 description: List of all available commands that you can use to help us with development and testing
+menuTitle: Available Commands
 ---
 
 # docker-to-iac Available Commands

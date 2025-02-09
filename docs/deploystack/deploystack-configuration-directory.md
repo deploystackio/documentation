@@ -1,5 +1,6 @@
 ---
 description: Technical guide for setting up the .deploystack directory to manage Infrastructure as Code template generation and updates across your repository.
+menuTitle: .deploystack Directory
 ---
 
 # .deploystack Directory Reference

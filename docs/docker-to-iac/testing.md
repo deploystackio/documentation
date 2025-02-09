@@ -1,5 +1,6 @@
 ---
 description: Learn how to test the docker-to-iac module including Docker run commands and Docker Compose files. Complete guide for local testing, automated checks, and CI/CD integration.
+menuTitle: Testing
 ---
 
 # Testing docker-to-iac Module
