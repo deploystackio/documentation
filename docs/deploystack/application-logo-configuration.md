@@ -22,6 +22,7 @@ application:
 - PNG (`.png`)
 - JPEG (`.jpg`, `.jpeg`)
 - WebP (`.webp`)
+- SVG (`.svg`)
 
 ### Size Guidelines
 
