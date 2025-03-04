@@ -1,12 +1,12 @@
 ---
-description: Example code for adding a new parser to docker-to-iac, supporting both Docker run commands and Docker Compose files
+description: Example code for adding a new parser to docker-to-iac, supporting both Docker run commands and Docker Compose files, with multi-file output capabilities
 menuTitle: Adding a New Parser
 ---
 
 # Adding a New Parser
 
 > [!TIP]
-> __Thank you__ for your interest in collaborating! The docker-to-iac module will remain open source forever, helping simplify deployments across cloud providers without vendor lock-in.
+> Thank you for your interest in collaborating! The docker-to-iac module will remain open source forever, helping simplify deployments across cloud providers without vendor lock-in.
 
 ## Parser Implementation
 
@@ -16,32 +16,59 @@ Create a new file inside `src/parsers/new-provider.ts`:
 import { 
   BaseParser, 
   ParserInfo, 
-  ContainerConfig,
   TemplateFormat, 
-  formatResponse, 
-  DefaultParserConfig 
+  ParserConfig,
+  FileOutput
 } from './base-parser';
+import { ApplicationConfig } from '../types/container-config';
 
-const defaultParserConfig: DefaultParserConfig = {
+const defaultParserConfig: ParserConfig = {
+  files: [
+    {
+      path: 'awesome-iac.yaml',
+      templateFormat: TemplateFormat.yaml,
+      isMain: true,
+      description: 'Main IaC configuration file'
+    }
+  ],
   cpu: 512,
-  memory: '1GB',
-  fileName: 'awesome-iac.yaml',
-  templateFormat: TemplateFormat.yaml
+  memory: '1GB'
 };
 
 class NewProviderParser extends BaseParser {
-  parse(containerConfig: ContainerConfig, templateFormat: TemplateFormat = defaultParserConfig.templateFormat): any {
-    let response: any = {};
-
-    // Get container configurations
-    const services = containerConfig.services;
+  // Legacy method implementation (calls parseFiles under the hood)
+  parse(config: ApplicationConfig, templateFormat: TemplateFormat = TemplateFormat.yaml): any {
+    return super.parse(config, templateFormat);
+  }
+  
+  // New multi-file implementation
+  parseFiles(config: ApplicationConfig): { [path: string]: FileOutput } {
+    // Process the application configuration
+    const services = config.services;
     
     // Your parser implementation here:
     // 1. Process each service
     // 2. Map container configurations to your IaC format
     // 3. Handle provider-specific requirements
     
-    return formatResponse(JSON.stringify(response, null, 2), templateFormat);
+    // Create your primary IaC configuration
+    const primaryConfig = {
+      // Your main configuration structure
+    };
+    
+    // Return object with file mappings - at minimum return your main file
+    return {
+      'awesome-iac.yaml': {
+        content: this.formatFileContent(primaryConfig, TemplateFormat.yaml),
+        format: TemplateFormat.yaml,
+        isMain: true
+      }
+      // Add additional files as needed:
+      // 'templates/service.yaml': {
+      //   content: this.formatFileContent(serviceConfig, TemplateFormat.yaml),
+      //   format: TemplateFormat.yaml
+      // }
+    };
   }
 
   getInfo(): ParserInfo {
@@ -62,22 +89,34 @@ export default new NewProviderParser();
 
 ## Parser Configuration
 
-### Default Parser Config
+### Multi-File Configuration
 
-Set appropriate defaults for your cloud provider:
+Define the files your parser will generate, please read more here: [Multi-File Configuration in docker-to-iac](/docs/docker-to-iac/multi-file-configuration.md).
+
+### File Output
+
+Your parser must implement the `parseFiles` method which returns a mapping of file paths to content:
 
 ```typescript
-const defaultParserConfig: DefaultParserConfig = {
-  cpu: 512,                        // Minimum viable CPU allocation
-  memory: '1GB',                   // Minimum viable memory
-  fileName: 'awesome-iac.yaml',    // Default output filename
-  templateFormat: TemplateFormat.yaml // Default format
-};
+parseFiles(config: ApplicationConfig): { [path: string]: FileOutput } {
+  return {
+    'awesome-iac.yaml': {
+      content: this.formatFileContent(mainConfig, TemplateFormat.yaml),
+      format: TemplateFormat.yaml,
+      isMain: true  // Mark one file as the main file
+    },
+    'templates/deployment.yaml': {
+      content: this.formatFileContent(deploymentConfig, TemplateFormat.yaml),
+      format: TemplateFormat.yaml
+    }
+    // Add more files as needed
+  };
+}
 ```
 
-Choose conservative resource defaults to prevent unexpected costs for users.
+The `isMain: true` property is required for at least one file - this maintains backward compatibility with existing code.
 
-### Supported Formats
+### Supported Ouput Formats
 
 Select appropriate output formats for your provider:
 
@@ -143,7 +182,7 @@ npm run build
    - Include examples for both Docker run and Docker Compose
    - Follow [documentation guidelines](https://github.com/deploystackio/documentation/blob/main/README.md)
 
-## Best Practices
+## Checlist
 
 1. Support both input types:
    - Docker run commands

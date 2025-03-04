@@ -29,28 +29,39 @@ console.log(parsers);
   {
     providerWebsite: 'https://aws.amazon.com/cloudformation/',
     providerName: 'Amazon Web Services',
-    provieerNameAbbreviation: 'AWS',
+    providerNameAbbreviation: 'AWS',
     languageOfficialDocs: 'https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html',
     languageAbbreviation: 'CFN',
     languageName: 'AWS CloudFormation',
-    defaultParserConfig: { fileName: 'aws-cloudformation.yaml', cpu: 512, memory: '1GB', templateFormat: 'yaml' }
+    defaultParserConfig: { files: [Array], cpu: 512, memory: '1GB' }
   },
   {
     providerWebsite: 'https://render.com/docs',
     providerName: 'Render',
-    provieerNameAbbreviation: 'RND',
+    providerNameAbbreviation: 'RND',
     languageOfficialDocs: 'https://docs.render.com/infrastructure-as-code',
     languageAbbreviation: 'RND',
     languageName: 'Render Blue Print',
     defaultParserConfig: {
-      subscriptionName: 'free',
+      files: [Array],
+      subscriptionName: 'starter',
       region: 'oregon',
-      fileName: 'render.yaml',
-      templateFormat: 'yaml'
+      diskSizeGB: 10
     }
+  },
+  {
+    providerWebsite: 'https://www.digitalocean.com/',
+    providerName: 'DigitalOcean',
+    providerNameAbbreviation: 'DO',
+    languageOfficialDocs: 'https://docs.digitalocean.com/products/app-platform/',
+    languageAbbreviation: 'DOP',
+    languageName: 'DigitalOcean App Spec',
+    defaultParserConfig: { files: [Array], region: 'nyc', subscriptionName: 'basic-xxs' }
   }
 ]
 ```
+
+**Note the files array**: that's because we have a [multi file strategy](/docs/docker-to-iac/multi-file-configuration.md).
 
 ### Type
 
@@ -77,13 +88,24 @@ console.log(awsInfo);
 
 ```json
 {
-    providerWebsite: 'https://aws.amazon.com/cloudformation/',
-    providerName: 'Amazon Web Services',
-    provieerNameAbbreviation: 'AWS',
-    languageOfficialDocs: 'https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html',
-    languageAbbreviation: 'CFN',
-    languageName: 'AWS CloudFormation',
-    defaultParserConfig: { fileName: 'aws-cloudformation.yaml', cpu: 512, memory: '1GB', templateFormat: 'yaml' }
+  providerWebsite: 'https://aws.amazon.com/cloudformation/',
+  providerName: 'Amazon Web Services',
+  providerNameAbbreviation: 'AWS',
+  languageOfficialDocs: 'https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html',
+  languageAbbreviation: 'CFN',
+  languageName: 'AWS CloudFormation',
+  defaultParserConfig: {
+    files: [
+      {
+        path: 'aws-cloudformation.cf.yml',
+        templateFormat: 'yaml',
+        isMain: true,
+        description: 'AWS CloudFormation template'
+      }
+    ],
+    cpu: 512,
+    memory: '1GB'
+  }
 }
 ```
 
@@ -107,7 +129,23 @@ translate(input: string, options: {
   environmentVariableGeneration?: EnvironmentVariableGenerationConfig;
   environmentVariables?: Record<string, string>;
   persistenceKey?: string;
-}): any
+}): TranslationResult
+```
+
+Where `TranslationResult` has the structure:
+
+```typescript
+interface TranslationResult {
+  files: { 
+    [path: string]: FileOutput 
+  };
+}
+
+interface FileOutput {
+  content: string;
+  format: TemplateFormat;
+  isMain?: boolean;
+}
 ```
 
 ### Examples
@@ -115,67 +153,93 @@ translate(input: string, options: {
 #### Translating Docker Compose
 
 ```javascript
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
 import { translate } from '@deploystack/docker-to-iac';
 
 const dockerComposeContent = readFileSync('path/to/docker-compose.yml', 'utf8');
 
-const translatedConfig = translate(dockerComposeContent, {
+const result = translate(dockerComposeContent, {
   source: 'compose',
   target: 'CFN',
   templateFormat: 'yaml'
 });
-console.log(translatedConfig);
+
+// Access individual file contents
+console.log(`Generated ${Object.keys(result.files).length} files:`);
+Object.keys(result.files).forEach(path => {
+  console.log(`- ${path}`);
+});
+
+// Write files to disk preserving directory structure
+Object.entries(result.files).forEach(([path, fileData]) => {
+  const fullPath = join('output', path);
+  const dir = dirname(fullPath);
+  
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  
+  writeFileSync(fullPath, fileData.content);
+});
 ```
 
 #### Translating Docker Run Command
 
 ```javascript
 import { translate } from '@deploystack/docker-to-iac';
+import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
 
 const dockerRunCommand = 'docker run -d -p 8080:80 nginx:latest';
 
-const translatedConfig = translate(dockerRunCommand, {
+const result = translate(dockerRunCommand, {
   source: 'run',
-  target: 'CFN',
+  target: 'RND',
   templateFormat: 'yaml'
 });
-console.log(translatedConfig);
+
+console.log(result)
+
+// Access and save all generated files
+Object.entries(result.files).forEach(([path, fileData]) => {
+  const fullPath = join('output', path);
+  const dir = dirname(fullPath);
+  
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  
+  writeFileSync(fullPath, fileData.content);
+  console.log(`Created: ${path}`);
+});
 ```
 
 ### Example Output (AWS CloudFormation)
 
 ```yaml
-AWSTemplateFormatVersion: 2010-09-09
-Description: Generated from container configuration by docker-to-iac
-Parameters:
-  VPC:
-    Type: AWS::EC2::VPC::Id
-  SubnetA:
-    Type: AWS::EC2::Subnet::Id
-  SubnetB:
-    Type: AWS::EC2::Subnet::Id
-  ServiceName:
-    Type: String
-    Default: DeployStackService
-Resources:
-  Cluster:
-    Type: AWS::ECS::Cluster
-    Properties:
-      ClusterName: !Join ['', [!Ref ServiceName, Cluster]]
-  ExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Join ['', [!Ref ServiceName, ExecutionRole]]
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ecs-tasks.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
-...
+{
+  files: {
+    'render.yaml': {
+      content: 'services:\n' +
+        '  - name: default\n' +
+        '    type: web\n' +
+        '    env: docker\n' +
+        '    runtime: image\n' +
+        '    image:\n' +
+        '      url: docker.io/library/nginx:latest\n' +
+        '    startCommand: ""\n' +
+        '    plan: starter\n' +
+        '    region: oregon\n' +
+        '    envVars:\n' +
+        '      - key: PORT\n' +
+        '        value: "80"\n',
+      format: 'yaml',
+      isMain: true
+    }
+  }
+}
+Created: render.yaml
 ```
 
 #### Translation with Environment Variable Generation

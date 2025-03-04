@@ -51,13 +51,11 @@ ehthumbs.db
 *.iml
 *.ipr
 *.iws
+._*.png
+._*.webp
+._*.svg
+
 
 # Tests
 coverage/
 .jest/
-
-# Vitepress
-.vitepress/dist
-.vitepress/cache
-.backup
-.remark-cache/
