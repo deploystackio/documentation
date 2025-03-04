@@ -57,6 +57,14 @@ After deployment, all services can be monitored and managed through your Digital
 
 - The default output format for this parser: `YAML`.
 
+## File Configuration
+
+The DigitalOcean parser generates a structured output with a specific file organization:
+
+- `.do/deploy.template.yaml` - The main App Platform specification file that defines all services, environment variables, and configuration options for deployment
+
+This single-file structure follows DigitalOcean's App Platform requirements, where all deployment configurations are contained within the standard location expected by the DigitalOcean CLI and deployment tools.
+
 ## Supported Docker Compose Variables
 
 This parser supports the following Docker Compose variables for services:

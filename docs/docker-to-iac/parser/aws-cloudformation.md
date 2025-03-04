@@ -53,6 +53,14 @@ ReadonlyRootFilesystem: false
 
 - The default output format for this parser: `YAML`.
 
+## File Configuration
+
+The AWS CloudFormation parser generates a single consolidated template:
+
+- `aws-cloudformation.cf.yml` - The comprehensive CloudFormation template that defines all resources including ECS clusters, services, tasks, security groups, and IAM roles
+
+This single-file approach encapsulates the entire infrastructure definition in YAML format, making it ready for immediate deployment through the AWS CloudFormation console, CLI, or other AWS deployment tools.
+
 ## Supported Docker Compose Variables
 
 The current version supports the following Docker Compose variables:
