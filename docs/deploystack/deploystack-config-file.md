@@ -64,6 +64,7 @@ You can configure multiple branch deployments using the `deployment.branches` se
 | `description` | String | Explain the branch's purpose or version | Maximum 100 characters |
 | `active` | Boolean | Whether this branch is available for deployment | Optional, defaults to true |
 | `priority` | Number | Order in which branches appear (lower numbers first) | Minimum value: 1 |
+| `exclude_providers` | Array | Optional list of cloud providers to exclude from template generation for this branch | Values must be valid provider codes: "aws", "rnd", "dop" |
 
 The default branch always has `priority: 0` and appears first in the deployment options, regardless of other branch priorities.
 
@@ -80,6 +81,8 @@ deployment:
       label: "Beta (v2.x)"
       description: "Preview of upcoming v2.x release"
       priority: 1
+      exclude_providers:
+        - "aws"  # Exclude AWS CloudFormation for this branch
     v3:
       label: "Alpha (v3.x)"
       description: "Early preview of v3.x"
@@ -101,6 +104,23 @@ When multiple branches are configured:
 - The default branch is always listed first with implicit `priority: 0`
 
 This is especially useful for projects that maintain multiple active versions simultaneously, such as stable and beta releases.
+
+The optional `exclude_providers` array allows you to specify which cloud providers should be excluded from template generation for particular branches. This is useful when certain features in a branch version may not be compatible with specific cloud providers. Valid provider codes are:
+
+Please check our [current supported provider list here](/docs/docker-to-iac/parser/index.md).
+
+For example, if your beta version uses features only supported in DigitalOcean, you might exclude the other providers:
+
+```yaml
+v2-beta:
+  label: "Beta"
+  description: "Beta version with DigitalOcean-specific features"
+  exclude_providers:
+    - "aws"
+    - "rnd"
+```
+
+If no providers are excluded, templates will be generated for all supported cloud providers.
 
 ## Schema Validation
 
