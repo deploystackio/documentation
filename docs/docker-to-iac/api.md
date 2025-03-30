@@ -129,6 +129,7 @@ translate(input: string, options: {
   environmentVariableGeneration?: EnvironmentVariableGenerationConfig;
   environmentVariables?: Record<string, string>;
   persistenceKey?: string;
+  serviceConnections?: ServiceConnectionsConfig;
 }): TranslationResult
 ```
 
@@ -139,6 +140,7 @@ interface TranslationResult {
   files: { 
     [path: string]: FileOutput 
   };
+  serviceConnections?: ResolvedServiceConnection[];
 }
 
 interface FileOutput {
@@ -213,6 +215,45 @@ Object.entries(result.files).forEach(([path, fileData]) => {
   writeFileSync(fullPath, fileData.content);
   console.log(`Created: ${path}`);
 });
+```
+
+#### Configuring Service Connections
+
+```javascript
+import { translate } from '@deploystack/docker-to-iac';
+
+const dockerComposeContent = `
+version: "3"
+services:
+  db:
+    image: mariadb:latest
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpass
+  app:
+    image: node:alpine
+    environment:
+      - DATABASE_HOST=db  # This will be transformed
+`;
+
+const result = translate(dockerComposeContent, {
+  source: 'compose',
+  target: 'DOP',  // DigitalOcean App Platform
+  templateFormat: 'yaml',
+  serviceConnections: {
+    mappings: [
+      {
+        fromService: 'app',        // Service that needs to connect
+        toService: 'db',           // Service to connect to
+        environmentVariables: [    // Env vars that reference the service
+          'DATABASE_HOST'
+        ]
+      }
+    ]
+  }
+});
+
+// The result will include transformed service references:
+console.log(result.serviceConnections);
 ```
 
 ### Example Output (AWS CloudFormation)
@@ -373,11 +414,65 @@ const result = translate(dockerConfig, {
 
 #### `options.persistenceKey?: string`
 
-Optional. The `persistenceKey` parameter allows you to maintain consistent variable values across multiple template generations
+Optional. The `persistenceKey` parameter allows you to maintain consistent variable values across multiple template generations.
+
+#### `options.serviceConnections?: ServiceConnectionsConfig`
+
+Optional. Configure service-to-service communications by defining which environment variables reference other services.
+
+```typescript
+type ServiceConnectionsConfig = {
+  mappings: Array<{
+    fromService: string;         // Service that needs to connect
+    toService: string;           // Service to connect to
+    environmentVariables: string[]; // Environment variables that reference the service
+  }>
+};
+```
+
+This option is currently supported by:
+
+- Render.com (RND): Uses Blueprint's `fromService` syntax
+- DigitalOcean App Platform (DOP): Uses direct service names
+
+Example:
+
+```javascript
+serviceConnections: {
+  mappings: [
+    {
+      fromService: 'frontend',
+      toService: 'api',
+      environmentVariables: ['API_URL']
+    }
+  ]
+}
+```
 
 ### Return Value
 
-Returns the translated Infrastructure as Code template in the specified format. The structure and content will vary based on the target IaC language and template format chosen.
+Returns the translated Infrastructure as Code template and any resolved service connections:
+
+```typescript
+{
+  files: {
+    // Generated IaC template files with paths as keys
+    'render.yaml': { content: '...', format: 'yaml', isMain: true }
+  },
+  serviceConnections: [
+    {
+      fromService: 'app',
+      toService: 'db',
+      variables: {
+        'DATABASE_HOST': {
+          originalValue: 'db',
+          transformedValue: 'db'  // Transformed as appropriate for the provider
+        }
+      }
+    }
+  ]
+}
+```
 
 ## List Services API
 
