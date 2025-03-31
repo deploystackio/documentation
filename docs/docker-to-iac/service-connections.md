@@ -157,12 +157,6 @@ const serviceConnections = {
 // For Render - Will use fromService syntax instead of string replacement
 ```
 
-## Limitations
-
-- For Render.com, the module uses the `hostport` property which includes both hostname and port
-- The feature only transforms environment variables specifically mentioned in the configuration
-- Complex connection strings with multiple service references need each reference defined separately
-
 ## Response Format
 
 The `translate` function returns information about the resolved service connections:
