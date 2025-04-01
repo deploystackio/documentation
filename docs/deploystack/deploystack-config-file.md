@@ -122,6 +122,74 @@ v2-beta:
 
 If no providers are excluded, templates will be generated for all supported cloud providers.
 
+### Service Connections
+
+You can configure service-to-service communication for multi-container applications using the `serviceConnections` property within each branch configuration. This feature is particularly useful for applications where services need to communicate with each other (e.g., web apps connecting to databases).
+
+| Property | Type | Description | Constraints |
+|----------|------|-------------|-------------|
+| `mappings` | Array | Defines relationships between services for connection configuration | Required |
+| `mappings[].fromService` | String | Service that needs to connect to another service | Required |
+| `mappings[].toService` | String | Service being connected to | Required |
+| `mappings[].environmentVariables` | Array of Strings | Environment variable names that reference the target service | Required |
+
+Example configuration for service connections:
+
+```yaml
+deployment:
+  branches:
+    main:
+      label: "Production"
+      description: "Production release"
+      serviceConnections:
+        mappings:
+          - fromService: "app"
+            toService: "db"
+            environmentVariables:
+              - "DATABASE_HOST"
+              - "DATABASE_URL"
+          - fromService: "frontend"
+            toService: "api"
+            environmentVariables:
+              - "API_URL"
+```
+
+This configuration tells DeployStack how to properly configure communication between:
+
+- The "app" service and the "db" service through the DATABASE_HOST and DATABASE_URL environment variables
+- The "frontend" service and the "api" service through the API_URL environment variable
+
+When templates are generated, DeployStack will transform these environment variables according to each cloud provider's specific service discovery mechanism:
+
+- For Render.com: Uses Blueprint's `fromService` syntax
+- For DigitalOcean App Platform: Uses direct service name references
+
+For example, if your docker-compose.yml contains:
+
+```yaml
+services:
+  app:
+    image: node:alpine
+    environment:
+      DATABASE_HOST: db
+  db:
+    image: mariadb:latest
+```
+
+The generated Render.com template would transform DATABASE_HOST to use their service discovery syntax:
+
+```yaml
+services:
+  - name: app
+    # ...other configuration...
+    envVars:
+      - key: DATABASE_HOST
+        fromService:
+          name: db
+          type: pserv
+          property: hostport
+```
+
 ## Schema Validation
 
 The configuration file is automatically validated against our JSON Schema when using supported IDEs (VS Code, IntelliJ, etc.). The schema is available at:
@@ -145,6 +213,41 @@ application:
   name: "Redis Cache Manager"      # Overrides repository name
   description: "A more detailed description that better explains your application"  # Overrides repository description
   logo: "https://example.com/logos/redis-manager.png"
+```
+
+### Configure Multiple Branch Deployments with Service Connections
+
+```yaml
+deployment:
+  branches:
+    stable:
+      label: "Stable"
+      description: "Production-ready version"
+      priority: 1
+      serviceConnections:
+        mappings:
+          - fromService: "web"
+            toService: "api"
+            environmentVariables:
+              - "API_ENDPOINT"
+          - fromService: "api"
+            toService: "db"
+            environmentVariables:
+              - "DB_HOST"
+              - "DB_CONNECTION"
+    
+    beta:
+      label: "Beta"
+      description: "Preview of upcoming features"
+      priority: 2
+      exclude_providers:
+        - "aws"  # Beta version not supported on AWS
+      serviceConnections:
+        mappings:
+          - fromService: "web"
+            toService: "api"
+            environmentVariables:
+              - "API_ENDPOINT"
 ```
 
 ### Minimal Configuration example for logo update
