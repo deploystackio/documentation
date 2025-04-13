@@ -43,9 +43,11 @@ You can override these values using the `config.yml` (only on your main branch) 
 
 | Property | Type | Description | Constraints |
 |----------|------|-------------|-------------|
-| `name` | String | Override the repository name for DeployStack display | Maximum 40 characters |
-| `description` | String | Override the repository description for DeployStack display | Maximum 500 characters |
-| `logo` | String | URL to your application logo | [Application Logo Configuration](/docs/deploystack/application-logo-configuration.md) |
+| `mappings` | Array | Defines relationships between services for connection configuration | Required |
+| `mappings[].fromService` | String | Service that needs to connect to another service | Required |
+| `mappings[].toService` | String | Service being connected to | Required |
+| `mappings[].environmentVariables` | Array of Strings | Environment variable names that reference the target service | Required |
+| `mappings[].property` | String | Type of connection property to reference (e.g., 'connectionString', 'hostport') | Optional, defaults to 'hostport' |
 
 The override process follows this order:
 
@@ -64,6 +66,7 @@ You can configure multiple branch deployments using the `deployment.branches` se
 | `description` | String | Explain the branch's purpose or version | Maximum 100 characters |
 | `active` | Boolean | Whether this branch is available for deployment | Optional, defaults to true |
 | `priority` | Number | Order in which branches appear (lower numbers first) | Minimum value: 1 |
+| `exclude_providers` | Array | Optional list of cloud providers to exclude from template generation for this branch | Values must be valid provider codes: "aws", "rnd", "dop" |
 
 The default branch always has `priority: 0` and appears first in the deployment options, regardless of other branch priorities.
 
@@ -80,6 +83,8 @@ deployment:
       label: "Beta (v2.x)"
       description: "Preview of upcoming v2.x release"
       priority: 1
+      exclude_providers:
+        - "aws"  # Exclude AWS CloudFormation for this branch
     v3:
       label: "Alpha (v3.x)"
       description: "Early preview of v3.x"
@@ -101,6 +106,93 @@ When multiple branches are configured:
 - The default branch is always listed first with implicit `priority: 0`
 
 This is especially useful for projects that maintain multiple active versions simultaneously, such as stable and beta releases.
+
+The optional `exclude_providers` array allows you to specify which cloud providers should be excluded from template generation for particular branches. This is useful when certain features in a branch version may not be compatible with specific cloud providers. Valid provider codes are:
+
+Please check our [current supported provider list here](/docs/docker-to-iac/parser/index.md).
+
+For example, if your beta version uses features only supported in DigitalOcean, you might exclude the other providers:
+
+```yaml
+v2-beta:
+  label: "Beta"
+  description: "Beta version with DigitalOcean-specific features"
+  exclude_providers:
+    - "aws"
+    - "rnd"
+```
+
+If no providers are excluded, templates will be generated for all supported cloud providers.
+
+### Service Connections
+
+You can configure service-to-service communication for multi-container applications using the `serviceConnections` property within each branch configuration. This feature is particularly useful for applications where services need to communicate with each other (e.g., web apps connecting to databases).
+
+| Property | Type | Description | Constraints |
+|----------|------|-------------|-------------|
+| `mappings` | Array | Defines relationships between services for connection configuration | Required |
+| `mappings[].fromService` | String | Service that needs to connect to another service | Required |
+| `mappings[].toService` | String | Service being connected to | Required |
+| `mappings[].environmentVariables` | Array of Strings | Environment variable names that reference the target service | Required |
+
+Example configuration for service connections:
+
+```yaml
+deployment:
+  branches:
+    main:
+      label: "Production"
+      description: "Production release"
+      serviceConnections:
+        mappings:
+          - fromService: "app"
+            toService: "db"
+            environmentVariables:
+              - "DATABASE_HOST"
+              - "DATABASE_URL"
+            property: "connectionString"
+          - fromService: "frontend"
+            toService: "api"
+            environmentVariables:
+              - "API_URL"
+            property: "hostport"
+```
+
+This configuration tells DeployStack how to properly configure communication between:
+
+- The "app" service and the "db" service through the DATABASE_HOST and DATABASE_URL environment variables
+- The "frontend" service and the "api" service through the API_URL environment variable
+
+When templates are generated, DeployStack will transform these environment variables according to each cloud provider's specific service discovery mechanism:
+
+- For Render.com: Uses Blueprint's `fromService` syntax
+- For DigitalOcean App Platform: Uses direct service name references
+
+For example, if your docker-compose.yml contains:
+
+```yaml
+services:
+  app:
+    image: node:alpine
+    environment:
+      DATABASE_HOST: db
+  db:
+    image: mariadb:latest
+```
+
+The generated Render.com template would transform DATABASE_HOST to use their service discovery syntax:
+
+```yaml
+services:
+  - name: app
+    # ...other configuration...
+    envVars:
+      - key: DATABASE_HOST
+        fromService:
+          name: db
+          type: pserv
+          property: hostport
+```
 
 ## Schema Validation
 
@@ -125,6 +217,41 @@ application:
   name: "Redis Cache Manager"      # Overrides repository name
   description: "A more detailed description that better explains your application"  # Overrides repository description
   logo: "https://example.com/logos/redis-manager.png"
+```
+
+### Configure Multiple Branch Deployments with Service Connections
+
+```yaml
+deployment:
+  branches:
+    stable:
+      label: "Stable"
+      description: "Production-ready version"
+      priority: 1
+      serviceConnections:
+        mappings:
+          - fromService: "web"
+            toService: "api"
+            environmentVariables:
+              - "API_ENDPOINT"
+          - fromService: "api"
+            toService: "db"
+            environmentVariables:
+              - "DB_HOST"
+              - "DB_CONNECTION"
+    
+    beta:
+      label: "Beta"
+      description: "Preview of upcoming features"
+      priority: 2
+      exclude_providers:
+        - "aws"  # Beta version not supported on AWS
+      serviceConnections:
+        mappings:
+          - fromService: "web"
+            toService: "api"
+            environmentVariables:
+              - "API_ENDPOINT"
 ```
 
 ### Minimal Configuration example for logo update

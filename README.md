@@ -2,9 +2,6 @@
 
 This repository contains the official documentation for the DeployStack ecosystem. Visit [deploystack.io](https://deploystack.io) to learn more about our platform.
 
-![GitHub Release](https://img.shields.io/github/v/release/deploystackio/documentation)
-![GitHub deployments](https://img.shields.io/github/deployments/deploystackio/documentation/Production?label=Production)
-
 ## Project Structure
 
 Key directories in this repository:
