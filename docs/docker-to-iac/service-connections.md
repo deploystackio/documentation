@@ -5,7 +5,7 @@ menuTitle: Service Connections
 
 # Service Connections
 
-The `docker-to-iac` module now supports configuring service-to-service communication when translating Docker Compose files to cloud provider IaC templates. This feature is essential for multi-container applications where services need to communicate with each other (e.g., web applications connecting to databases).
+The `docker-to-iac` module supports configuring service-to-service communication when translating Docker Compose files to cloud provider IaC templates. This feature is essential for multi-container applications where services need to communicate with each other (e.g., web applications connecting to databases).
 
 ## The Challenge
 
@@ -63,7 +63,8 @@ const result = translate(dockerComposeContent, {
         environmentVariables: [       // List of env vars that reference the service
           'DATABASE_HOST', 
           'API_URL'
-        ]
+        ],
+        property: 'connectionString'  // The type of connection (connectionString, hostport, etc.)
       }
     ]
   }
@@ -77,6 +78,7 @@ For each service connection mapping:
 - `fromService`: The service that needs to connect to another service
 - `toService`: The service being connected to
 - `environmentVariables`: Array of environment variable names that reference the target service
+- `property`: The type of connection property to reference (e.g., 'connectionString', 'hostport', etc.)
 
 ## Provider-Specific Implementations
 
@@ -99,7 +101,7 @@ services:
         fromService:
           name: db
           type: pserv
-          property: hostport
+          property: hostport  # This property is derived from the 'property' parameter in your mapping
 ```
 
 This approach leverages Render's built-in service discovery capabilities for reliable inter-service communication.
@@ -122,7 +124,7 @@ services:
 
 ## Complete Example
 
-Here's a complete example showing Node.js microservices communicating with each other:
+Here's a complete example showing Node.js microservices communicating with each other, and a more detailed database connection example:
 
 ```javascript
 const dockerComposeContent = `
@@ -148,13 +150,47 @@ const serviceConnections = {
     {
       fromService: 'frontend',
       toService: 'api',
-      environmentVariables: ['API_URL']
+      environmentVariables: ['API_URL'],
+      property: 'hostport'
     }
   ]
 };
 
 // For DigitalOcean - Service name stays as "api" in http://api:3000
 // For Render - Will use fromService syntax instead of string replacement
+
+// Database Connection Example
+const databaseComposeContent = `
+services:
+  app:
+    image: node:18-alpine
+    environment:
+      - DATABASE_URL=postgresql://postgres:secret@postgres:5432/mydb
+    ports:
+      - "3000:3000"
+  
+  postgres:
+    image: postgres:latest
+    environment:
+      - POSTGRES_DB: mydb
+      - POSTGRES_USER: postgres
+      - POSTGRES_PASSWORD: secret
+`;
+
+const dbServiceConnections = {
+  mappings: [
+    {
+      fromService: 'app',
+      toService: 'postgres',
+      environmentVariables: ['DATABASE_URL'],
+      property: 'connectionString'  // Use connectionString for full database URL
+    }
+  ]
+};
+
+// Result will include proper connection format for each provider
+// DigitalOcean: DATABASE_URL=${postgres.DATABASE_URL}
+// Render: fromDatabase: { name: "postgres", property: "connectionString" }
 ```
 
 ## Response Format

@@ -426,6 +426,7 @@ type ServiceConnectionsConfig = {
     fromService: string;         // Service that needs to connect
     toService: string;           // Service to connect to
     environmentVariables: string[]; // Environment variables that reference the service
+    property?: string;           // Connection property type (connectionString, hostport, etc.)
   }>
 };
 ```
@@ -443,7 +444,14 @@ serviceConnections: {
     {
       fromService: 'frontend',
       toService: 'api',
-      environmentVariables: ['API_URL']
+      environmentVariables: ['API_URL'],
+      property: 'hostport'
+    },
+    {
+      fromService: 'app',
+      toService: 'db',
+      environmentVariables: ['DATABASE_URL'],
+      property: 'connectionString'
     }
   ]
 }

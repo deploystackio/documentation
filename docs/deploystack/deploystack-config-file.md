@@ -43,9 +43,11 @@ You can override these values using the `config.yml` (only on your main branch) 
 
 | Property | Type | Description | Constraints |
 |----------|------|-------------|-------------|
-| `name` | String | Override the repository name for DeployStack display | Maximum 40 characters |
-| `description` | String | Override the repository description for DeployStack display | Maximum 500 characters |
-| `logo` | String | URL to your application logo | [Application Logo Configuration](/docs/deploystack/application-logo-configuration.md) |
+| `mappings` | Array | Defines relationships between services for connection configuration | Required |
+| `mappings[].fromService` | String | Service that needs to connect to another service | Required |
+| `mappings[].toService` | String | Service being connected to | Required |
+| `mappings[].environmentVariables` | Array of Strings | Environment variable names that reference the target service | Required |
+| `mappings[].property` | String | Type of connection property to reference (e.g., 'connectionString', 'hostport') | Optional, defaults to 'hostport' |
 
 The override process follows this order:
 
@@ -148,10 +150,12 @@ deployment:
             environmentVariables:
               - "DATABASE_HOST"
               - "DATABASE_URL"
+            property: "connectionString"
           - fromService: "frontend"
             toService: "api"
             environmentVariables:
               - "API_URL"
+            property: "hostport"
 ```
 
 This configuration tells DeployStack how to properly configure communication between:
