@@ -7,13 +7,71 @@ menuTitle: Available Commands
 
 The following commands are currently supported:
 
-- `npm run build`
-  - Will build the module and create output files inside `dist/` direcotry.
-- `npm run lint`
-  - Will run eslint command. ESLint is also run as part of GitHub action test for new pull request on the default `main` branch.
-- `npm run test`
-  - Runs the tests defined in the `test/test.ts` file. The tests are also part of the GitHub action pipeline for new pull requests into `main`.
-- `npm run semantic-release`
-  - Runs the semantic-release command which is part of the release process of [docker-to-iac](https://www.npmjs.com/package/@deploystack/docker-to-iac) modules to npm registry. The release is executed through a [GitHub action pipeline](/docs/docker-to-iac/publishing-to-npm.md).
+## Build Commands
 
-View all commands config from [package.json](https://github.com/deploystackio/docker-to-iac/blob/main/package.json).
+- `npm run build`
+  - Builds the module using TypeScript compiler and creates output files inside the `dist/` directory.
+
+## Code Quality Commands
+
+- `npm run lint`
+  - Runs ESLint to check code quality. ESLint is also run as part of GitHub action test for new pull requests on the default `main` branch.
+
+## Testing Commands
+
+- `npm run test`
+  - Runs the complete test suite including both unit tests and end-to-end tests.
+- `npm run test:unit`
+  - Runs only the unit tests to validate individual components.
+- `npm run test:e2e`
+  - Runs only the end-to-end tests which validate the entire translation process from Docker run commands or Docker Compose files to infrastructure as code.
+- `npm run test:watch`
+  - Runs tests in watch mode, which automatically re-runs tests when files change.
+- `npm run test:coverage`
+  - Runs tests with coverage reporting to identify untested code paths.
+
+## Release Commands
+
+- `npm run release`
+  - Runs the release-it command which is part of the release process of [docker-to-iac](https://www.npmjs.com/package/@deploystack/docker-to-iac) modules to npm registry. The release is executed through configurations defined in `.release-it.js`.
+
+## Other Commands
+
+- `npm run pretest:e2e`
+  - Automatically run before e2e tests to clean the output directory.
+
+You can view all commands and their configurations in the [package.json](https://github.com/deploystackio/docker-to-iac/blob/main/package.json) file.
+
+## Examples
+
+### Running Unit Tests Only
+
+```bash
+npm run test:unit
+```
+
+### Running End-to-End Tests Only
+
+```bash
+npm run test:e2e
+```
+
+### Running All Tests with Coverage
+
+```bash
+npm run test:coverage
+```
+
+### Building the Module
+
+```bash
+npm run build
+```
+
+### Checking Code Quality
+
+```bash
+npm run lint
+```
+
+Each command is configured to provide the most relevant feedback for its purpose. For example, unit tests provide detailed output about each individual function, while end-to-end tests show a summary of the complete translation process from Docker configurations to infrastructure as code.
