@@ -56,6 +56,29 @@ mychart/
     └── _helpers.tpl     # Template helpers
 ```
 
+The docker-to-iac module now includes a Helm parser that generates this exact structure when translating Docker configurations to Helm Charts:
+
+```javascript
+const result = translate(dockerComposeContent, {
+  source: 'compose',
+  target: 'HELM',
+  templateFormat: 'yaml'
+});
+
+// Result contains all files needed for a complete Helm Chart
+console.log(Object.keys(result.files));
+// [
+//   'Chart.yaml',
+//   'values.yaml',
+//   'templates/deployment.yaml',
+//   'templates/service.yaml',
+//   'templates/configmap.yaml',
+//   'templates/secret.yaml',
+//   'templates/NOTES.txt',
+//   'templates/_helpers.tpl'
+// ]
+```
+
 With the multi-file support, a Helm Chart parser configuration might look like:
 
 ```typescript
