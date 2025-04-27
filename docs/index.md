@@ -5,7 +5,7 @@ menuTitle: DeployStack Documentation
 
 # DeployStack Documentation
 
-DeployStack converts your **Docker configurations** into **Infrastructure as Code** (IaC) templates for multiple cloud providers. Whether you have a docker-compose.yml file or docker run commands, it generates the necessary AWS CloudFormation, Render.com Blueprint, or DigitalOcean specifications for example. This lets you and your users deploy the same application consistently across different cloud platforms using their native deployment mechanisms, **without needing to manually create** each provider's infrastructure.
+DeployStack converts your **Docker configurations** into **Infrastructure as Code** (IaC) templates for multiple cloud providers. Whether you have a docker-compose.yml file or docker run commands, it generates the necessary AWS CloudFormation, Render.com Blueprint, DigitalOcean specifications, or Kubernetes Helm charts for example. This lets you and your users deploy the same application consistently across different cloud platforms using their native deployment mechanisms, **without needing to manually create** each provider's infrastructure.
 
 ## Get Started
 
@@ -30,6 +30,7 @@ DeployStack generates infrastructure templates for major cloud providers, each o
 !card-image[AWS]{title="AWS" link="/docs/docker-to-iac/parser/aws-cloudformation" src="/img/deploy/aws.svg" width=47 height=28}
 !card-image[DigitalOcean]{title="DigitalOcean" link="/docs/docker-to-iac/parser/digitalocean" src="/img/deploy/digitalocean.svg" width=56 height=28}
 !card-image[Render.com]{title="Render.com" link="/docs/docker-to-iac/parser/render.com" src="/img/deploy/render.svg" width=130 height=28}
+!card-image[Helm]{title="Helm" link="/docs/docker-to-iac/parser/helm" src="/img/deploy/helm.svg" width=47 height=47}
 :::
 
 ### DeployStack Ecosystem

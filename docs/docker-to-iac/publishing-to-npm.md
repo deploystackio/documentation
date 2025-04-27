@@ -5,7 +5,7 @@ menuTitle: Publishing to NPM
 
 # Publishing docker-to-iac module to NPM
 
-The docker-to-iac module is published to the @deploystack organization on NPM. The publishing process is automated through GitHub Actions and follows a conventional commit-based workflow.
+We have created an organization @deploystack for NPM. Publishing in NPM happens automatically through `semantic-release`. Config: [https://github.com/deploystackio/docker-to-iac/blob/main/.github/workflows/release-pr.yml](https://github.com/deploystackio/docker-to-iac/blob/main/.github/workflows/release-pr.yml)
 
 ## Release Process Overview
 

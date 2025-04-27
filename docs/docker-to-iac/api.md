@@ -57,6 +57,28 @@ console.log(parsers);
     languageAbbreviation: 'DOP',
     languageName: 'DigitalOcean App Spec',
     defaultParserConfig: { files: [Array], region: 'nyc', subscriptionName: 'basic-xxs' }
+  },
+  {
+    providerWebsite: 'https://helm.sh/',
+    providerName: 'Kubernetes',
+    providerNameAbbreviation: 'K8S',
+    languageOfficialDocs: 'https://helm.sh/docs/',
+    languageAbbreviation: 'HELM',
+    languageName: 'Helm Chart',
+    defaultParserConfig: { 
+      files: [Array],
+      cpu: '100m',
+      memory: '128Mi'
+    }
+  },
+  {
+    providerWebsite: 'https://www.digitalocean.com/',
+    providerName: 'DigitalOcean',
+    providerNameAbbreviation: 'DO',
+    languageOfficialDocs: 'https://docs.digitalocean.com/products/app-platform/',
+    languageAbbreviation: 'DOP',
+    languageName: 'DigitalOcean App Spec',
+    defaultParserConfig: { files: [Array], region: 'nyc', subscriptionName: 'basic-xxs' }
   }
 ]
 ```
@@ -215,6 +237,67 @@ Object.entries(result.files).forEach(([path, fileData]) => {
   writeFileSync(fullPath, fileData.content);
   console.log(`Created: ${path}`);
 });
+```
+
+#### Translating Docker Compose to Helm Chart
+
+```javascript
+import { translate } from '@deploystack/docker-to-iac';
+import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
+
+const dockerComposeContent = `
+version: '3'
+services:
+  web:
+    image: nginx:latest
+    ports:
+      - "80:80"
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: myapp
+`;
+
+const result = translate(dockerComposeContent, {
+  source: 'compose',
+  target: 'HELM',
+  templateFormat: 'yaml'
+});
+
+// Access and save all generated files to create a complete Helm Chart
+Object.entries(result.files).forEach(([path, fileData]) => {
+  const fullPath = join('helm-chart', path);
+  const dir = dirname(fullPath);
+  
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  
+  writeFileSync(fullPath, fileData.content);
+  console.log(`Created: ${path}`);
+});
+```
+
+#### Example Output (Partial - Chart.yaml)
+
+```yaml
+apiVersion: v2
+name: deploystack-app
+description: A Helm chart for DeployStack application generated from Docker configuration
+type: application
+version: 0.1.0
+appVersion: 1.0.0
+maintainers:
+  - name: DeployStack
+    email: hello@deploystack.io
+dependencies:
+  - name: db
+    repository: https://charts.bitnami.com/bitnami
+    version: ^12.0.0
+    condition: dependencies.db.enabled
 ```
 
 #### Configuring Service Connections
@@ -435,6 +518,7 @@ This option is currently supported by:
 
 - Render.com (RND): Uses Blueprint's `fromService` syntax
 - DigitalOcean App Platform (DOP): Uses direct service names
+- Kubernetes Helm Charts (HELM): Uses Kubernetes DNS service discovery
 
 Example:
 
