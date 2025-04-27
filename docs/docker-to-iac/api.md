@@ -70,6 +70,15 @@ console.log(parsers);
       cpu: '100m',
       memory: '128Mi'
     }
+  },
+  {
+    providerWebsite: 'https://www.digitalocean.com/',
+    providerName: 'DigitalOcean',
+    providerNameAbbreviation: 'DO',
+    languageOfficialDocs: 'https://docs.digitalocean.com/products/app-platform/',
+    languageAbbreviation: 'DOP',
+    languageName: 'DigitalOcean App Spec',
+    defaultParserConfig: { files: [Array], region: 'nyc', subscriptionName: 'basic-xxs' }
   }
 ]
 ```
@@ -333,36 +342,28 @@ console.log(result.serviceConnections);
 ### Example Output (AWS CloudFormation)
 
 ```yaml
-AWSTemplateFormatVersion: 2010-09-09
-Description: Generated from container configuration by docker-to-iac
-Parameters:
-  VPC:
-    Type: AWS::EC2::VPC::Id
-  SubnetA:
-    Type: AWS::EC2::Subnet::Id
-  SubnetB:
-    Type: AWS::EC2::Subnet::Id
-  ServiceName:
-    Type: String
-    Default: DeployStackService
-Resources:
-  Cluster:
-    Type: AWS::ECS::Cluster
-    Properties:
-      ClusterName: !Join ['', [!Ref ServiceName, Cluster]]
-  ExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Join ['', [!Ref ServiceName, ExecutionRole]]
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ecs-tasks.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
-...
+{
+  files: {
+    'render.yaml': {
+      content: 'services:\n' +
+        '  - name: default\n' +
+        '    type: web\n' +
+        '    env: docker\n' +
+        '    runtime: image\n' +
+        '    image:\n' +
+        '      url: docker.io/library/nginx:latest\n' +
+        '    startCommand: ""\n' +
+        '    plan: starter\n' +
+        '    region: oregon\n' +
+        '    envVars:\n' +
+        '      - key: PORT\n' +
+        '        value: "80"\n',
+      format: 'yaml',
+      isMain: true
+    }
+  }
+}
+Created: render.yaml
 ```
 
 #### Translation with Environment Variable Generation
@@ -426,9 +427,8 @@ Optional. The desired output format:
 - `'yaml'` - YAML format
 - `'text'` - Plain text
 
-::content-alert{type="important"}
-Not all template formats are valid for every IaC language. For example, AWS CloudFormation only accepts YAML or JSON formats. Choose a format compatible with your target IaC language.
-::
+> [!IMPORTANT]
+> Not all template formats are valid for every IaC language. For example, AWS CloudFormation only accepts YAML or JSON formats. Choose a format compatible with your target IaC language.
 
 #### `options.environmentVariableGeneration?: EnvironmentVariableGenerationConfig`
 
@@ -472,9 +472,8 @@ Version matching:
 - Use "*" for all versions
 - Use "latest" for latest version
 
-::content-alert{type="important"}
-Environment variables in your docker-compose.yml must use the `${VARIABLE_NAME}` syntax to be processed by the generator.
-::
+> [!IMPORTANT]
+> Environment variables in your docker-compose.yml must use the `${VARIABLE_NAME}` syntax to be processed by the generator.
 
 #### `environmentVariables?: Record<string, string>`
 

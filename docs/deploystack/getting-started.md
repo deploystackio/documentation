@@ -1,115 +1,194 @@
 ---
 description: Start deploying Docker applications across cloud providers with DeployStack. Step-by-step guide to generating infrastructure templates from Docker configurations.
+menuTitle: Getting Started
 ---
 
 # Getting Started with DeployStack
 
-Let's get your Docker project deployed across different cloud platforms with minimal effort.
+DeployStack offers two distinct paths to transform your Docker projects into cloud-ready deployments: a Quick Start path for immediate results, and our Recommended path for enhanced control and automation. Let's explore both approaches in detail.
 
-## What is DeployStack?
+## Understanding the Two Paths
 
-DeployStack transforms your Docker configurations into cloud-ready infrastructure templates. Whether you're using Docker run commands or docker-compose.yml files, we help make your project easily deployable by others.
+### 🚀 Quick Start Path
 
-What makes it powerful is the one-click deployment feature - your users can deploy your project instantly on their preferred cloud platform using the provider's native deployment capabilities.
+The Quick Start path is designed for developers who want to immediately make their Docker projects deployable, with minimal setup required. This approach works with your existing repository structure.
 
-## Project Requirements
+### Recommended Path
 
-### Repository Requirements
+The Recommended path provides additional features through a `.deploystack` configuration directory and GitHub app integration. This approach enables automatic updates, environment variable management, and project customization.
 
-- A public GitHub repository (private repositories aren't supported yet)
-- Either a docker-compose.yml file or documented Docker run commands
-- Container images must be pre-built and available in a supported registry
+## Quick Start Path: Detailed Guide
 
-### Container Requirements
+### For Docker Compose Projects
 
-For docker-compose.yml:
+#### Requirements
 
-- Must use the `image` directive (no build instructions)
-- Images must be from supported registries
-- No private images currently supported
+- A public GitHub repository
+- A `docker-compose.yml` or `docker-compose.yaml` file in your repository's root directory
+- Container images must be:
+  - Pre-built and available in supported registries
+  - Publicly accessible
+  - Referenced using the `image` directive
 
-For Docker run commands:
+#### Step-by-Step Process
 
-- Must be complete, runnable commands
-- Can include standard Docker options (ports, volumes, environment variables)
-- Images must be publicly accessible
+1. **Repository Preparation**
+   - Ensure your `docker-compose.yml` is in the root directory
+   - Verify all images are publicly accessible
+   - Check that your compose file uses supported configuration options
 
-## Generating Your First Templates
+2. **Submission**
+   - Visit [deploystack.io/submit](https://deploystack.io/submit)
+   - Enter your GitHub repository URL
+   - Our system automatically detects your compose file
+   - Review the detected configuration
 
-1. Visit [deploystack.io/submit](https://deploystack.io/submit)
-2. Submit your GitHub repository URL
-3. We'll detect your Docker configurations and generate infrastructure templates
-4. Your project gets added to our catalog at [deploystack.io/c](https://deploystack.io/c)
+3. **Template Generation**
+   - Infrastructure templates are generated for each supported cloud provider
+   - Templates are stored in our public repository
+   - You receive deployment button code for your README.md
 
-We support multiple cloud providers including AWS CloudFormation, DigitalOcean, and Render.com. See our complete list of supported providers in the [docker-to-iac documentation](/docs/docker-to-iac/index.md).
+### For Docker Run Commands
 
-## Configuration Examples
+#### Requirements
 
-### Using docker-compose.yml
+- A public GitHub repository
+- A valid Docker run command that includes:
+  - Image name and tag
+  - Port mappings (if required)
+  - Environment variables (if needed)
+  - Volume mounts (if necessary)
 
-```yaml
-version: '3'
-services:
-  web:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-  cache:
-    image: redis:latest
-    ports:
-      - "6379:6379"
-```
+#### Step-by-Step Process
 
-### Using Docker Run Commands
+1. **Command Preparation**
+   - Ensure your Docker run command is complete and valid
+   - Verify all referenced images are publicly available
+   - Test the command locally if possible
+
+2. **Submission**
+   - Visit [deploystack.io/submit](https://deploystack.io/submit)
+   - Enter your GitHub repository URL
+   - Paste your Docker run command
+   - Review the parsed configuration
+
+3. **Template Generation**
+   - Infrastructure templates are generated automatically
+   - Templates are optimized for each cloud provider
+   - You receive deployment button code
+
+## Recommended Path: Comprehensive Setup
+
+### The `.deploystack` Directory Structure
+
+Create a `.deploystack` directory in your repository with these components:
 
 ```bash
-# Web Server
-docker run -d \
-  -p 80:80 \
-  --name web \
-  nginx:alpine
-
-# Cache Server
-docker run -d \
-  -p 6379:6379 \
-  --name cache \
-  redis:latest
+.deploystack/
+├── docker-compose.yml  # Your Docker Compose configuration
+├── docker-run.txt      # Or your Docker run command
+├── env                 # Environment variables (optional)
+└── logo.webp           # Your project logo (optional)
 ```
 
-Both configurations will be translated into appropriate infrastructure templates for your chosen cloud providers.
+#### Component Details
 
-## Adding Deployment Buttons
+**Docker Configuration Files**:
+
+- `docker-compose.yml`: Your complete Docker Compose configuration
+- `docker-run.txt`: Alternative to compose file, contains your Docker run command
+- Only one of these files should be present
+
+For more configuration options please check our [.deploystack Directory Reference](/docs/deploystack/deploystack-configuration-directory.md).
+
+### GitHub App Integration
+
+The [DeployStack Repository Sync](https://github.com/apps/deploystack-repository-sync) app enables:
+
+1. **Automatic Updates**
+   - Monitors changes to your Docker configurations
+   - Updates templates when configurations change
+   - Ensures templates stay in sync with your project
+
+2. **Installation Steps**
+   - Visit the GitHub app installation page
+   - Select your repositories
+   - Configure access permissions
+   - Verify installation
+
+3. **Monitoring and Updates**
+   - Changes to `.deploystack` directory trigger updates
+   - Only default branch changes are processed
+   - Templates are automatically regenerated
+
+## Behind the Scenes: How It Works
+
+### The docker-to-iac Module
+
+Our open-source [docker-to-iac](https://github.com/deploystackio/docker-to-iac) module:
+
+- Parses your Docker configurations
+- Handles multiple cloud provider translations
+- Supports various infrastructure patterns
+- Maintains provider-specific optimizations
+
+### Template Generation Process
+
+1. **Configuration Analysis**
+   - Docker configurations are parsed
+   - Dependencies are identified
+
+2. **Provider-Specific Translation**
+   - Templates generated for each provider
+   - Provider best practices applied
+   - Resource mappings optimized
+
+3. **Template Storage**
+   - Templates stored in [deploy-templates](https://github.com/deploystackio/deploy-templates)
+   - Version controlled for tracking
+   - Publicly accessible
+
+### Deployment Button Integration
 
 After template generation:
 
 1. Visit [deploystack.io/deploy-button](https://deploystack.io/deploy-button)
-2. Generate deployment button code
-3. Add the buttons to your README.md
-
-Users can then deploy your project with a single click on their preferred cloud platform.
-
-## Next Steps
-
-1. Review the [Configuration Requirements](/docs/deploystack/docker-compose-requirements.md)
-2. Learn about [One-Click Deploy](/docs/deploystack/one-click-deploy.md)
-3. Check [Supported Registries](/docs/docker-to-iac/supported-registries.md)
+2. Select your preferred button style
+3. Copy the generated code
+4. Add to your README.md
 
 ## Best Practices
 
-- Store configuration files in your repository's root directory
-- Use specific version tags for images rather than `latest`
-- Ensure all images are publicly accessible
-- Test configurations locally before submitting
-- Document any specific requirements or environment variables
+### Repository Organization
 
-## Need Help?
+- Keep Docker configurations clean and well-documented
+- Use specific version tags for images
+- Document environment variable requirements
+- Include clear deployment instructions
 
-- Review our [Troubleshooting Guide](/docs/deploystack/troubleshooting.md)
-- Join our [Discord Community](https://discord.gg/UjFWwByB)
+### Configuration Management
 
-## Limitations
+- Use the `.deploystack` directory for better organization
+- Keep environment variables separate
+- Test configurations locally
 
-- Only supports public repositories currently
-- Requires pre-built container images
-- No support for private image registries
-- Build instructions not supported (use pre-built images)
+### Deployment Strategy
+
+- Start with the Quick Start path if needed
+- Migrate to Recommended path for better control
+- Use GitHub app for automatic updates
+
+## Troubleshooting Common Issues
+
+### Template Generation
+
+- Verify image accessibility
+- Check Docker configuration syntax
+- Ensure all required ports are exposed
+- Validate environment variables
+
+## Need Additional Help?
+
+- Review our detailed [Troubleshooting Guide](/docs/deploystack/troubleshooting.md)
+- Join our active [Discord Community](https://discord.gg/UjFWwByB)
+- Submit issues on GitHub to our [Feedback repository](https://github.com/deploystackio/feedback)

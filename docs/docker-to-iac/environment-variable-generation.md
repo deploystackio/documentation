@@ -1,5 +1,6 @@
 ---
 description: Use docker-to-iac to automatically create environment variables for your Docker containers. Define rules for variable generation and maintain consistency across multiple deployments.
+menuTitle: Environment Variable Generation
 ---
 
 # Environment Variable Generation

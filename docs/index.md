@@ -1,5 +1,6 @@
 ---
 description: Welcome to DeployStack documentation. Learn how to automate Docker Compose deployments across cloud providers with Infrastructure as Code templates and one-click deployments.
+menuTitle: DeployStack Documentation
 ---
 
 # DeployStack Documentation
@@ -12,65 +13,40 @@ DeployStack simplifies cloud deployment through three key steps: configure your 
 
 ### Core Concepts
 
-::card-grid{grid=3}
-
-:::card-item-icon-text{icon="CloudUpload" title="Quickstart" link="/docs/deploystack/getting-started"}
+::: card-grid{columns=3}
+!card-icon[CloudUpload]{title="Quickstart" link="/docs/deploystack/getting-started"}
 Start with our Getting Started Guide to understand the basics of DeployStack.
-:::
-
-:::card-item-icon-text{icon="Terminal" title="One-Click Deploy" link="/docs/deploystack/one-click-deploy"}
+!card-icon[Terminal]{title="One-Click Deploy" link="/docs/deploystack/one-click-deploy"}
 Learn how to enable One-Click Deploy buttons for your repository.
-:::
-
-:::card-item-icon-text{icon="FileText" title="Configuration" link="/docs/deploystack/deploystack-configuration-directory"}
+!card-icon[FileText]{title="Configuration" link="/docs/deploystack/deploystack-configuration-directory"}
 Configuration file placed to your repository, telling Zerops how to build and start your app.
 :::
-
-::
 
 ### Supported Cloud Providers
 
 DeployStack generates infrastructure templates for major cloud providers, each optimized for their specific deployment patterns. AWS CloudFormation templates use Fargate for containerized workloads, DigitalOcean leverages App Platform, and Render.com implements Blueprints for smooth deployment. While translating your docker command to Infrastructure as Code by using [docker-to-iac](/docs/docker-to-iac/index.md) module, you can choose your target provider.
 
-::card-grid{grid=4}
-
-:::card-item-image{title="AWS" link="/docs/docker-to-iac/parser/aws-cloudformation" imageWidth=47 imageHeight=28 src="/img/deploy/aws.svg"}
+::: card-grid{columns=4}
+!card-image[AWS]{title="AWS" link="/docs/docker-to-iac/parser/aws-cloudformation" src="/img/deploy/aws.svg" width=47 height=28}
+!card-image[DigitalOcean]{title="DigitalOcean" link="/docs/docker-to-iac/parser/digitalocean" src="/img/deploy/digitalocean.svg" width=56 height=28}
+!card-image[Render.com]{title="Render.com" link="/docs/docker-to-iac/parser/render.com" src="/img/deploy/render.svg" width=130 height=28}
+!card-image[Helm]{title="Helm" link="/docs/docker-to-iac/parser/helm" src="/img/deploy/helm.svg" width=47 height=47}
 :::
-
-:::card-item-image{title="DigitalOcean" link="/docs/docker-to-iac/parser/digitalocean" imageWidth=56 imageHeight=28 src="/img/deploy/digitalocean.svg"}
-:::
-
-:::card-item-image{title="Render.com" link="/docs/docker-to-iac/parser/render.com" imageWidth=130 imageHeight=28 src="/img/deploy/render.svg"}
-:::
-
-:::card-item-image{title="Helm" link="/docs/docker-to-iac/parser/helm" imageWidth=47 imageHeight=47 src="/img/deploy/helm.svg"}
-:::
-
-::
 
 ### DeployStack Ecosystem
 
 DeployStack consists of several integrated components that work together to enable consistent Docker to cloud deployment. Each repository serves a specific purpose in the ecosystem:
 
-::card-grid{grid=3}
-
-:::card-item-icon-text{icon="Container" title="docker-to-iac" target="_blank" link="https://github.com/deploystackio/docker-to-iac"}
+::: card-grid{columns=3}
+!card-icon[Container]{title="docker-to-iac" link="https://github.com/deploystackio/docker-to-iac" target="_blank"}
 The core Node.js module that handles Docker configuration translation to Infrastructure as Code templates
-:::
-
-:::card-item-icon-text{icon="BookOpenText" title="documentation" target="_blank" link="https://github.com/deploystackio/documentation"}
+!card-icon[BookOpenText]{title="documentation" link="https://github.com/deploystackio/documentation" target="_blank"}
 Central repository for all DeployStack documentation and guides
-:::
-
-:::card-item-icon-text{icon="FileText" title="deploy-templates" target="_blank" link="https://github.com/deploystackio/deploy-templates"}
+!card-icon[FileText]{title="deploy-templates" link="https://github.com/deploystackio/deploy-templates" target="_blank"}
 Houses all generated Infrastructure as Code templates for supported repositories
-:::
-
-:::card-item-icon-text{icon="MessageCircleHeart" title="feedback" target="_blank" link="https://github.com/deploystackio/feedback"}
+!card-icon[MessageCircleHeart]{title="feedback" link="https://github.com/deploystackio/feedback" target="_blank"}
 Public repository for feature requests, bug reports, and roadmap discussions
 :::
-
-::
 
 ## Contributing to DeployStack docker-to-iac module
 
@@ -81,9 +57,9 @@ DeployStack is open source and we welcome contributions. Here's how you can help
 - Enhance documentation
 - Report issues and suggest improvements
 
-Visit our [GitHub repository](https://github.com/deploystackio/docker-to-iac){:target="_blank"} to get started.
+Visit our [GitHub repository](https://github.com/deploystackio/docker-to-iac) to get started.
 
 ## Community and Support
 
-- Join our [Discord community](https://discord.gg/UjFWwByB){:target="_blank"}
+- Join our [Discord community](https://discord.gg/UjFWwByB)
 - Check our [troubleshooting guide](/docs/deploystack/troubleshooting.md)

@@ -1,5 +1,6 @@
 ---
 description: Translate docker docker-compose.yml file into Render.com Infrastructure as Code with DeployStack
+menuTitle: Render.com
 ---
 
 # Render.com - Parser Full Documentation
@@ -32,6 +33,14 @@ In contrast to other cloud providers, Render.com's usability is very trivial. Th
 
 - The default output format for this parser: `YAML`.
 
+## File Configuration
+
+The Render.com parser generates a single file output:
+
+- `render.yaml` - The main Blueprint configuration file that defines all services, environment variables, and disk configurations
+
+This straightforward single-file approach aligns with Render's Blueprint specification, which requires all service definitions to be contained within a single YAML file. The file is structured according to Render's requirements with services, environment variables, and disk configurations properly organized for immediate deployment.
+
 ## Supported Docker Compose Variables
 
 The current version supports the following Docker Compose variables:
@@ -43,9 +52,8 @@ For __services__:
 - ports
 - command
 
-::content-alert{type="note"}
-The supported variables that are not on this list are ignored. This means that they are not translated by the parser in Infrastructure as Code from `docker-compose.yml` or docker run command.
-::
+> [!NOTE]
+> The supported variables that are not on this list are ignored. This means that they are not translated by the parser in Infrastructure as Code from `docker-compose.yml` or docker run command.
 
 ## Volume Support
 

@@ -1,5 +1,6 @@
 ---
 description: Translate docker docker-compose.yml file into AWS Cloud Formation with DeployStack
+menuTitle: AWS CloudFormation
 ---
 
 # AWS CloudFormation - Parser Full Documentation
@@ -52,6 +53,14 @@ ReadonlyRootFilesystem: false
 
 - The default output format for this parser: `YAML`.
 
+## File Configuration
+
+The AWS CloudFormation parser generates a single consolidated template:
+
+- `aws-cloudformation.cf.yml` - The comprehensive CloudFormation template that defines all resources including ECS clusters, services, tasks, security groups, and IAM roles
+
+This single-file approach encapsulates the entire infrastructure definition in YAML format, making it ready for immediate deployment through the AWS CloudFormation console, CLI, or other AWS deployment tools.
+
 ## Supported Docker Compose Variables
 
 The current version supports the following Docker Compose variables:
@@ -63,9 +72,8 @@ For __services__:
 - ports
 - command
 
-::content-alert{type="note"}
-The supported variables that are not on this list are ignored. This means that they are not translated by the parser in Infrastructure as Code from `docker-compose.yml` or docker run command.
-::
+> [!NOTE]
+> The supported variables that are not on this list are ignored. This means that they are not translated by the parser in Infrastructure as Code from `docker-compose.yml` or docker run command.
 
 ## Storage Support
 
@@ -83,6 +91,5 @@ Multi `services` support for CloudFormation: __yes__
 
 Please read more about [multi service support here](/docs/docker-to-iac/multi-services-support.md).
 
-::content-alert{type="important"}
-This CloudFormation template is designed for development and testing environments. For production deployments, review and adjust security groups, storage configuration, and other security settings according to your requirements.
-::
+> [!IMPORTANT]
+> This CloudFormation template is designed for development and testing environments. For production deployments, review and adjust security groups, storage configuration, and other security settings according to your requirements.

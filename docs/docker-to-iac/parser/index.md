@@ -1,5 +1,6 @@
 ---
 description: View all available parsers in docker-to-iac for converting Docker Compose to cloud infrastructure templates. Supports major cloud providers.
+menuTitle: Available parser
 ---
 
 # Available parser list for module docker-to-iac

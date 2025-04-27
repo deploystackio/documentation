@@ -1,5 +1,6 @@
 ---
 description: Translate docker docker-compose.yml file into DigitalOcean Infrastructure as Code with DeployStack
+menuTitle: DigitalOcean
 ---
 
 # DigitalOcean - Parser Full Documentation
@@ -16,30 +17,53 @@ To use the DigitalOcean App Spec, you need a valid DigitalOcean account with acc
 
 ## Architecture
 
-The DigitalOcean App Spec will deploy your application using two main components:
+The DigitalOcean App Spec will deploy your application entirely within App Platform using containerized services:
 
 ### App Platform Services
 
-- Each service from your Docker Compose file becomes an App Platform service
-- Services are identified by their original service names
-- The app auto-configures HTTPS routing:
+Services in your App Platform deployment fall into two categories:
+
+#### HTTP Services
+
+- Web-facing containers that serve HTTP traffic
+- Automatically configured with HTTPS routing:
   - First service gets the root path `/`
   - Additional services receive paths based on their names, e.g., `/servicename`
+- Ideal for web applications, APIs, and frontend services
 
-### Managed Databases
+#### TCP Services
 
-- Database containers (MySQL, PostgreSQL, etc.) are automatically converted to DigitalOcean managed databases
-- Each database runs as a standalone managed instance, not within App Platform
-- Database credentials and connection strings are automatically injected into your services
+- Database containers (MySQL, PostgreSQL, Redis, etc.) run as internal TCP services
+- Configured with appropriate health checks and internal ports
+- No external HTTP routing - only accessible by other services within the app
+- Suitable for databases, caches, and message queues
 
-After deployment:
+### Important Note About Databases
 
-- Services can be accessed via links in your DigitalOcean dashboard
-- Managed databases appear in your Databases section with connection details
+While DigitalOcean offers managed database services, these cannot be automatically provisioned through one-click deployment. Instead, database containers (like MySQL, PostgreSQL, Redis) are deployed as TCP services within App Platform, allowing:
+
+- Immediate deployment without pre-existing infrastructure
+- Internal communication between application components
+- Simplified configuration for development and testing
+
+For production use cases where you need managed databases, you should:
+
+1. Manually create managed databases in your DigitalOcean account
+2. Update the application configuration to use these managed instances
+
+After deployment, all services can be monitored and managed through your DigitalOcean App Platform dashboard.
 
 ## Default output format
 
 - The default output format for this parser: `YAML`.
+
+## File Configuration
+
+The DigitalOcean parser generates a structured output with a specific file organization:
+
+- `.do/deploy.template.yaml` - The main App Platform specification file that defines all services, environment variables, and configuration options for deployment
+
+This single-file structure follows DigitalOcean's App Platform requirements, where all deployment configurations are contained within the standard location expected by the DigitalOcean CLI and deployment tools.
 
 ## Supported Docker Compose Variables
 
@@ -50,34 +74,37 @@ This parser supports the following Docker Compose variables for services:
 - ports
 - command
 
-::content-alert{type="note"}
-Supported variables not listed above will be ignored. They will not be translated into the Infrastructure as Code from `docker-compose.yml` or docker run command.
-::
+> [!NOTE]
+> Supported variables not listed above will be ignored. They will not be translated into the Infrastructure as Code from `docker-compose.yml` or docker run command.
 
 ## Database Support
 
-DigitalOcean App Platform does not support running containerized database workloads due to its stateless nature and TCP protocol limitations. Therefore, the parser automatically converts database containers to DigitalOcean managed databases, ensuring proper data persistence and reliability. Supported databases include:
+DigitalOcean App Platform supports running database containers as internal TCP services. The parser automatically configures these services with appropriate health checks and port settings to ensure proper communication within your application.
 
-- MySQL
-- PostgreSQL
-- Redis
-- MongoDB
+### Supported Databases
 
-### Configuration and Customization
+The parser recognizes and configures the following database types:
 
-The database conversion rules are defined in `src/config/digitalocean/database-types.ts`. This configuration maps Docker images to their corresponding DigitalOcean managed database services.
+- MySQL/MariaDB (port 3306)
+- PostgreSQL (port 5432)
+- Redis (port 6379)
+- MongoDB (port 27017)
 
-To add or modify database mappings:
+### Configuration Details
+
+Database service configurations are defined in `src/config/digitalocean/database-types.ts`. This configuration maps Docker images to their corresponding TCP port and health check settings.
+
+To add or modify database configurations:
 
 1. Locate the `database-types.ts` file
 2. Edit the `digitalOceanDatabaseConfig` object
 3. Define the mapping using this structure:
 
 ```typescript
-'docker.io/library/mysql': {
+'docker.io/library/mariadb': {
   engine: 'MYSQL',
-  versions: ['8'],
-  description: 'MySQL database service - requires managed database service due to TCP protocol'
+  description: 'MariaDB database service - maps to MySQL managed database due to compatibility',
+  portNumber: 3306
 }
 ```
 
@@ -101,19 +128,41 @@ Generated App Spec:
 
 ```yaml
 spec:
-  databases:
-    - name: db
-      engine: MYSQL
-      version: "8"
-      production: false
   services:
+    - name: db
+      image:
+        registry_type: DOCKER_HUB
+        registry: library
+        repository: mariadb
+        tag: "11.2"
+      health_check:
+        port: 3306
+      internal_ports:
+        - 3306
     - name: app
-      # [service configuration]
+      image:
+        registry_type: DOCKER_HUB
+        registry: library
+        repository: nginx
+        tag: alpine
+      http_port: 80
+      routes:
+        - path: /
 ```
 
-::content-alert{type="important"}
-Database services in docker-compose.yml must use official images from Docker Hub (e.g., mysql, mariadb, postgres) for automatic conversion to managed databases.
-::
+> [!IMPORTANT]
+> While running databases as App Platform services works well for development and testing, for production workloads consider using DigitalOcean's managed database offerings for better reliability and maintenance.
+
+### Understanding TCP Services
+
+When a database image is detected, the parser:
+
+1. Configures the service without HTTP routing
+2. Sets up appropriate internal ports for database communication
+3. Adds health checks on the database's standard port
+4. Ensures the service can communicate with other containers in your app
+
+This approach allows immediate deployment while maintaining proper isolation and communication between your application components.
 
 ## Volume Support
 
@@ -125,9 +174,8 @@ DigitalOcean App Platform supports ephemeral files only. This means:
 - Each container instance has its own separate filesystem
 - Changes to the filesystem are lost when instances are scaled or redeployed
 
-::content-alert{type="warning"}
-Any `volumes` directives in your docker-compose.yml or docker run command will be ignored during the translation to App Platform specifications.
-::
+> [!WARNING]
+> Any `volumes` directives in your docker-compose.yml or docker run command will be ignored during the translation to App Platform specifications.
 
 ## Multi Services Support
 

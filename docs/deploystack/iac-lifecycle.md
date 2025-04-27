@@ -1,5 +1,6 @@
 ---
 description: Guide to how DeployStack manages Infrastructure as Code template updates, including automatic synchronization, update triggers, and version control.
+menuTitle: Iac Lifecycle
 ---
 
 # Infrastructure as Code Lifecycle
@@ -14,8 +15,8 @@ This guide explains how DeployStack manages and updates your Infrastructure as C
 2. Add your Docker configuration files:
    - `docker-compose.yml` for Compose configurations
    - `docker-run.txt` for Docker run commands
-3. Submit your repository to [deploystack.io/submit](https://deploystack.io/submit){:target="_blank"}
-4. Initial IaC templates are generated and stored in our [deploy-templates](https://github.com/deploystackio/deploy-templates){:target="_blank"} repository
+3. Submit your repository to [deploystack.io/submit](https://deploystack.io/submit)
+4. Initial IaC templates are generated and stored in our [deploy-templates](https://github.com/deploystackio/deploy-templates) repository
 
 ### Enabling Automatic Updates
 
@@ -25,7 +26,31 @@ Install the [DeployStack Repository Sync](/docs/deploystack/github-application.m
 - Cloud providers update their IaC specifications
 - DeployStack improves its template generation
 
-![DeployStack IaC Lifecycle](/docs/assets/images/deploystack/iac-lifecycle.drawio.svg)
+![DeployStack IaC Lifecycle](/docs/assets/images/deploystack/iac-lifecycle.webp)
+
+## Update Flow
+
+As the app GitHub repository owner, an update flow gives you control over the generation of Infrastructure as Code (IaC) templates. The flow allows you to regenerate IaC templates by changing, for example, the `.deploystack/docker-compose.yml` file.
+
+All IaC templates are stored in public and open-source repository: [https://github.com/deploystackio/deploy-templates](https://github.com/deploystackio/deploy-templates).
+
+### Prerequisites for activating the flow
+
+1. You have installed the [DeployStack GitHub app](/docs/deploystack/github-application.md).
+2. You have created the `.deploystack/docker-run.txt` or `.deploystack/docker-compose.yml` file.
+
+The choice between `docker-run.txt` or `docker-compose.yml` depends on the submission process used to DeployStack. When submitting to DeployStack, you can choose two methods -> Docker Run or Docker Compose.
+
+### Example flow
+
+Let's say you want to change your image tag from "deploystack/awesomeapp:v1" to "deploystack/awesomeapp:v2-next".
+
+![DeployStack IaC Lifecycle](/docs/assets/images/deploystack/deploystack-iac-flow-via-github-app.webp)
+
+1. To do this, you will edit the file `.deploy stack/docker-run.txt` and change your new docker tag
+2. GitHub will send an event to the DeployStack backend with the change of the file `.deploy stack/docker-run.txt` because you have the DeployStack GitHub app installed.
+3. DeployStack backend validates the change, and if everything test passes
+4. By using [docker-to-iac module](https://github.com/deploystackio/docker-to-iac), DeployStack backend will generate the new IaC templates for your application and store them in our repository [https://github.com/deploystackio/deploy-templates](https://github.com/deploystackio/deploy-templates)
 
 ## Update Triggers
 
@@ -56,7 +81,7 @@ DeployStack initiates template updates when:
 
 ## Template Versioning
 
-All template updates are version controlled in our [deploy-templates repository](https://github.com/deploystackio/deploy-templates){:target="_blank"}, allowing you to:
+All template updates are version controlled in our [deploy-templates repository](https://github.com/deploystackio/deploy-templates), allowing you to:
 
 - Track template changes over time
 - Review modification history
