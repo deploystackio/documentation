@@ -19,12 +19,6 @@ To deploy the generated Helm Charts, you need:
 - Helm CLI installed (version 3.x recommended)
 - Appropriate RBAC permissions to deploy resources in your target namespace
 
-## Architecture
-
-The Helm parser generates a complete Helm Chart structure that follows Kubernetes and Helm best practices:
-
-![Kubernetes Helm Architecture](/docs/assets/images/docker-to-iac/helm-kubernetes-architecture.png)
-
 ### Kubernetes Resources
 
 The generated Helm Chart creates the following Kubernetes resources for each service in your Docker configuration:
