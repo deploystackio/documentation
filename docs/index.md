@@ -4,7 +4,7 @@ description: Welcome to DeployStack documentation. Learn how to automate Docker 
 
 # DeployStack Documentation
 
-DeployStack converts your **Docker configurations** into **Infrastructure as Code** (IaC) templates for multiple cloud providers. Whether you have a docker-compose.yml file or docker run commands, it generates the necessary AWS CloudFormation, Render.com Blueprint, or DigitalOcean specifications for example. This lets you and your users deploy the same application consistently across different cloud platforms using their native deployment mechanisms, **without needing to manually create** each provider's infrastructure.
+DeployStack converts your **Docker configurations** into **Infrastructure as Code** (IaC) templates for multiple cloud providers. Whether you have a docker-compose.yml file or docker run commands, it generates the necessary AWS CloudFormation, Render.com Blueprint, DigitalOcean specifications, or Kubernetes Helm charts for example. This lets you and your users deploy the same application consistently across different cloud platforms using their native deployment mechanisms, **without needing to manually create** each provider's infrastructure.
 
 ## Get Started
 
@@ -41,6 +41,9 @@ DeployStack generates infrastructure templates for major cloud providers, each o
 :::
 
 :::card-item-image{title="Render.com" link="/docs/docker-to-iac/parser/render.com" imageWidth=130 imageHeight=28 src="/img/deploy/render.svg"}
+:::
+
+:::card-item-image{title="Helm" link="/docs/docker-to-iac/parser/helm" imageWidth=47 imageHeight=47 src="/img/deploy/helm.svg"}
 :::
 
 ::

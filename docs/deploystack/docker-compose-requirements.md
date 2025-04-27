@@ -54,12 +54,24 @@ The infrastructure templates we generate require specific, immutable container i
 
 We currently support these Docker Compose properties -> please check [Supported Docker Compose Variables](/docs/docker-to-iac/supported-docker-compose-variables.md).
 
+### Kubernetes/Helm
+
+When generating Helm charts for Kubernetes:
+
+- Database services (MySQL, PostgreSQL, Redis, etc.) are converted to Bitnami Helm chart dependencies
+- Environment variables are split between ConfigMaps (regular variables) and Secrets (sensitive data)
+- Each service in your Docker Compose becomes a separate Deployment and Service
+- Volume mounts are supported and configured as needed
+
+This allows for better security practices and easier management of your application on Kubernetes.
+
 ## Multiple Services Support
 
 DeployStack can handle Docker Compose files with multiple services, but support varies by cloud provider:
 
 - Some providers support deploying all services at once
 - Others will only deploy the first service in your compose file
+- Kubernetes (Helm) supports multi-service deployments with each service becoming a separate Deployment
 
 Check the specific [Multi Services Support](/docs/docker-to-iac/multi-services-support.md) for details about multi-service support.
 

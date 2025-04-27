@@ -1,0 +1,191 @@
+---
+description: Learn how docker-to-iac supports complex Infrastructure as Code templates with multiple interconnected files, including Helm Charts and other multi-file IaC formats.
+menuTitle: Multi-File Configuration
+---
+
+# Multi-File Configuration in docker-to-iac
+
+## Introduction to Multi-File Support
+
+Starting with version 1.20.0, [docker-to-iac](https://github.com/deploystackio/docker-to-iac) supports generating multiple interconnected files for more complex Infrastructure as Code (IaC) templates. This feature was introduced primarily to support Helm Charts and other sophisticated IaC formats that require multiple files with specific directory structures.
+
+## Why Multi-File Templates?
+
+Modern IaC solutions often require multiple files that work together:
+
+- **Helm Charts** need Chart.yaml, values.yaml, and template files
+- **Terraform modules** use main.tf, variables.tf, outputs.tf, and more
+- **Kubernetes manifests** are typically split into multiple YAML files
+- **Multi-tier applications** may need separate configurations for each tier
+
+These complex deployments would be difficult or impossible to represent in a single file, which led to the introduction of multi-file support.
+
+## The Main File Concept
+
+Each parser must designate one file as the "main" file using the `isMain: true` property. This maintains backward compatibility with existing code and provides a clear entry point for deployment tools.
+
+```typescript
+parseFiles(config: ApplicationConfig): { [path: string]: FileOutput } {
+  return {
+    'Chart.yaml': {
+      content: this.formatFileContent(chartConfig, TemplateFormat.yaml),
+      format: TemplateFormat.yaml,
+      isMain: true  // This is the main file
+    },
+    'values.yaml': {
+      content: this.formatFileContent(valuesConfig, TemplateFormat.yaml),
+      format: TemplateFormat.yaml
+    }
+  };
+}
+```
+
+When a parser is invoked through the legacy `parse()` method, only the content of the main file is returned. However, when using the `parseFiles()` method, all files are included in the response.
+
+## Example: Helm Chart Structure
+
+Helm Charts are a perfect example of why multi-file support is needed. A basic Helm Chart requires at least the following files:
+
+```bash
+mychart/
+├── Chart.yaml           # Chart metadata
+├── values.yaml          # Default configuration values
+└── templates/
+    ├── deployment.yaml  # Kubernetes Deployment
+    ├── service.yaml     # Kubernetes Service
+    └── _helpers.tpl     # Template helpers
+```
+
+The docker-to-iac module now includes a Helm parser that generates this exact structure when translating Docker configurations to Helm Charts:
+
+```javascript
+const result = translate(dockerComposeContent, {
+  source: 'compose',
+  target: 'HELM',
+  templateFormat: 'yaml'
+});
+
+// Result contains all files needed for a complete Helm Chart
+console.log(Object.keys(result.files));
+// [
+//   'Chart.yaml',
+//   'values.yaml',
+//   'templates/deployment.yaml',
+//   'templates/service.yaml',
+//   'templates/configmap.yaml',
+//   'templates/secret.yaml',
+//   'templates/NOTES.txt',
+//   'templates/_helpers.tpl'
+// ]
+```
+
+With the multi-file support, a Helm Chart parser configuration might look like:
+
+```typescript
+const defaultParserConfig: ParserConfig = {
+  files: [
+    {
+      path: 'Chart.yaml',
+      templateFormat: TemplateFormat.yaml,
+      isMain: true,
+      description: 'Chart metadata file'
+    },
+    {
+      path: 'values.yaml',
+      templateFormat: TemplateFormat.yaml,
+      description: 'Default configuration values'
+    },
+    {
+      path: 'templates/deployment.yaml',
+      templateFormat: TemplateFormat.yaml,
+      description: 'Kubernetes Deployment template'
+    },
+    {
+      path: 'templates/service.yaml',
+      templateFormat: TemplateFormat.yaml,
+      description: 'Kubernetes Service template'
+    },
+    {
+      path: 'templates/_helpers.tpl',
+      templateFormat: TemplateFormat.text,
+      description: 'Template helper functions'
+    }
+  ]
+};
+```
+
+## Implementation Details
+
+### File Structure
+
+Each parser must implement the `parseFiles` method, which returns an object mapping file paths to their content:
+
+```typescript
+interface FileOutput {
+  content: string;          // File content as a string
+  format: TemplateFormat;   // Format (yaml, json, text)
+  isMain?: boolean;         // Whether this is the main file
+}
+
+parseFiles(config: ApplicationConfig): { [path: string]: FileOutput };
+```
+
+### Directory Support
+
+The file paths can include directories, which will be created automatically when the templates are saved:
+
+```typescript
+return {
+  'templates/deployment.yaml': {
+    content: deploymentContent,
+    format: TemplateFormat.yaml
+  },
+  'templates/ingress.yaml': {
+    content: ingressContent,
+    format: TemplateFormat.yaml
+  }
+};
+```
+
+### Content Formatting
+
+The `formatFileContent` helper method ensures that content is properly formatted according to the specified template format.
+
+## Backward Compatibility
+
+To maintain backward compatibility, the `BaseParser` class implements a default `parse` method that:
+
+1. Calls the new `parseFiles` method
+2. Finds the file marked with `isMain: true`
+3. Returns only that file's content
+
+```typescript
+parse(config: ApplicationConfig, templateFormat?: TemplateFormat): any {
+  const files = this.parseFiles(config);
+  const mainFile = Object.values(files).find(file => file.isMain);
+  
+  if (!mainFile) {
+    throw new Error('No main file defined in parser output');
+  }
+  
+  return typeof mainFile.content === 'string'
+    ? mainFile.content
+    : formatResponse(JSON.stringify(mainFile.content, null, 2), templateFormat || mainFile.format);
+}
+```
+
+This ensures that existing code that calls `parse()` will continue to work as expected.
+
+## Best Practices
+
+When implementing multi-file parsers:
+
+1. **Always mark one file as main**: Designate exactly one file as `isMain: true` to maintain backward compatibility.
+
+2. **Use consistent directory structure**: Follow the conventions of your target IaC format (e.g., Helm Chart layout).
+
+3. **Use appropriate formats**: Choose the right format for each file (YAML for Kubernetes manifests, text for template helpers, etc.).
+
+4. **Include descriptive comments**: Add descriptions to help users understand the purpose of each file.
+
+5. **Handle file dependencies**: Ensure that files reference each other correctly using relative paths.

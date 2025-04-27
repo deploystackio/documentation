@@ -1,0 +1,216 @@
+---
+description: Translate Docker Compose files into Kubernetes Helm Charts with DeployStack docker-to-iac module
+menuTitle: Helm
+---
+
+# Helm - Parser Full Documentation
+
+The parser for Helm translates Docker configurations into Kubernetes Helm Charts. The parser logic can be found in GitHub inside the [docker-to-iac repo](https://github.com/deploystackio/docker-to-iac/blob/main/src/parsers/helm.ts).
+
+## Parser language abbreviation for API
+
+- `languageAbbreviation`: `HELM`.
+
+## Prerequisite to deploy Helm Charts
+
+To deploy the generated Helm Charts, you need:
+
+- A Kubernetes cluster (local or cloud-based)
+- Helm CLI installed (version 3.x recommended)
+- Appropriate RBAC permissions to deploy resources in your target namespace
+
+## Architecture
+
+The Helm parser generates a complete Helm Chart structure that follows Kubernetes and Helm best practices:
+
+![Kubernetes Helm Architecture](/docs/assets/images/docker-to-iac/helm-kubernetes-architecture.png)
+
+### Kubernetes Resources
+
+The generated Helm Chart creates the following Kubernetes resources for each service in your Docker configuration:
+
+- **Deployments**: Container specifications, replica count, resource limits
+- **Services**: Network access to your pods with appropriate ports
+- **ConfigMaps**: Non-sensitive environment variables
+- **Secrets**: Sensitive environment variables (passwords, tokens, etc.)
+
+### Database Support
+
+For database services, the parser leverages Helm's dependency management to incorporate official Bitnami charts:
+
+- **MySQL/MariaDB**: Uses Bitnami's MySQL/MariaDB chart
+- **PostgreSQL**: Uses Bitnami's PostgreSQL chart
+- **Redis**: Uses Bitnami's Redis chart
+- **MongoDB**: Uses Bitnami's MongoDB chart
+
+Each database dependency is configured with appropriate defaults and includes persistent storage for data.
+
+## Default output format
+
+- The default output format for this parser: `YAML`.
+
+## File Configuration
+
+The Helm parser generates a complete Helm Chart directory structure:
+
+- `Chart.yaml` - The main chart definition with metadata and dependencies
+- `values.yaml` - Configuration values that can be customized at deployment time
+- `templates/` - Directory containing Kubernetes YAML templates:
+  - `deployment.yaml` - Deployment specifications for each service
+  - `service.yaml` - Service definitions for network access
+  - `configmap.yaml` - ConfigMap for non-sensitive environment variables
+  - `secret.yaml` - Secret for sensitive environment variables
+  - `_helpers.tpl` - Helper functions for template generation
+  - `NOTES.txt` - Usage instructions displayed after installation
+
+This multi-file approach follows the standard Helm Chart structure and allows for maximum flexibility when deploying to Kubernetes.
+
+## Supported Docker Compose Variables
+
+This parser supports the following Docker Compose variables:
+
+- `image`
+- `environment`
+- `ports`
+- `command`
+- `volumes`
+
+::content-alert{type="note"}
+The parser automatically detects sensitive environment variables (containing keywords like "password", "secret", "key", "token", or "auth") and places them in Kubernetes Secrets instead of ConfigMaps.
+::
+
+## Volume Support
+
+The parser supports Docker volume mappings by converting them to Kubernetes volume mounts:
+
+- Each volume is converted to a hostPath volume by default
+- Volume names are sanitized to conform to Kubernetes naming conventions
+- For production use, you should modify the generated templates to use more appropriate volume types (PersistentVolumeClaims, etc.)
+
+## Database Integration
+
+When a database service is detected (MySQL, PostgreSQL, Redis, MongoDB), the parser:
+
+1. Adds the corresponding Bitnami Helm chart as a dependency in `Chart.yaml`
+2. Configures database settings in `values.yaml`
+3. Maps environment variables to the expected format for the database chart
+4. Sets up appropriate persistence configurations
+
+### Example Database Configuration
+
+For a PostgreSQL database in your Docker Compose file:
+
+```yaml
+services:
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: myapp
+```
+
+The parser will create:
+
+```yaml
+# In Chart.yaml
+dependencies:
+  - name: db
+    repository: https://charts.bitnami.com/bitnami
+    version: ^12.0.0
+    condition: dependencies.db.enabled
+
+# In values.yaml
+dependencies:
+  db:
+    enabled: true
+    auth:
+      postgres:
+        password: mypassword
+      database: myapp
+      username: myuser
+      password: mypassword
+    primary:
+      service:
+        ports:
+          postgresql: 5432
+      persistence:
+        enabled: true
+        size: 8Gi
+```
+
+## Service Connections
+
+The parser supports service-to-service connections by leveraging Kubernetes DNS for service discovery. When a service refers to another service in an environment variable, the parser automatically configures the appropriate DNS references.
+
+For example, if your `app` service connects to a `db` service:
+
+```yaml
+# Docker Compose
+services:
+  app:
+    image: myapp
+    environment:
+      DATABASE_URL: postgresql://postgres:password@db:5432/mydb
+  
+  db:
+    image: postgres
+    environment:
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mydb
+```
+
+The parser will create:
+
+```yaml
+# In ConfigMap template
+data:
+  DATABASE_URL: {{ include "deploystack.serviceReference" (dict "service" (index $.Values.services "db") "serviceKey" "db") }}
+```
+
+Which resolves to the Kubernetes DNS name: `db.{{ .Release.Namespace }}.svc.cluster.local:5432`
+
+## Multi Services Support
+
+Multi `services` support for Helm: **yes**
+
+Helm Charts are designed to handle multiple services and dependencies in a single deployment, making them ideal for complex applications. The parser transforms all services from your Docker Compose file into corresponding Kubernetes resources.
+
+Please read more about [multi service support here](/docs/docker-to-iac/multi-services-support.md).
+
+## Deployment Instructions
+
+To deploy the generated Helm Chart:
+
+1. Navigate to the directory containing the generated chart
+2. Install dependencies:
+
+   ```bash
+   helm dependency update
+   ```
+
+3. Install the chart:
+
+   ```bash
+   helm install my-release .
+   ```
+
+4. For custom configurations:
+
+   ```bash
+   helm install my-release . --set services.app.replicaCount=2
+   ```
+
+## Production Considerations
+
+For production deployments, consider the following modifications to the generated chart:
+
+1. Replace hostPath volumes with appropriate persistent volume claims
+2. Adjust resource limits in `values.yaml`
+3. Configure proper ingress settings for external access
+4. Enable and configure horizontal pod autoscaling
+5. Set up proper liveness and readiness probes
+
+::content-alert{type="important"}
+The generated Helm Chart is a starting point that you should review and customize to match your production requirements and security best practices.
+::

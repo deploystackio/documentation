@@ -1,5 +1,6 @@
 ---
 description: Here's everything you need to know about our docker-to-iac module - from listing available cloud providers to converting your Docker setup into deployable code.
+menuTitle: API
 ---
 
 # docker-to-iac module API list
@@ -28,28 +29,52 @@ console.log(parsers);
   {
     providerWebsite: 'https://aws.amazon.com/cloudformation/',
     providerName: 'Amazon Web Services',
-    provieerNameAbbreviation: 'AWS',
+    providerNameAbbreviation: 'AWS',
     languageOfficialDocs: 'https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html',
     languageAbbreviation: 'CFN',
     languageName: 'AWS CloudFormation',
-    defaultParserConfig: { fileName: 'aws-cloudformation.yaml', cpu: 512, memory: '1GB', templateFormat: 'yaml' }
+    defaultParserConfig: { files: [Array], cpu: 512, memory: '1GB' }
   },
   {
     providerWebsite: 'https://render.com/docs',
     providerName: 'Render',
-    provieerNameAbbreviation: 'RND',
+    providerNameAbbreviation: 'RND',
     languageOfficialDocs: 'https://docs.render.com/infrastructure-as-code',
     languageAbbreviation: 'RND',
     languageName: 'Render Blue Print',
     defaultParserConfig: {
-      subscriptionName: 'free',
+      files: [Array],
+      subscriptionName: 'starter',
       region: 'oregon',
-      fileName: 'render.yaml',
-      templateFormat: 'yaml'
+      diskSizeGB: 10
+    }
+  },
+  {
+    providerWebsite: 'https://www.digitalocean.com/',
+    providerName: 'DigitalOcean',
+    providerNameAbbreviation: 'DO',
+    languageOfficialDocs: 'https://docs.digitalocean.com/products/app-platform/',
+    languageAbbreviation: 'DOP',
+    languageName: 'DigitalOcean App Spec',
+    defaultParserConfig: { files: [Array], region: 'nyc', subscriptionName: 'basic-xxs' }
+  },
+  {
+    providerWebsite: 'https://helm.sh/',
+    providerName: 'Kubernetes',
+    providerNameAbbreviation: 'K8S',
+    languageOfficialDocs: 'https://helm.sh/docs/',
+    languageAbbreviation: 'HELM',
+    languageName: 'Helm Chart',
+    defaultParserConfig: { 
+      files: [Array],
+      cpu: '100m',
+      memory: '128Mi'
     }
   }
 ]
 ```
+
+**Note the files array**: that's because we have a [multi file strategy](/docs/docker-to-iac/multi-file-configuration.md).
 
 ### Type
 
@@ -76,13 +101,24 @@ console.log(awsInfo);
 
 ```json
 {
-    providerWebsite: 'https://aws.amazon.com/cloudformation/',
-    providerName: 'Amazon Web Services',
-    provieerNameAbbreviation: 'AWS',
-    languageOfficialDocs: 'https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html',
-    languageAbbreviation: 'CFN',
-    languageName: 'AWS CloudFormation',
-    defaultParserConfig: { fileName: 'aws-cloudformation.yaml', cpu: 512, memory: '1GB', templateFormat: 'yaml' }
+  providerWebsite: 'https://aws.amazon.com/cloudformation/',
+  providerName: 'Amazon Web Services',
+  providerNameAbbreviation: 'AWS',
+  languageOfficialDocs: 'https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html',
+  languageAbbreviation: 'CFN',
+  languageName: 'AWS CloudFormation',
+  defaultParserConfig: {
+    files: [
+      {
+        path: 'aws-cloudformation.cf.yml',
+        templateFormat: 'yaml',
+        isMain: true,
+        description: 'AWS CloudFormation template'
+      }
+    ],
+    cpu: 512,
+    memory: '1GB'
+  }
 }
 ```
 
@@ -106,7 +142,25 @@ translate(input: string, options: {
   environmentVariableGeneration?: EnvironmentVariableGenerationConfig;
   environmentVariables?: Record<string, string>;
   persistenceKey?: string;
-}): any
+  serviceConnections?: ServiceConnectionsConfig;
+}): TranslationResult
+```
+
+Where `TranslationResult` has the structure:
+
+```typescript
+interface TranslationResult {
+  files: { 
+    [path: string]: FileOutput 
+  };
+  serviceConnections?: ResolvedServiceConnection[];
+}
+
+interface FileOutput {
+  content: string;
+  format: TemplateFormat;
+  isMain?: boolean;
+}
 ```
 
 ### Examples
@@ -114,32 +168,166 @@ translate(input: string, options: {
 #### Translating Docker Compose
 
 ```javascript
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
 import { translate } from '@deploystack/docker-to-iac';
 
 const dockerComposeContent = readFileSync('path/to/docker-compose.yml', 'utf8');
 
-const translatedConfig = translate(dockerComposeContent, {
+const result = translate(dockerComposeContent, {
   source: 'compose',
   target: 'CFN',
   templateFormat: 'yaml'
 });
-console.log(translatedConfig);
+
+// Access individual file contents
+console.log(`Generated ${Object.keys(result.files).length} files:`);
+Object.keys(result.files).forEach(path => {
+  console.log(`- ${path}`);
+});
+
+// Write files to disk preserving directory structure
+Object.entries(result.files).forEach(([path, fileData]) => {
+  const fullPath = join('output', path);
+  const dir = dirname(fullPath);
+  
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  
+  writeFileSync(fullPath, fileData.content);
+});
 ```
 
 #### Translating Docker Run Command
 
 ```javascript
 import { translate } from '@deploystack/docker-to-iac';
+import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
 
 const dockerRunCommand = 'docker run -d -p 8080:80 nginx:latest';
 
-const translatedConfig = translate(dockerRunCommand, {
+const result = translate(dockerRunCommand, {
   source: 'run',
-  target: 'CFN',
+  target: 'RND',
   templateFormat: 'yaml'
 });
-console.log(translatedConfig);
+
+console.log(result)
+
+// Access and save all generated files
+Object.entries(result.files).forEach(([path, fileData]) => {
+  const fullPath = join('output', path);
+  const dir = dirname(fullPath);
+  
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  
+  writeFileSync(fullPath, fileData.content);
+  console.log(`Created: ${path}`);
+});
+```
+
+#### Translating Docker Compose to Helm Chart
+
+```javascript
+import { translate } from '@deploystack/docker-to-iac';
+import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
+
+const dockerComposeContent = `
+version: '3'
+services:
+  web:
+    image: nginx:latest
+    ports:
+      - "80:80"
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: myapp
+`;
+
+const result = translate(dockerComposeContent, {
+  source: 'compose',
+  target: 'HELM',
+  templateFormat: 'yaml'
+});
+
+// Access and save all generated files to create a complete Helm Chart
+Object.entries(result.files).forEach(([path, fileData]) => {
+  const fullPath = join('helm-chart', path);
+  const dir = dirname(fullPath);
+  
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  
+  writeFileSync(fullPath, fileData.content);
+  console.log(`Created: ${path}`);
+});
+```
+
+#### Example Output (Partial - Chart.yaml)
+
+```yaml
+apiVersion: v2
+name: deploystack-app
+description: A Helm chart for DeployStack application generated from Docker configuration
+type: application
+version: 0.1.0
+appVersion: 1.0.0
+maintainers:
+  - name: DeployStack
+    email: hello@deploystack.io
+dependencies:
+  - name: db
+    repository: https://charts.bitnami.com/bitnami
+    version: ^12.0.0
+    condition: dependencies.db.enabled
+```
+
+#### Configuring Service Connections
+
+```javascript
+import { translate } from '@deploystack/docker-to-iac';
+
+const dockerComposeContent = `
+version: "3"
+services:
+  db:
+    image: mariadb:latest
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpass
+  app:
+    image: node:alpine
+    environment:
+      - DATABASE_HOST=db  # This will be transformed
+`;
+
+const result = translate(dockerComposeContent, {
+  source: 'compose',
+  target: 'DOP',  // DigitalOcean App Platform
+  templateFormat: 'yaml',
+  serviceConnections: {
+    mappings: [
+      {
+        fromService: 'app',        // Service that needs to connect
+        toService: 'db',           // Service to connect to
+        environmentVariables: [    // Env vars that reference the service
+          'DATABASE_HOST'
+        ]
+      }
+    ]
+  }
+});
+
+// The result will include transformed service references:
+console.log(result.serviceConnections);
 ```
 
 ### Example Output (AWS CloudFormation)
@@ -310,11 +498,74 @@ const result = translate(dockerConfig, {
 
 #### `options.persistenceKey?: string`
 
-Optional. The `persistenceKey` parameter allows you to maintain consistent variable values across multiple template generations
+Optional. The `persistenceKey` parameter allows you to maintain consistent variable values across multiple template generations.
+
+#### `options.serviceConnections?: ServiceConnectionsConfig`
+
+Optional. Configure service-to-service communications by defining which environment variables reference other services.
+
+```typescript
+type ServiceConnectionsConfig = {
+  mappings: Array<{
+    fromService: string;         // Service that needs to connect
+    toService: string;           // Service to connect to
+    environmentVariables: string[]; // Environment variables that reference the service
+    property?: string;           // Connection property type (connectionString, hostport, etc.)
+  }>
+};
+```
+
+This option is currently supported by:
+
+- Render.com (RND): Uses Blueprint's `fromService` syntax
+- DigitalOcean App Platform (DOP): Uses direct service names
+- Kubernetes Helm Charts (HELM): Uses Kubernetes DNS service discovery
+
+Example:
+
+```javascript
+serviceConnections: {
+  mappings: [
+    {
+      fromService: 'frontend',
+      toService: 'api',
+      environmentVariables: ['API_URL'],
+      property: 'hostport'
+    },
+    {
+      fromService: 'app',
+      toService: 'db',
+      environmentVariables: ['DATABASE_URL'],
+      property: 'connectionString'
+    }
+  ]
+}
+```
 
 ### Return Value
 
-Returns the translated Infrastructure as Code template in the specified format. The structure and content will vary based on the target IaC language and template format chosen.
+Returns the translated Infrastructure as Code template and any resolved service connections:
+
+```typescript
+{
+  files: {
+    // Generated IaC template files with paths as keys
+    'render.yaml': { content: '...', format: 'yaml', isMain: true }
+  },
+  serviceConnections: [
+    {
+      fromService: 'app',
+      toService: 'db',
+      variables: {
+        'DATABASE_HOST': {
+          originalValue: 'db',
+          transformedValue: 'db'  // Transformed as appropriate for the provider
+        }
+      }
+    }
+  ]
+}
+```
 
 ## List Services API
 

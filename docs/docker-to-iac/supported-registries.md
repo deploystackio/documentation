@@ -1,5 +1,6 @@
 ---
 description: Complete guide to Docker registries in docker-to-iac - From official Docker Hub images to GHCR, learn supported formats with practical examples.
+menuTitle: Supported Registries
 ---
 
 # Supported Registries for docker-to-iac module
@@ -79,3 +80,4 @@ Here's how different registry types are handled:
 - If no tag is specified, `latest` is used as the default tag
 - The module preserves the original registry URL format for custom registries
 - SHA256 digests are supported for all registry types
+- All supported registries work with all parsers, including AWS CloudFormation, Render.com, DigitalOcean App Platform, and Kubernetes Helm Charts

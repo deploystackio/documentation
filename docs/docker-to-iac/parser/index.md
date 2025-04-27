@@ -9,3 +9,4 @@ Here you can find the list of available [parsers](/docs/docker-to-iac/parser-exp
 - [AWS CloudFormation](/docs/docker-to-iac/parser/aws-cloudformation.md)
 - [Render.com](/docs/docker-to-iac/parser/render.com.md)
 - [DigitalOcean](/docs/docker-to-iac/parser/digitalocean.md)
+- [Helm (Kubernetes)](/docs/docker-to-iac/parser/helm.md)

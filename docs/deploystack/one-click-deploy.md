@@ -39,6 +39,7 @@ We create a dedicated branch for each project to support one-click deployment fu
 We integrate with cloud providers' native deployment systems. For example:
 
 - **DigitalOcean**: Uses the "Deploy to DigitalOcean" functionality as documented in their [official guide](https://docs.digitalocean.com/products/app-platform/how-to/add-deploy-do-button/)
+- **Kubernetes**: Generates Helm charts that can be deployed to any Kubernetes cluster
 - Check [supported cloud providers](/docs/docker-to-iac/index.md) for full list
 
 ### Provider-Specific Templates
@@ -49,6 +50,7 @@ Each cloud provider may require specific template formats:
 - DigitalOcean App Spec
 - Render Blueprints
 - And more based on provider requirements
+- Kubernetes Helm charts with all necessary templates
 
 ## Using Deploy Buttons
 
