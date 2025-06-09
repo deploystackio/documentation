@@ -23,9 +23,20 @@ node_modules/
 .idea/
 .DS_Store
 
-# Ignore build outputs
+# Next.js build outputs
+.next/
+out/
 dist/
 build/
+
+# Next.js cache
+.next/cache/
+
+# Vercel deployment outputs
+.vercel/
+
+# Fumadocs generated files
+.fumadocs/
 
 # Ignore TypeScript compiled outputs
 *.tsbuildinfo

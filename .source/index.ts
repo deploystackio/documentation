@@ -1,0 +1,7 @@
+// @ts-nocheck -- skip type checking
+import * as docs_2 from "../docs/docker-to-iac/index.mdx?collection=docs&hash=1749400994400"
+import * as docs_1 from "../docs/deploystack/index.mdx?collection=docs&hash=1749400994400"
+import * as docs_0 from "../docs/index.mdx?collection=docs&hash=1749400994400"
+import { _runtime } from "fumadocs-mdx"
+import * as _source from "../source.config"
+export const docs = _runtime.docs<typeof _source.docs>([{ info: {"path":"index.mdx","absolutePath":"/Volumes/T9_1/Git/deploy.my/documentation/docs/index.mdx"}, data: docs_0 }, { info: {"path":"deploystack/index.mdx","absolutePath":"/Volumes/T9_1/Git/deploy.my/documentation/docs/deploystack/index.mdx"}, data: docs_1 }, { info: {"path":"docker-to-iac/index.mdx","absolutePath":"/Volumes/T9_1/Git/deploy.my/documentation/docs/docker-to-iac/index.mdx"}, data: docs_2 }], [{"info":{"path":"deploystack/meta.json","absolutePath":"/Volumes/T9_1/Git/deploy.my/documentation/docs/deploystack/meta.json"},"data":{"title":"DeployStack","description":"Documentation for DeployStack","root":true,"icon":"DeployStackLogo"}}, {"info":{"path":"docker-to-iac/meta.json","absolutePath":"/Volumes/T9_1/Git/deploy.my/documentation/docs/docker-to-iac/meta.json"},"data":{"title":"docker-to-iac","description":"docker-to-iac module","root":true,"icon":"Container"}}])

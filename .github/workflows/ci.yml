@@ -36,6 +36,9 @@ jobs:
       - name: Run Lint Links
         run: npm run lint:links
 
+      - name: Run Lint Links
+        run: npm run build        
+
   release:
     name: Run Release
     runs-on: ubuntu-latest
