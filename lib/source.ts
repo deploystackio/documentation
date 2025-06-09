@@ -17,6 +17,7 @@ export const source = loader({
   // The source of the documents, converted to Fumadocs format.
   source: docs.toFumadocsSource(),
   
+  
   // Icon handler to support both lucide-react icons and custom icons
   icon(icon) {
     if (!icon) {
@@ -37,11 +38,19 @@ export const source = loader({
     return undefined;
   },
 
+  // Customize page tree to support custom sidebar titles
+  pageTree: {
+    attachFile(node, file) {
+      // If the file has a custom sidebar title, use it instead of the title
+      if (file?.data && 'sidebar' in file.data && file.data.sidebar) {
+        node.name = file.data.sidebar as string;
+      }
+      return node;
+    },
+  },
+
   // Optional: You can define global MDX components here if not done elsewhere
   // globalMdxComponents: getMDXComponents(),
-
-  // Optional: Configure how slugs are generated
-  // getSlugs: (file) => { ... }
 });
 
 // You might also want to export page tree and other utilities if needed directly

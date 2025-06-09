@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation';
 import { source } from '@/lib/source';
 import { generatePageMetadata, getCanonicalUrl } from '@/lib/seo-utils';
 import { CustomNavbar } from '@/lib/components/CustomNavbar';
+import { getFinalPageTitle } from '@/lib/h1-extractor';
+import { readFile } from 'fs/promises';
 
 export default async function Page({
   params,
@@ -23,7 +25,6 @@ export default async function Page({
     <DocsPage toc={page.data.toc} full={page.data.full}>
       <CustomNavbar />
       <DocsBody>
-        <h1>{page.data.title}</h1>
         <MDX />
       </DocsBody>
     </DocsPage>
@@ -49,8 +50,22 @@ export async function generateMetadata({
   const slugString = slug ? slug.join('/') : '';
   const url = getCanonicalUrl(slugString);
 
+  // Read the raw MDX file to extract H1 heading
+  let finalTitle = page.data.title;
+  try {
+    // Get the absolute path from the page info
+    const filePath = page.file.path;
+    const absolutePath = `/Volumes/T9_1/Git/deploy.my/documentation/docs/${filePath}`;
+    const rawContent = await readFile(absolutePath, 'utf-8');
+    finalTitle = getFinalPageTitle(rawContent, page.data.title);
+  } catch (error) {
+    // Fallback to frontmatter title if file reading fails
+    console.warn('Failed to read MDX file for H1 extraction:', error);
+    finalTitle = page.data.title;
+  }
+
   return generatePageMetadata({
-    title: page.data.title,
+    title: finalTitle,
     description: page.data.description || 'DeployStack Documentation and API Reference',
     slug: slugString,
     url,
