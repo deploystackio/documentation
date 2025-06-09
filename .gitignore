@@ -23,17 +23,16 @@ node_modules/
 .idea/
 .DS_Store
 
-# Next.js build outputs
-.next/
-out/
-dist/
-build/
+# outputs
+.turbo
+.next
+dist
+.contentlayer
+.eslintcache
+.source
 
 # Next.js cache
 .next/cache/
-
-# Vercel deployment outputs
-.vercel/
 
 # Fumadocs generated files
 .fumadocs/

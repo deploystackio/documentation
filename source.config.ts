@@ -1,4 +1,4 @@
-import { defineDocs, frontmatterSchema } from 'fumadocs-mdx/config';
+import { defineDocs, defineConfig, frontmatterSchema } from 'fumadocs-mdx/config';
 import { z } from 'zod';
 
 export const docs = defineDocs({
@@ -9,5 +9,16 @@ export const docs = defineDocs({
     schema: frontmatterSchema.extend({
       sidebar: z.string().optional(),
     }),
+  },
+});
+
+export default defineConfig({
+  mdxOptions: {
+    rehypeCodeOptions: {
+      themes: {
+        light: 'github-light',
+        dark: 'github-dark',
+      },
+    },
   },
 });

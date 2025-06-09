@@ -1,9 +1,5 @@
-import defaultMdxComponents from 'fumadocs-ui/mdx';
-import type { ComponentType } from 'react';
-
-type MDXComponents = {
-  [key: string]: ComponentType<any>;
-};
+import defaultComponents from 'fumadocs-ui/mdx';
+import type { MDXComponents } from 'mdx/types';
 
 // You can add your own global components here
 const customComponents: MDXComponents = {
@@ -13,7 +9,7 @@ const customComponents: MDXComponents = {
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
-    ...defaultMdxComponents,
+    ...defaultComponents,
     ...customComponents,
     ...components,
   };

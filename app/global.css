@@ -1,14 +1,5 @@
-/* Import Tailwind CSS */
-@import 'tailwindcss';
-
-/* Import Fumadocs UI base styles */
-/* From the docs:
-   @import 'tailwindcss'; // Already handled by individual imports above for clarity
-   @import 'fumadocs-ui/css/neutral.css';
-   @import 'fumadocs-ui/css/preset.css';
-*/
-@import 'fumadocs-ui/css/neutral.css'; /* Recommended for a neutral color palette */
-@import 'fumadocs-ui/css/preset.css'; /* Core Fumadocs UI styles */
+/* Import Fumadocs UI complete styles */
+@import 'fumadocs-ui/css/style.css';
 
 /* Custom navbar styling to match main site */
 /* Navbar height override removed since navbar is now inside content area */

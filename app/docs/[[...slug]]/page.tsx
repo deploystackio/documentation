@@ -6,6 +6,7 @@ import { generatePageMetadata, getCanonicalUrl } from '@/lib/seo-utils';
 import { CustomNavbar } from '@/lib/components/CustomNavbar';
 import { getFinalPageTitle } from '@/lib/h1-extractor';
 import { readFile } from 'fs/promises';
+import { getMDXComponents } from '@/mdx-components';
 
 export default async function Page({
   params,
@@ -25,7 +26,7 @@ export default async function Page({
     <DocsPage toc={page.data.toc} full={page.data.full}>
       <CustomNavbar />
       <DocsBody>
-        <MDX />
+        <MDX components={getMDXComponents()} />
       </DocsBody>
     </DocsPage>
   );
