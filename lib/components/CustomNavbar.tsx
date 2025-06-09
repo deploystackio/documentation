@@ -5,8 +5,8 @@ import { GithubIcon, Menu } from 'lucide-react';
 
 export function CustomNavbar() {
   return (
-    <div className="mx-auto sm:px-0 md:px-6 lg:px-8 max-w-7xl">
-      <header className="md:mt-7 md:bg-slate-50 flex items-center justify-between gap-8 rounded-full lg:border border-border px-2.5 py-5 md:py-1.5 backdrop-blur-lg md:top-6 mx-auto w-full max-w-7xl">
+    <div className="w-full mb-6 hidden md:block">
+      <header className="bg-slate-50 flex items-center justify-between gap-8 rounded-full border border-border px-4 py-3 backdrop-blur-lg w-full">
         {/* Logo and Main Navigation */}
         <div className="flex items-center gap-3">
           <div className="ml-3 flex items-center gap-3 mr-10">
@@ -19,7 +19,6 @@ export function CustomNavbar() {
                 height={24}
                 className="inline w-[22px] h-[24px] -mt-1"
               />
-              <span className="ml-2 text-[18px] font-semibold">DeployStack</span>
             </Link>
           </div>
           
@@ -29,20 +28,7 @@ export function CustomNavbar() {
               <ul className="menu flex gap-6" data-orientation="horizontal">
                 <li>
                   <Link href="https://deploystack.io/mcp" className="hover:text-primary transition-colors">
-                    Browse MCP Server
-                  </Link>
-                </li>
-                <li>
-                  <Link href="https://deploystack.io/c" className="hover:text-primary transition-colors">
-                    Browse Docker
-                  </Link>
-                </li>
-                <li>
-                  <Link 
-                    href="/docs" 
-                    className="text-primary font-semibold hover:text-primary/80 transition-colors"
-                  >
-                    Documentation
+                    MCP Server
                   </Link>
                 </li>
                 <li>
@@ -86,6 +72,7 @@ export function CustomNavbar() {
           {/* Login Button */}
           <Link
             href="https://cloud.deploystack.io/login"
+            target="_blank"
             className="items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-black text-white shadow hover:bg-gray-800 h-9 px-4 py-2 rounded-full hidden md:inline-flex"
           >
             Login

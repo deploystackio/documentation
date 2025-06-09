@@ -2,7 +2,6 @@ import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import type { ReactNode } from 'react';
 import { baseOptions } from '../layout.config';
 import { source } from '../../lib/source';
-import { CustomNavbar } from '../../lib/components/CustomNavbar';
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (
@@ -10,7 +9,8 @@ export default function Layout({ children }: { children: ReactNode }) {
       {...baseOptions}
       tree={source.pageTree}
       nav={{
-        component: <CustomNavbar />,
+        title: 'DeployStack Docs',
+        url: '/docs',
       }}
       sidebar={{
         defaultOpenLevel: 1,

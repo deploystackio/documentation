@@ -3,6 +3,7 @@ import { DocsPage, DocsBody } from 'fumadocs-ui/page';
 import { notFound } from 'next/navigation';
 import { source } from '@/lib/source';
 import { generatePageMetadata, getCanonicalUrl } from '@/lib/seo-utils';
+import { CustomNavbar } from '@/lib/components/CustomNavbar';
 
 export default async function Page({
   params,
@@ -20,6 +21,7 @@ export default async function Page({
 
   return (
     <DocsPage toc={page.data.toc} full={page.data.full}>
+      <CustomNavbar />
       <DocsBody>
         <h1>{page.data.title}</h1>
         <MDX />

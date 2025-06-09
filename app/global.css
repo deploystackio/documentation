@@ -11,9 +11,7 @@
 @import 'fumadocs-ui/css/preset.css'; /* Core Fumadocs UI styles */
 
 /* Custom navbar styling to match main site */
-:root {
-  --fd-nav-height: 80px; /* Height for custom navbar */
-}
+/* Navbar height override removed since navbar is now inside content area */
 
 /* Ensure logo and navigation styling matches main site */
 .fd-nav-title {
