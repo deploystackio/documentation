@@ -1,0 +1,42 @@
+name: Deploy Documentation Preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      comment:
+        description: 'Deployment Documentation'
+        required: false
+        default: 'Manual preview deployment'
+
+jobs:
+  build-and-deploy:
+    if: github.ref_name == 'main' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          npm install
+      
+      - name: Build frontend
+        run: npm run build
+      
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy out --project-name=deploystack-docs --branch=main
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}

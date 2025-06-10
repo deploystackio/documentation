@@ -72,3 +72,4 @@ coverage/
 
 ._*.mdx
 ._*.ts
+out/

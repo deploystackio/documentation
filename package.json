@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && npm run move-assets",
+    "move-assets": "mkdir -p out/docs/_next && cp -r out/_next/* out/docs/_next/ && rm -rf out/_next",
     "start": "next start",
     "lint:md": "npx markdownlint-cli2 '**/*.md' '#node_modules' '#.github'",
     "lint:links": "node check-links.js",
