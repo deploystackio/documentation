@@ -38,5 +38,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy .next --project-name=deploystack-docs --branch=main
+          command: pages deploy out --project-name=deploystack-docs --branch=main
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}

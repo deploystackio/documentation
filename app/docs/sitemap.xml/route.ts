@@ -1,6 +1,9 @@
 import { source } from '@/lib/source';
 import { getCanonicalUrl } from '@/lib/seo-utils';
 
+export const dynamic = 'force-static';
+export const revalidate = false;
+
 export async function GET() {
   const pages = source.getPages();
   
