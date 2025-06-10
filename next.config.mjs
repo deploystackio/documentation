@@ -7,6 +7,8 @@ const config = {
   reactStrictMode: true,
   output: 'export', // Enable static HTML export
   trailingSlash: true, // Required for static export
+  basePath: '/docs', // Set base path for the application
+  assetPrefix: '/docs', // Ensure assets are also prefixed with /docs
   images: {
     unoptimized: true // Required for static export
   },
