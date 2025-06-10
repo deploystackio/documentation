@@ -1,7 +1,6 @@
 ---
 title: One-Click Deploy
 description: Technical docs for DeployStack's one-click deployment feature. Covers infrastructure template generation, cloud provider integration, and button configuration.
-menuTitle: One-Click Deploy
 ---
 
 # One-Click Deploy
@@ -12,7 +11,7 @@ DeployStack leverages existing deployment technologies from cloud providers to m
 
 When you submit your repository to [deploystack.io/submit](https://deploystack.io/submit), we:
 
-1. Generate Infrastructure as Code (IaC) templates for [supported cloud providers](/docs/docker-to-iac/index.md)
+1. Generate Infrastructure as Code (IaC) templates for [supported cloud providers](/docs/docker-to-iac/index)
 2. Store these templates in our [deploy-templates repository](https://github.com/deploystackio/deploy-templates)
 3. Create provider-specific deployment buttons for your README.md -> by [deploystack.io/deploy-button](https://deploystack.io/deploy-button)
 
@@ -42,7 +41,7 @@ We integrate with cloud providers' native deployment systems. For example:
 
 - **DigitalOcean**: Uses the "Deploy to DigitalOcean" functionality as documented in their [official guide](https://docs.digitalocean.com/products/app-platform/how-to/add-deploy-do-button/)
 - **Kubernetes**: Generates Helm charts that can be deployed to any Kubernetes cluster
-- Check [supported cloud providers](/docs/docker-to-iac/index.md) for full list
+- Check [supported cloud providers](/docs/docker-to-iac/index) for full list
 
 ### Provider-Specific Templates
 
@@ -81,7 +80,7 @@ Link via deploystack deploy endpoint.
 - static deploy links: if the cloud provider changes the one-click deploy url, the functionality will also be broken. You have to update your `README.md` manually.
 - no statistics collection possible: you will never know how many people use your project :)
 
-```markdown [README.md]
+```markdown title="README.md"
 ## ⚡ One-Click Deploy
 
 | Cloud Provider | Deploy Button |
@@ -95,7 +94,7 @@ Direct link to Cloud Provider to enable One-Click depoy.
 
 #### Example Markdown Deploy Standalone
 
-```markdown [README.md]
+```markdown title="README.md"
 ## ⚡ One-Click Deploy
 
 | Cloud Provider | Deploy Button |

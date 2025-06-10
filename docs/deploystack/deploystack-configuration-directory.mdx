@@ -1,15 +1,15 @@
 ---
 title: .deploystack Directory Reference
 description: Technical guide for setting up the .deploystack directory to manage Infrastructure as Code template generation and updates across your repository.
-menuTitle: .deploystack Directory
 ---
 
 # .deploystack Directory Reference
 
-The `.deploystack` directory in your repository contains configuration files that DeployStack uses to generate and maintain your Infrastructure as Code templates. Creating this repo allows you to enable the [lifecycle of IaC](/docs/deploystack/iac-lifecycle.md). The deploystack configurations repo only makes sense if you also [install DeployStack GitHub app](/docs/deploystack/github-application.md). Otherwise, changes to DeployStack backend will not be recognized.
+The `.deploystack` directory in your repository contains configuration files that DeployStack uses to generate and maintain your Infrastructure as Code templates. Creating this repo allows you to enable the [lifecycle of IaC](/docs/deploystack/iac-lifecycle). The deploystack configurations repo only makes sense if you also [install DeployStack GitHub app](/docs/deploystack/github-application). Otherwise, changes to DeployStack backend will not be recognized.
 
-> [!NOTE]
-> `.deploystack` directory is optional. You don't need to create it to submit your repository to deploystack.io.
+<Callout>
+`.deploystack` directory is optional. You don't need to create it to submit your repository to deploystack.io.
+</Callout>
 
 ## Directory Structure
 
@@ -24,7 +24,7 @@ The `.deploystack` directory in your repository contains configuration files tha
 
 ### DeployStack Configuration File
 
-Please read more at [DeployStack Configuration File Reference](/docs/deploystack/deploystack-config-file.md).
+Please read more at [DeployStack Configuration File Reference](/docs/deploystack/deploystack-config-file).
 
 ### Docker Configuration
 
@@ -52,11 +52,11 @@ docker run -d -p 80:80 nginx:alpine
 
 ### Environment Variables
 
-Please read more from our [environment variables](/docs/deploystack/docker-environment-variables.md) page.
+Please read more from our [environment variables](/docs/deploystack/docker-environment-variables) page.
 
 ## Automatic Updates
 
-When the [DeployStack GitHub App](/docs/deploystack/github-application.md) is installed:
+When the [DeployStack GitHub App](/docs/deploystack/github-application) is installed:
 
 1. Changes to specific (`docker-compose.yml` & `docker-run.txt`) file in `.deploystack/` trigger template updates
 2. Updates only process when changes occur on the default branch
@@ -66,6 +66,6 @@ When the [DeployStack GitHub App](/docs/deploystack/github-application.md) is in
 
 - The `.deploystack` directory is **optional**
 - Without this directory, automatic template updates are **not** available
-- You can add the directory and install the [DeployStack GitHub Sync App](/docs/deploystack/github-application.md) at any time
-- [Environment variables](/docs/deploystack/docker-environment-variables.md) and [DeployStack config](/docs/deploystack/deploystack-config-file.md) are optional components
+- You can add the directory and install the [DeployStack GitHub Sync App](/docs/deploystack/github-application) at any time
+- [Environment variables](/docs/deploystack/docker-environment-variables) and [DeployStack config](/docs/deploystack/deploystack-config-file) are optional components
 - Only one Docker configuration file should be used (either compose or run)
