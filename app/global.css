@@ -1,0 +1,38 @@
+/* Import Fumadocs UI complete styles */
+@import 'fumadocs-ui/css/style.css';
+
+/* Custom navbar styling to match main site */
+/* Navbar height override removed since navbar is now inside content area */
+
+/* Ensure logo and navigation styling matches main site */
+.fd-nav-title {
+  font-weight: 600;
+  font-size: 18px;
+}
+
+/* Style the login button to match main site */
+[data-fumadocs-nav] a[href*="login"] {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-radius: 9999px;
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+[data-fumadocs-nav] a[href*="login"]:hover {
+  background: hsl(var(--primary) / 0.9);
+}
+
+/* Ensure Documentation link is highlighted when active */
+[data-fumadocs-nav] a[href="/docs"][data-active="true"] {
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+
+/* Optional: Add your own global styles or font imports here */
+/* For example, to set a default font:
+body {
+  font-family: 'Inter', sans-serif; // Make sure to import 'Inter' or your chosen font
+}
+*/

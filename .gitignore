@@ -23,9 +23,19 @@ node_modules/
 .idea/
 .DS_Store
 
-# Ignore build outputs
-dist/
-build/
+# outputs
+.turbo
+.next
+dist
+.contentlayer
+.eslintcache
+.source
+
+# Next.js cache
+.next/cache/
+
+# Fumadocs generated files
+.fumadocs/
 
 # Ignore TypeScript compiled outputs
 *.tsbuildinfo
@@ -59,3 +69,6 @@ ehthumbs.db
 # Tests
 coverage/
 .jest/
+
+._*.mdx
+._*.ts
