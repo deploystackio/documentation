@@ -56,7 +56,7 @@ export async function generateMetadata({
   try {
     // Get the absolute path from the page info
     const filePath = page.file.path;
-    const absolutePath = `/Volumes/T9_1/Git/deploy.my/documentation/docs/${filePath}`;
+    const absolutePath = `./docs/${filePath}`;
     const rawContent = await readFile(absolutePath, 'utf-8');
     finalTitle = getFinalPageTitle(rawContent, page.data.title);
   } catch (error) {
