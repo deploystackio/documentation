@@ -1,0 +1,6 @@
+{
+  "title": "docker-to-iac",
+  "description": "docker-to-iac module",
+  "icon": "Container",
+  "root": true
+}
