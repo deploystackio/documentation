@@ -13,8 +13,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         url: '/docs',
       }}
       sidebar={{
-        defaultOpenLevel: 1,
-        tabs: false,
+        defaultOpenLevel: 1
       }}
     >
       {children}

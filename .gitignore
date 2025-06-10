@@ -69,3 +69,6 @@ ehthumbs.db
 # Tests
 coverage/
 .jest/
+
+._*.mdx
+._*.ts
