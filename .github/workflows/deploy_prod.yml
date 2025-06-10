@@ -1,4 +1,4 @@
-name: Deploy Documentation Preview
+name: Deploy Documentation Production
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
       comment:
         description: 'Deployment Documentation'
         required: false
-        default: 'Manual preview deployment'
+        default: 'Manual Production deployment'
 
 jobs:
   build-and-deploy:
