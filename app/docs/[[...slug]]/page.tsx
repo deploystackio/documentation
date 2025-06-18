@@ -3,7 +3,6 @@ import { DocsPage, DocsBody } from 'fumadocs-ui/page';
 import { notFound } from 'next/navigation';
 import { source } from '@/lib/source';
 import { generatePageMetadata, getCanonicalUrl } from '@/lib/seo-utils';
-import { CustomNavbar } from '@/lib/components/CustomNavbar';
 import { getFinalPageTitle } from '@/lib/h1-extractor';
 import { readFile } from 'fs/promises';
 import { getMDXComponents } from '@/mdx-components';
@@ -24,7 +23,6 @@ export default async function Page({
 
   return (
     <DocsPage toc={page.data.toc} full={page.data.full}>
-      <CustomNavbar />
       <DocsBody>
         <MDX components={getMDXComponents()} />
       </DocsBody>

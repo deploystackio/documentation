@@ -10,7 +10,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       tree={source.pageTree}
       nav={{
         title: 'DeployStack Docs',
-        url: '/docs',
+        url: '/',
       }}
       sidebar={{
         defaultOpenLevel: 1
