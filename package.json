@@ -17,7 +17,7 @@
     "@types/mdx": "^2.0.13",
     "fumadocs-core": "^15.5.3",
     "fumadocs-mdx": "^11.6.7",
-    "fumadocs-ui": "^15.5.1",
+    "fumadocs-ui": "^15.5.3",
     "lucide-react": "^0.513.0",
     "mdx": "^0.3.1",
     "next": "^15.3.3",
