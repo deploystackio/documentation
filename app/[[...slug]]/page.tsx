@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import { DocsPage, DocsBody } from 'fumadocs-ui/page';
 import { notFound } from 'next/navigation';
 import { source } from '@/lib/source';
@@ -6,6 +7,7 @@ import { generatePageMetadata, getCanonicalUrl } from '@/lib/seo-utils';
 import { getFinalPageTitle } from '@/lib/h1-extractor';
 import { readFile } from 'fs/promises';
 import { getMDXComponents } from '@/mdx-components';
+import { baseOptions } from '../layout.config';
 
 export default async function Page({
   params,
@@ -22,11 +24,23 @@ export default async function Page({
   const MDX = page.data.body;
 
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full}>
-      <DocsBody>
-        <MDX components={getMDXComponents()} />
-      </DocsBody>
-    </DocsPage>
+    <DocsLayout
+      {...baseOptions}
+      tree={source.pageTree}
+      nav={{
+        title: 'DeployStack Docs',
+        url: '/',
+      }}
+      sidebar={{
+        defaultOpenLevel: 1
+      }}
+    >
+      <DocsPage toc={page.data.toc} full={page.data.full}>
+        <DocsBody>
+          <MDX components={getMDXComponents()} />
+        </DocsBody>
+      </DocsPage>
+    </DocsLayout>
   );
 }
 

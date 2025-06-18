@@ -32,7 +32,7 @@ services:
 
 ## API
 
-For detailed API documentation, see the [parser API reference](/docker-to-iac/api).
+For detailed API documentation, see the [parser API reference](/docs/docker-to-iac/api).
 
 ## Default Parser Config
 
@@ -40,7 +40,7 @@ Each parser includes default configurations specific to its target cloud provide
 
 Example: AWS Fargate has a minimum CPU allocation of 256, while DigitalOcean's [minimum setting is 1 vCPU](https://www.digitalocean.com/pricing/app-platform). The default parser config handles these provider-specific requirements.
 
-To retrieve default parser configurations through the API, see the [parser info documentation](/docker-to-iac/api#get-parser-info).
+To retrieve default parser configurations through the API, see the [parser info documentation](/docs/docker-to-iac/api#get-parser-info).
 
 ## Parser vs. Language
 
@@ -52,7 +52,7 @@ For example, AWS infrastructure can be defined using:
 - AWS CDK (for TypeScript, Python, etc.)
 - Terraform
 
-When adding new parsers, consider whether multiple IaC languages are possible for your target provider. This affects how you name your parser file in `src/parsers/<IAC_LANGUAGE_FILE_NAME>.ts`. It's why the [`translate()`](/docker-to-iac/api#translate-api) method requires the target IaC language name (e.g., `CFN`) rather than the provider name (e.g., `AWS`).
+When adding new parsers, consider whether multiple IaC languages are possible for your target provider. This affects how you name your parser file in `src/parsers/<IAC_LANGUAGE_FILE_NAME>.ts`. It's why the [`translate()`](/docs/docker-to-iac/api#translate-api) method requires the target IaC language name (e.g., `CFN`) rather than the provider name (e.g., `AWS`).
 
 ## Parser Implementation Notes
 
