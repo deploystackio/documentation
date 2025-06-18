@@ -5,7 +5,7 @@ description: Learn about multi-service deployment support - See how docker-to-ia
 
 # Multi-Service Support
 
-Multi-service support refers to the ability of a [parser](/docker-to-iac/parser-explanation) to handle multiple container configurations when translating to Infrastructure as Code (IaC) templates.
+Multi-service support refers to the ability of a [parser](/docs/docker-to-iac/parser-explanation) to handle multiple container configurations when translating to Infrastructure as Code (IaC) templates.
 
 ## Docker Run vs Docker Compose
 
@@ -73,6 +73,6 @@ const translation = translate(dockerComposeContent, {
 
 ## Provider-Specific Behavior
 
-Before using a specific parser, check its multi-service capabilities in the [parser documentation](/docker-to-iac/parser-explanation). This helps ensure your deployment strategy aligns with the provider's capabilities.
+Before using a specific parser, check its multi-service capabilities in the [parser documentation](/docs/docker-to-iac/parser-explanation). This helps ensure your deployment strategy aligns with the provider's capabilities.
 
 Note that some providers may have different service limits or deployment patterns even when they support multiple services. Always consult the target provider's documentation for specific limitations.

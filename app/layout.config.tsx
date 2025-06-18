@@ -1,10 +1,10 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 
 export const baseOptions: BaseLayoutProps = {
-  // Navigation bar configuration (now handled by CustomNavbar)
+  // Navigation bar configuration
   nav: {
     title: 'DeployStack Docs',
-    url: '/docs',
+    url: '/',
   },
 
   // GitHub repository for edit links
