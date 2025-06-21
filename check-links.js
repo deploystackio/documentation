@@ -25,19 +25,35 @@ const extractLinks = (content) => {
 
 // Check if a local file exists
 const checkLocalFile = (linkPath, filePath) => {
-    if (linkPath.startsWith('/docs/')) {
+    // Check for internal links (starting with / but not external URLs)
+    if (linkPath.startsWith('/') && !linkPath.startsWith('//') && !linkPath.startsWith('http')) {
         // Remove hash fragment before checking file existence
         const [baseUrl] = linkPath.split('#');
-        const localPath = path.join(process.cwd(), baseUrl);
         
-        try {
-            fs.accessSync(localPath, fs.constants.F_OK);
-            console.log(`  ✅ ${linkPath}`);
-            return true;
-        } catch (err) {
-            console.log(`  ❌ ${linkPath} → File not found`);
-            return false;
+        // Map the URL to the actual file location
+        // Since our URLs are now root-level but files are in docs/
+        const actualFilePath = path.join(process.cwd(), 'docs', baseUrl.substring(1));
+        
+        // Try both .mdx and .md extensions
+        const possiblePaths = [
+            actualFilePath + '.mdx',
+            actualFilePath + '.md',
+            path.join(actualFilePath, 'index.mdx'),
+            path.join(actualFilePath, 'index.md')
+        ];
+        
+        for (const possiblePath of possiblePaths) {
+            try {
+                fs.accessSync(possiblePath, fs.constants.F_OK);
+                console.log(`  ✅ ${linkPath}`);
+                return true;
+            } catch (err) {
+                // Continue to next possible path
+            }
         }
+        
+        console.log(`  ❌ ${linkPath} → File not found (checked: ${possiblePaths.map(p => path.relative(process.cwd(), p)).join(', ')})`);
+        return false;
     }
     return null; // not a local file
 };
@@ -79,7 +95,8 @@ const processFile = async (filePath) => {
     
     let allValid = true;
     for (const link of links) {
-        if (link.url.startsWith('/docs/')) {
+        if (link.url.startsWith('/') && !link.url.startsWith('//') && !link.url.startsWith('http')) {
+            // Internal link (root-level)
             const isValid = checkLocalFile(link.url, filePath);
             if (!isValid) allValid = false;
         } else if (link.url.startsWith('http')) {
@@ -109,7 +126,7 @@ const processDirectory = async (dir) => {
         if (stat.isDirectory()) {
             const isValid = await processDirectory(filePath);
             if (!isValid) allValid = false;
-        } else if (file.endsWith('.md')) {
+        } else if (file.endsWith('.md') || file.endsWith('.mdx')) {
             const isValid = await processFile(filePath);
             if (!isValid) allValid = false;
         }

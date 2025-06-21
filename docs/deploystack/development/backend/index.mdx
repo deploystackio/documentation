@@ -1,0 +1,144 @@
+---
+title: Backend Development
+description: Complete guide to developing and contributing to the DeployStack backend - a high-performance Node.js application built with Fastify, TypeScript, and extensible plugin architecture.
+sidebar: Getting Started
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Database, Shield, Plug, Settings, Mail, TestTube, Wrench, BookOpen } from 'lucide-react';
+
+# DeployStack Backend Development
+
+The DeployStack backend is a modern, high-performance Node.js application built with **Fastify**, **TypeScript**, and **Drizzle ORM**. It's specifically designed for managing MCP (Model Context Protocol) server deployments with enterprise-grade features including authentication, role-based access control, and an extensible plugin system.
+
+## Technology Stack
+
+- **Framework**: Fastify for high-performance HTTP server
+- **Language**: TypeScript for type safety
+- **Database**: SQLite (default) or PostgreSQL with Drizzle ORM
+- **Validation**: Zod for request/response validation and OpenAPI generation
+- **Plugin System**: Extensible architecture with security isolation
+- **Authentication**: Cookie-based sessions with role-based access control
+
+## Quick Start
+
+```bash
+cd services/backend
+npm install
+npm run dev
+```
+
+The development server starts at `http://localhost:3000` with API documentation at `/documentation`.
+
+## Development Guides
+
+<Cards>
+  <Card 
+    icon={<BookOpen />} 
+    href="/deploystack/development/backend/api" 
+    title="API Documentation"
+  >
+    Learn how to generate OpenAPI specifications, use Swagger UI, and implement Zod validation for automatic API documentation.
+  </Card>
+  
+  <Card 
+    icon={<Database />} 
+    href="/deploystack/development/backend/database" 
+    title="Database Management"
+  >
+    SQLite and PostgreSQL setup, schema management, migrations, and Drizzle ORM best practices.
+  </Card>
+  
+  <Card 
+    icon={<Plug />} 
+    href="/deploystack/development/backend/plugins" 
+    title="Plugin System"
+  >
+    Create extensible plugins with isolated routes, database extensions, and security features for custom functionality.
+  </Card>
+  
+  <Card 
+    icon={<Settings />} 
+    href="/deploystack/development/backend/global-settings" 
+    title="Global Settings"
+  >
+    Configuration management system with encrypted storage, role-based access, and plugin extensions.
+  </Card>
+  
+  <Card 
+    icon={<Shield />} 
+    href="/deploystack/development/backend/security" 
+    title="Security & Roles"
+  >
+    Authentication, authorization, role-based access control, and security best practices.
+  </Card>
+  
+  <Card 
+    icon={<Mail />} 
+    href="/deploystack/development/backend/mail" 
+    title="Mail System"
+  >
+    Email service configuration, SMTP setup, template management, and transactional email sending.
+  </Card>
+  
+  <Card 
+    icon={<TestTube />} 
+    href="/deploystack/development/backend/test" 
+    title="Testing"
+  >
+    Testing strategies, examples, and best practices for backend development and API testing.
+  </Card>
+  
+  <Card 
+    icon={<Wrench />} 
+    href="/deploystack/development/backend/roles" 
+    title="Roles Management"
+  >
+    User roles, permissions system, and access control implementation details.
+  </Card>
+</Cards>
+
+## Project Structure
+
+```bash
+services/backend/
+├── src/
+│   ├── routes/              # API route handlers
+│   ├── db/                  # Database schema and configuration
+│   ├── plugin-system/       # Plugin architecture
+│   ├── global-settings/     # Core settings definitions
+│   ├── auth/                # Authentication utilities
+│   └── server.ts            # Main server configuration
+├── plugins/                 # Extensible plugin directory
+├── persistent_data/         # Data persistence
+└── drizzle/                 # Database migrations
+```
+
+## Key Features
+
+### Plugin Architecture
+- **Security Isolation**: Routes automatically namespaced under `/api/plugin/<id>/`
+- **Database Extensions**: Plugins can safely add their own tables
+- **Global Settings**: Contribute configuration options
+- **Lifecycle Management**: Proper initialization and cleanup
+
+### API Documentation
+- **Automatic Generation**: OpenAPI 3.0 specs from Zod schemas
+- **Interactive Testing**: Swagger UI for API exploration
+- **Type Safety**: Request/response validation with TypeScript
+
+### Database Management
+- **Multi-Database Support**: SQLite (default) and PostgreSQL
+- **Type-Safe ORM**: Drizzle ORM with full TypeScript integration
+- **Migration System**: Automatic schema management
+- **Plugin Extensions**: Plugins can add their own tables
+
+## Development Workflow
+
+1. **Setup**: Install dependencies and start development server
+2. **Database**: Use API endpoints to initialize database
+3. **Development**: Add routes, modify schemas, create plugins
+4. **Testing**: Run comprehensive test suite
+5. **Documentation**: Generate API specs for integration
+
+For detailed implementation guides, security considerations, and best practices, explore the specific documentation sections above.

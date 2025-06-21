@@ -1,0 +1,187 @@
+---
+title: Security and Privacy
+description: Learn how DeployStack protects your data, manages user accounts securely, and maintains privacy in your MCP server deployments.
+---
+
+# Security and Privacy
+
+DeployStack takes security seriously. This guide explains how we protect your information and what you can do to keep your account and deployments secure.
+
+## Your Account Security
+
+### Secure Passwords
+DeployStack uses industry-standard security practices to protect your password:
+
+- **Never stored in plain text**: Your password is encrypted using advanced security methods
+- **Unique protection**: Each password gets its own unique security key
+- **Computational protection**: Even if someone accessed our database, your password would be extremely difficult to decrypt
+
+**What this means for you**: Your password is safe, but you should still choose a strong, unique password.
+
+### Login Sessions
+When you log into DeployStack:
+
+- **Secure cookies**: Your login is stored in a secure cookie that websites can't access
+- **Automatic expiration**: Sessions automatically expire after 30 days for security
+- **HTTPS protection**: All login information is encrypted when traveling over the internet
+- **Safe logout**: Logging out immediately invalidates your session
+
+**What this means for you**: You can trust that your login sessions are secure and protected.
+
+### Email Verification
+To ensure account security:
+
+- **Verification required**: New accounts must verify their email address
+- **Secure tokens**: Verification links contain secure, time-limited tokens
+- **24-hour expiration**: Verification links expire after 24 hours
+- **One-time use**: Each verification link can only be used once
+- **Administrator exception**: The first user (administrator) is automatically verified
+
+**What this means for you**: Only you can activate your account, and verification links are secure and temporary.
+
+## Data Protection
+
+### Sensitive Settings
+Your configuration data is protected with encryption:
+
+- **Encrypted storage**: Sensitive settings like passwords and API keys are encrypted
+- **Secure keys**: Encryption uses industry-standard methods
+- **Protected access**: Only authorized users can view or modify settings
+
+**What this means for you**: Your SMTP passwords, API keys, and other sensitive configuration data is securely encrypted.
+
+### Database Security
+All data is protected through:
+
+- **Input validation**: Everything you enter is checked for security before being saved
+- **SQL injection protection**: Database queries are automatically secured
+- **Proper access controls**: Users can only access data they're authorized to see
+
+**What this means for you**: Your data is protected from common security attacks.
+
+## Account Access Control
+
+### User Roles
+DeployStack uses role-based access to keep your installation secure:
+
+- **Administrator access**: Only administrators can manage users and system settings
+- **User isolation**: Regular users can only access their own teams and projects
+- **Permission checking**: Every action is checked against your current permissions
+
+**What this means for you**: Users only have access to features and data appropriate for their role.
+
+### Team Security
+Your teams and projects are protected:
+
+- **Team ownership**: Only team owners can modify team settings
+- **Member control**: Team access is controlled by the team owner
+- **Isolated data**: Teams cannot access each other's information
+
+**What this means for you**: Your team data is private and secure from other users.
+
+## Privacy
+
+### What Information We Collect
+DeployStack only collects information necessary for operation:
+
+- **Account information**: Username, email, name (what you provide during registration)
+- **Team data**: Team names, descriptions, and membership
+- **Deployment information**: Information about your MCP server deployments
+- **System settings**: Configuration you set up for email, authentication, etc.
+
+### What We Don't Collect
+- **Browsing behavior**: We don't track what you do outside DeployStack
+- **Personal files**: We don't access files on your computer
+- **Third-party data**: We don't collect data from other services unless you explicitly connect them
+
+### Data Retention
+- **Active accounts**: Data is retained while your account is active
+- **Deleted accounts**: When you delete your account, your data is removed
+- **Backups**: System backups may retain data for operational purposes
+
+## Best Practices for Users
+
+### Strong Passwords
+- Use a unique password for DeployStack
+- Consider using a password manager
+- Don't share your password with others
+- Change your password if you suspect it's been compromised
+
+### Account Security
+- Log out when using shared computers
+- Don't share your account credentials
+- Report suspicious activity to your administrator
+- Keep your email account secure (used for password resets)
+
+### Team Management
+- Only invite trusted users to your teams
+- Review team membership regularly
+- Use appropriate role assignments
+- Remove users who no longer need access
+
+### Deployment Security
+- Review MCP servers before deploying them
+- Use trusted sources for MCP servers
+- Keep deployment credentials secure
+- Monitor your deployed services
+
+## Reporting Security Issues
+
+### If You Find a Security Problem
+We appreciate responsible security reporting:
+
+1. **Don't share publicly**: Please don't post security issues on public forums
+2. **Contact us directly**: Email security concerns to our team
+3. **Provide details**: Include steps to reproduce the issue if possible
+4. **Be patient**: We'll work with you to understand and fix the issue
+
+### What We'll Do
+- **Acknowledge quickly**: We'll confirm receipt of your report
+- **Investigate thoroughly**: We'll work to understand the issue
+- **Fix promptly**: We'll develop and deploy fixes as quickly as possible
+- **Keep you informed**: We'll update you on our progress
+
+## Getting Help
+
+### Security Questions
+If you have questions about security:
+
+- **Account issues**: Contact your administrator
+- **General security**: Visit our [Discord community](https://discord.gg/UjFWwByB)
+- **Suspected problems**: Report them following the guidelines above
+
+### Password Problems
+If you can't log in:
+
+- **Forgot password**: Use the "Forgot Password" link on the login page
+- **Account locked**: Contact your administrator
+- **Email issues**: Ensure you can receive emails at your registered address
+
+### Privacy Concerns
+If you have privacy questions:
+
+- **Data access**: Contact your administrator to understand what data is stored
+- **Data deletion**: Ask your administrator about account deletion procedures
+- **Data export**: Inquire about getting a copy of your data
+
+## Security Updates
+
+DeployStack is regularly updated with security improvements:
+
+- **Automatic updates**: Security patches are applied promptly
+- **Dependency updates**: We keep security libraries current
+- **Regular reviews**: We continuously assess and improve security measures
+
+**What this means for you**: The security of DeployStack improves over time, and you benefit from ongoing security enhancements.
+
+## Summary
+
+DeployStack is designed with security as a core principle:
+
+- **Your passwords are strongly protected** with modern encryption
+- **Your sessions are secure** and automatically protected
+- **Your data is encrypted** when it needs to be
+- **Access is controlled** based on roles and permissions
+- **Privacy is respected** - we only collect what's necessary
+
+By following security best practices and understanding how DeployStack protects your information, you can use the platform confidently for your MCP server deployments.

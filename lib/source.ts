@@ -10,10 +10,9 @@ import { DeployStackLogo } from './components/DeployStackLogo';
 
 export const source = loader({
   // Base URL for the documentation pages.
-  // Since 'docs/index.md' should be the root page of the /docs section,
-  // and our content is in the 'docs' directory (configured in source.config.ts),
-  // baseUrl should be '/docs'. This means docs/index.mdx will be at /docs.
-  baseUrl: '/docs',
+  // Since we've moved docs to the root level, baseUrl should be '/'
+  // This means docs/index.mdx will be at / and other docs at their direct paths
+  baseUrl: '/',
   // The source of the documents, converted to Fumadocs format.
   source: docs.toFumadocsSource(),
   

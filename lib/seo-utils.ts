@@ -23,11 +23,11 @@ export function getSchemaOrgData(pageData: PageSEOData) {
         ]
       },
       {
-        "@id": "https://deploystack.io/docs/#website",
+        "@id": "https://deploystack.io/#website",
         "@type": "WebSite",
         "inLanguage": "en",
         "name": "DeployStack Documentation",
-        "url": "https://deploystack.io/docs/",
+        "url": "https://deploystack.io/",
         "publisher": {
           "@id": "https://deploystack.io/#identity"
         },
@@ -119,7 +119,7 @@ export function generatePageMetadata(pageData: PageSEOData): Metadata {
 }
 
 export function getCanonicalUrl(slug: string): string {
-  const baseUrl = 'https://deploystack.io/docs';
+  const baseUrl = 'https://docs.deploystack.io';
   
   if (slug === '' || slug === '/') {
     return baseUrl;

@@ -1,0 +1,135 @@
+---
+title: Global Settings
+description: Manage your DeployStack application settings including email configuration, authentication, and system preferences in one central location.
+---
+
+# Global Settings
+
+Global Settings is your central control panel for configuring DeployStack. Here you can set up email delivery, manage authentication options, and control various system features.
+
+## What are Global Settings?
+
+Global Settings are configuration options that affect your entire DeployStack installation. Think of them as the "system preferences" for your deployment platform. These settings are organized into different categories (called groups) to make them easier to manage.
+
+## Accessing Global Settings
+
+To access Global Settings:
+
+1. **Log in** as an administrator
+2. **Navigate** to the Settings section in your dashboard
+3. **Select** the setting group you want to configure
+
+**Note**: Only users with administrator privileges can view and modify global settings.
+
+## Setting Groups
+
+Your settings are organized into logical groups that appear as tabs in the interface:
+
+### SMTP Mail Settings
+Configure email delivery for notifications and user communications:
+
+- **SMTP Server**: Your email server address (like `smtp.gmail.com`)
+- **Port**: Usually 587 for most email providers
+- **Username & Password**: Your email account credentials
+- **Sender Information**: The name and email address that appears on outgoing emails
+
+**Why this matters**: Email setup is essential for user registration confirmations, password resets, and system notifications.
+
+### GitHub OAuth Configuration
+Set up GitHub login for your users:
+
+- **Client ID & Secret**: Credentials from your GitHub OAuth app
+- **Enable/Disable**: Turn GitHub login on or off
+- **Callback URL**: Where GitHub redirects users after login
+
+**Why this matters**: Allows users to sign in with their GitHub accounts instead of creating new passwords.
+
+### System Configuration
+Control how DeployStack behaves:
+
+- **Frontend URL**: The web address where users access your DeployStack interface
+- **Email Sending**: Enable or disable all email functionality
+- **Login Options**: Control which login methods are available
+- **API Documentation**: Show or hide the technical API documentation
+
+**Why this matters**: These settings control the basic behavior and security of your DeployStack installation.
+
+## Setting Up Email (SMTP)
+
+Email configuration is one of the most important settings to configure. Here's a simple guide:
+
+### For Gmail Users:
+1. **SMTP Host**: `smtp.gmail.com`
+2. **Port**: `587`
+3. **Username**: Your Gmail address
+4. **Password**: Use an "App Password" (not your regular Gmail password)
+5. **Enable**: Set "Use TLS" to Yes
+
+### For Other Email Providers:
+Check your email provider's SMTP settings documentation. Most business email providers offer SMTP access.
+
+## Setting Up GitHub Login
+
+To allow users to log in with GitHub:
+
+1. **Create a GitHub OAuth App**:
+   - Go to GitHub Settings > Developer settings > OAuth Apps
+   - Click "New OAuth App"
+   - Set the callback URL to: `https://your-deploystack-url.com/api/auth/github/callback`
+
+2. **Configure in DeployStack**:
+   - Enter the Client ID and Client Secret from GitHub
+   - Set the callback URL to match what you entered in GitHub
+   - Enable GitHub OAuth
+
+## Security Notes
+
+- **Sensitive Information**: Settings like passwords and API keys are automatically encrypted
+- **Administrator Access**: Only administrators can view and change these settings
+- **Backup**: Consider backing up your settings before making major changes
+
+## Common Settings Scenarios
+
+### Personal Use
+- Enable email with your personal email account
+- Disable GitHub OAuth (use email registration instead)
+- Keep API documentation enabled for learning
+
+### Team Use
+- Set up business email account for professional communications
+- Enable GitHub OAuth for easier team member access
+- Consider disabling email registration if you only want GitHub users
+
+### Production Use
+- Use dedicated email service (like SendGrid or AWS SES)
+- Enable GitHub OAuth for team access
+- Disable API documentation for security
+- Set proper frontend URL for your domain
+
+## Troubleshooting
+
+### Email Not Working
+- Check your SMTP credentials are correct
+- Verify your email provider allows SMTP access
+- For Gmail, ensure you're using an App Password
+- Check the "Test Email" feature if available
+
+### GitHub Login Issues
+- Verify your GitHub OAuth app settings
+- Ensure the callback URL matches exactly
+- Check that the GitHub OAuth app is active
+
+### Can't Access Settings
+- Confirm you have administrator privileges
+- Check with the person who installed DeployStack
+- The first user registered automatically becomes an administrator
+
+## Getting Help
+
+If you need assistance with Global Settings:
+
+- Check the troubleshooting section above
+- Visit our [Discord community](https://discord.gg/UjFWwByB)
+- Consult your system administrator if DeployStack was set up by someone else
+
+Remember: Changes to Global Settings affect your entire DeployStack installation, so test them carefully, especially email and authentication settings.

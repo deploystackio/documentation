@@ -5,9 +5,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && npm run move-assets",
-    "move-assets": "mkdir -p out/docs/_next && cp -r out/_next/* out/docs/_next/ && rm -rf out/_next",
-    "start": "next start",
+    "build": "next build",
+    "start": "npx serve@latest out",
     "lint:md": "npx markdownlint-cli2 '**/*.md' '#node_modules' '#.github'",
     "lint:links": "node check-links.js",
     "semantic-release": "semantic-release",
@@ -15,9 +14,9 @@
   },
   "dependencies": {
     "@types/mdx": "^2.0.13",
-    "fumadocs-core": "^15.5.1",
+    "fumadocs-core": "^15.5.3",
     "fumadocs-mdx": "^11.6.7",
-    "fumadocs-ui": "^15.5.1",
+    "fumadocs-ui": "^15.5.3",
     "lucide-react": "^0.513.0",
     "mdx": "^0.3.1",
     "next": "^15.3.3",
@@ -27,15 +26,15 @@
   },
   "devDependencies": {
     "@semantic-release/github": "^11.0.3",
-    "@tailwindcss/postcss": "^4.1.8",
+    "@tailwindcss/postcss": "^4.1.10",
     "@types/node": "22.15.30",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.6",
     "autoprefixer": "^10.4.21",
     "markdownlint-cli": "^0.45.0",
     "markdownlint-cli2": "^0.18.1",
-    "postcss": "^8.5.4",
-    "tailwindcss": "^4.1.8",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.10",
     "typescript": "5.8.3"
   }
 }
