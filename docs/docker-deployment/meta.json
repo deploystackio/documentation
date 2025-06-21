@@ -1,0 +1,15 @@
+{
+  "title": "Docker Deployment",
+  "description": "Docker Deployment",
+  "icon": "Container",
+  "root": true,
+  "pages": [
+    "!index.mdx",
+    "getting-started.mdx",
+    "---General---",
+    "one-click-deploy.mdx",
+    "deploystack-configuration-directory.mdx",
+    "deploystack-config-file.mdx",
+    "..."
+  ]
+}

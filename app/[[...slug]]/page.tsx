@@ -8,6 +8,7 @@ import { getFinalPageTitle } from '@/lib/h1-extractor';
 import { readFile } from 'fs/promises';
 import { getMDXComponents } from '@/mdx-components';
 import { baseOptions } from '../layout.config';
+import { docs } from '@/.source/index';
 
 export default async function Page({
   params,
@@ -45,7 +46,18 @@ export default async function Page({
 }
 
 export async function generateStaticParams() {
-  return source.generateParams();
+  const params = source.generateParams();
+
+  const result = [
+    ...params,
+    ...docs.docs
+      .filter((page: any) => page._file.flattenedPath)
+      .map((page: any) => ({
+        slug: page._file.flattenedPath.split('/'),
+      })),
+  ];
+
+  return result;
 }
 
 export async function generateMetadata({
