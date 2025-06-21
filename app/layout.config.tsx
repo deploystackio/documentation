@@ -1,13 +1,17 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 
-export const baseOptions: BaseLayoutProps = {
-  // Navigation bar configuration
+// Base configuration shared between both layouts
+const baseConfig = {
   nav: {
     title: 'DeployStack Docs',
     url: '/',
   },
+  githubUrl: 'https://github.com/deploystackio/documentation',
+};
 
-  // Navigation links
+// Configuration for the home page (root URL) with all links visible
+export const homeOptions: BaseLayoutProps = {
+  ...baseConfig,
   links: [
     {
       text: 'MCP Server',
@@ -34,7 +38,10 @@ export const baseOptions: BaseLayoutProps = {
       ),
     },
   ],
-
-  // GitHub repository for edit links
-  githubUrl: 'https://github.com/deploystackio/documentation',
 };
+
+export const docsOptions: BaseLayoutProps = {
+  ...baseConfig
+};
+
+export const baseOptions = docsOptions;

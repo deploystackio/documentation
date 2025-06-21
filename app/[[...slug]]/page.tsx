@@ -8,7 +8,7 @@ import { generatePageMetadata, getCanonicalUrl } from '@/lib/seo-utils';
 import { getFinalPageTitle } from '@/lib/h1-extractor';
 import { readFile } from 'fs/promises';
 import { getMDXComponents } from '@/mdx-components';
-import { baseOptions } from '../layout.config';
+import { homeOptions, docsOptions } from '../layout.config';
 import { docs } from '@/.source/index';
 
 export default async function Page({
@@ -31,7 +31,7 @@ export default async function Page({
   // Use HomeLayout for root page (no sidebar), DocsLayout for all other pages
   if (isRootPage) {
     return (
-      <HomeLayout {...baseOptions}>
+      <HomeLayout {...homeOptions}>
         <div className="container max-w-6xl mx-auto px-4 py-8">
           <article className="prose prose-neutral dark:prose-invert max-w-none">
             <MDX components={getMDXComponents()} />
@@ -43,7 +43,7 @@ export default async function Page({
 
   return (
     <DocsLayout
-      {...baseOptions}
+      {...docsOptions}
       tree={source.pageTree}
       nav={{
         title: 'DeployStack Docs',

@@ -74,4 +74,5 @@ coverage/
 ._*.md
 ._*.json
 ._*.ts
+._*.tsx
 out/
