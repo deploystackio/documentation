@@ -1,0 +1,191 @@
+---
+title: User Roles and Permissions
+description: Understand user roles, permissions, and team management in DeployStack. Learn how to manage access control and collaborate effectively.
+---
+
+# User Roles and Permissions
+
+DeployStack uses a role-based system to control what different users can do in your installation. This guide explains how roles work and how to manage user access.
+
+## What are User Roles?
+
+User roles determine what actions a person can perform in DeployStack. Think of roles as "job titles" that come with specific permissions. Each user is assigned one role that defines their level of access.
+
+## Available Roles
+
+### Global Administrator
+**Who needs this**: The person responsible for managing the entire DeployStack installation.
+
+**What they can do**:
+- Manage all users (create, edit, delete)
+- Configure global settings (email, authentication, system options)
+- Manage roles and permissions
+- Access all system features
+- Manage all teams
+
+**Important**: The first person to register automatically becomes a Global Administrator.
+
+### Global User
+**Who needs this**: Regular users who want to deploy applications.
+
+**What they can do**:
+- View and edit their own profile
+- Create up to 3 teams
+- Manage their own teams
+- Deploy applications through their teams
+
+**Note**: This is the default role for new users.
+
+### Team Administrator
+**Who needs this**: Users who manage specific teams within the organization.
+
+**What they can do**:
+- Manage their team's settings
+- View team members
+- Manage team deployments
+- Delete teams they own
+
+### Team User
+**Who needs this**: Basic team members who participate in deployments.
+
+**What they can do**:
+- View team information
+- See team members
+- Participate in team activities
+
+## Understanding Teams
+
+Teams are groups where users organize their deployment projects. Here's how teams work:
+
+### Team Basics
+- **Automatic Team**: Every user gets their own team when they register
+- **Team Limit**: Users can create up to 3 teams total
+- **Team Owner**: The person who created the team has full control
+- **Single User Teams**: Currently, each team has one user (multi-user teams coming soon)
+
+### Team Management
+- **Create Teams**: Use descriptive names for your different projects
+- **Team Settings**: Customize team name and description
+- **Team Deletion**: Only team owners can delete teams
+
+## Common Role Scenarios
+
+### Personal Use
+- **You are**: Global Administrator (first user) or Global User
+- **Your teams**: Use your default team for personal projects
+- **Additional teams**: Create separate teams for different types of projects
+
+### Small Team
+- **Administrator**: One person manages the system and users
+- **Team Members**: Everyone else is a Global User with their own teams
+- **Collaboration**: Users can share deployment information outside the system
+
+### Organization
+- **System Admin**: Global Administrator manages the DeployStack installation
+- **Project Leads**: Team Administrators manage specific project teams
+- **Developers**: Global Users participate in deployments
+
+## Managing User Roles
+
+### As a Global Administrator
+
+**To view all users**:
+1. Go to User Management in your admin panel
+2. See list of all registered users with their roles
+
+**To change a user's role**:
+1. Find the user in the user list
+2. Click on their role
+3. Select the new role from the dropdown
+4. Save changes
+
+**To create new users** (if needed):
+1. Use the "Create User" option
+2. Fill in their information
+3. Assign appropriate role
+4. User receives login information
+
+### Managing Your Own Profile
+All users can:
+- View their profile information
+- Update their name and email
+- Change their password
+- See their current role (but not change it)
+
+## Team Management
+
+### Creating Teams
+1. **Go to Teams** in your dashboard
+2. **Click "Create Team"**
+3. **Enter team name** and description
+4. **Save** - you become the team owner automatically
+
+### Managing Your Teams
+- **Edit team details**: Update name and description
+- **View team information**: See team settings and members
+- **Delete teams**: Remove teams you no longer need
+
+### Team Limitations
+- **3 Team Maximum**: You can only create 3 teams total
+- **One User per Team**: Teams currently support single users
+- **Owner Control**: Only team owners can modify team settings
+
+## Security and Access Control
+
+### What Roles Protect
+- **System Settings**: Only administrators can change global configuration
+- **User Management**: Only administrators can create, edit, or delete users
+- **Team Ownership**: Only team owners can modify their teams
+- **Profile Privacy**: Users can only edit their own profiles
+
+### Role Assignment Rules
+- **First User**: Automatically becomes Global Administrator
+- **New Users**: Get Global User role by default
+- **Self-Assignment**: Users cannot change their own roles
+- **Admin Assignment**: Only administrators can change user roles
+
+## Troubleshooting Roles and Teams
+
+### Can't Access Settings
+**Problem**: "I don't see the Settings option"
+**Solution**: Only Global Administrators can access system settings. Contact your administrator.
+
+### Can't Create Teams
+**Problem**: "Create Team button is disabled"
+**Solution**: You may have reached the 3-team limit. Delete unused teams or contact your administrator.
+
+### Can't Change Role
+**Problem**: "I want to be an administrator"
+**Solution**: Only existing administrators can assign roles. Ask your current administrator to change your role.
+
+### Lost Administrator Access
+**Problem**: "No one has administrator access"
+**Solution**: This requires technical intervention. Contact your system administrator or technical support.
+
+## Best Practices
+
+### For Administrators
+- **Regular Review**: Periodically review user roles and remove inactive users
+- **Principle of Least Privilege**: Give users the minimum role needed for their tasks
+- **Documentation**: Keep track of who has what role and why
+- **Backup Access**: Ensure at least two people have administrator access
+
+### For Team Management
+- **Descriptive Names**: Use clear team names that reflect their purpose
+- **Regular Cleanup**: Delete teams you no longer use
+- **Organization**: Consider how to organize your projects across teams
+
+### For Security
+- **Role Changes**: Think carefully before changing someone's role
+- **Team Ownership**: Be aware that team owners have full control over their teams
+- **Profile Information**: Keep your profile information current
+
+## Getting Help
+
+If you have questions about roles or teams:
+
+- **Role Questions**: Contact your Global Administrator
+- **Technical Issues**: Visit our [Discord community](https://discord.gg/UjFWwByB)
+- **Feature Requests**: Let us know what team features you'd like to see
+
+Remember: The role system is designed to be simple but secure. Most users will be happy as Global Users with their own teams, while administrators handle system-wide configuration.

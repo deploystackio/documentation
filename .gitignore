@@ -71,5 +71,7 @@ coverage/
 .jest/
 
 ._*.mdx
+._*.md
+._*.json
 ._*.ts
 out/
