@@ -20,9 +20,18 @@ export const baseOptions: BaseLayoutProps = {
       external: true,
     },
     {
-      text: 'Login',
-      url: 'https://cloud.deploystack.io/login',
-      external: true,
+      type: 'custom',
+      secondary: true,
+      children: (
+        <a
+          href="https://cloud.deploystack.io/login"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-slate-100 bg-slate-800 border border-slate-700 focus:outline-none hover:bg-slate-900 hover:text-slate-50 focus:ring-4 focus:ring-gray-100 font-medium rounded-full text-sm px-5 py-2.5 me-2 mb-2 dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:border-gray-600 dark:focus:ring-gray-700 transition-colors"
+        >
+          Login
+        </a>
+      ),
     },
   ],
 
