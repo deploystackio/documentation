@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { DocsLayout } from 'fumadocs-ui/layouts/docs';
+import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { DocsPage, DocsBody } from 'fumadocs-ui/page';
 import { notFound } from 'next/navigation';
 import { source } from '@/lib/source';
@@ -23,6 +24,22 @@ export default async function Page({
   }
 
   const MDX = page.data.body;
+
+  // Determine if this is the root page (no sidebar needed)
+  const isRootPage = !slug || slug.length === 0;
+
+  // Use HomeLayout for root page (no sidebar), DocsLayout for all other pages
+  if (isRootPage) {
+    return (
+      <HomeLayout {...baseOptions}>
+        <div className="container max-w-6xl mx-auto px-4 py-8">
+          <article className="prose prose-neutral dark:prose-invert max-w-none">
+            <MDX components={getMDXComponents()} />
+          </article>
+        </div>
+      </HomeLayout>
+    );
+  }
 
   return (
     <DocsLayout

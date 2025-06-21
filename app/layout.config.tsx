@@ -7,6 +7,25 @@ export const baseOptions: BaseLayoutProps = {
     url: '/',
   },
 
+  // Navigation links
+  links: [
+    {
+      text: 'MCP Server',
+      url: 'https://deploystack.io/mcp',
+      external: true,
+    },
+    {
+      text: 'Changelog',
+      url: 'https://deploystack.io/changelog',
+      external: true,
+    },
+    {
+      text: 'Login',
+      url: 'https://cloud.deploystack.io/login',
+      external: true,
+    },
+  ],
+
   // GitHub repository for edit links
   githubUrl: 'https://github.com/deploystackio/documentation',
 };
