@@ -1,6 +1,21 @@
 {
-  "title": "DeployStack",
+  "title": "Docker Deployment",
   "description": "Documentation for DeployStack",
   "icon": "DeployStackLogo",
-  "root": true
+  "root": true,
+  "pages": [
+    "index.mdx",
+    "---General---",
+    "global-settings.mdx",
+    "roles.mdx",
+    "security.mdx",
+    "---Development---",
+    "development/index.mdx",
+    "---Frontend Development---",
+    "development/frontend/index.mdx",
+    "...development/frontend",
+    "---Backend Development---",
+    "development/backend/index.mdx",
+    "...development/backend"    
+  ]
 }

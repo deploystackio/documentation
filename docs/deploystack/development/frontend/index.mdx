@@ -1,0 +1,389 @@
+---
+title: Frontend Development Guide
+description: Complete guide to developing and contributing to the DeployStack frontend application built with Vue 3, TypeScript, and Vite.
+sidebar: Getting Started
+---
+
+# DeployStack Frontend Development
+
+The DeployStack frontend is a modern web application built with Vue 3, TypeScript, and Vite, specifically designed for managing MCP (Model Context Protocol) server deployments. This guide covers everything you need to know to develop and contribute to the frontend.
+
+## Technology Stack
+
+- **Framework**: Vue 3 with Composition API
+- **Language**: TypeScript for type safety
+- **Build Tool**: Vite for fast development and building
+- **Styling**: TailwindCSS with shadcn-vue components
+- **Icons**: Lucide Icons
+- **Internationalization**: Vue I18n
+- **State Management**: Pinia (when needed)
+- **Routing**: Vue Router
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 18 or higher
+- npm 8 or higher
+
+### Development Setup
+
+1. **Navigate to frontend directory**:
+   ```bash
+   cd services/frontend
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Start development server**:
+   ```bash
+   npm run dev
+   ```
+
+4. **Build for production**:
+   ```bash
+   npm run build
+   ```
+
+The development server will start at `http://localhost:5173` with hot module replacement enabled.
+
+## Project Structure
+
+```bash
+services/frontend/
+├── src/
+│   ├── components/          # Reusable Vue components
+│   ├── views/              # Page-level components
+│   ├── router/             # Vue Router configuration
+│   ├── stores/             # Pinia stores (state management)
+│   ├── services/           # API services and utilities
+│   ├── plugins/            # Frontend plugin system
+│   ├── i18n/               # Internationalization files
+│   ├── utils/              # Utility functions
+│   ├── types/              # TypeScript type definitions
+│   └── assets/             # Static assets
+├── public/                 # Public static files
+├── dist/                   # Built application (generated)
+└── ...
+```
+
+## Development Guidelines
+
+### Code Style
+
+- Use TypeScript for all new code
+- Follow Vue 3 Composition API patterns
+- Use `<script setup>` syntax for components
+- Maintain consistent naming conventions
+- Add proper TypeScript types for all functions and variables
+
+### Component Development
+
+```vue
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+// Props with TypeScript
+interface Props {
+  title: string
+  count?: number
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  count: 0
+})
+
+// Composables
+const { t } = useI18n()
+
+// Reactive state
+const isVisible = ref(true)
+
+// Computed properties
+const displayTitle = computed(() => 
+  `${props.title} (${props.count})`
+)
+
+// Methods
+function toggleVisibility() {
+  isVisible.value = !isVisible.value
+}
+</script>
+
+<template>
+  <div v-if="isVisible" class="component-container">
+    <h2 class="text-xl font-semibold">{{ displayTitle }}</h2>
+    <button 
+      @click="toggleVisibility"
+      class="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+    >
+      {{ t('common.toggle') }}
+    </button>
+  </div>
+</template>
+```
+
+## UI Components and Styling
+
+### TailwindCSS Integration
+
+The frontend uses TailwindCSS for styling with the shadcn-vue component library for consistent UI elements.
+
+#### Installing New shadcn-vue Components
+
+```bash
+npx shadcn-vue@latest add button
+npx shadcn-vue@latest add input
+npx shadcn-vue@latest add dialog
+```
+
+#### Custom Component Example
+
+```vue
+<template>
+  <div class="p-6 bg-white rounded-lg shadow-md border">
+    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+      MCP Server Status
+    </h3>
+    <div class="flex items-center space-x-2">
+      <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+      <span class="text-sm text-gray-700">Running</span>
+    </div>
+  </div>
+</template>
+```
+
+### Icons
+
+The project uses Lucide Icons through the `lucide-vue-next` package.
+
+#### Using Icons
+
+```vue
+<script setup lang="ts">
+import { Mail, Lock, User, Settings, Play, Stop } from 'lucide-vue-next'
+</script>
+
+<template>
+  <div class="icon-examples">
+    <!-- Basic usage -->
+    <Mail class="h-4 w-4 text-gray-500" />
+    
+    <!-- Different sizes -->
+    <Settings class="h-6 w-6" />
+    
+    <!-- Different colors -->
+    <User class="text-indigo-600" />
+    
+    <!-- Positioned icons -->
+    <div class="relative">
+      <input class="pl-10" />
+      <Lock class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+    </div>
+    
+    <!-- Interactive icons -->
+    <button @click="toggleServer" class="flex items-center space-x-2">
+      <Play v-if="!isRunning" class="h-4 w-4" />
+      <Stop v-else class="h-4 w-4" />
+      <span>{{ isRunning ? 'Stop' : 'Start' }} Server</span>
+    </button>
+  </div>
+</template>
+```
+
+## Environment Configuration
+
+The frontend supports environment variables for both development and production environments.
+
+### Development Environment
+
+Create a `.env` file in the `services/frontend` directory:
+
+```bash
+VITE_API_URL=http://localhost:3000
+VITE_APP_TITLE=DeployStack (Development)
+VITE_ENABLE_DEBUG=true
+```
+
+### Production Environment
+
+Environment variables can be passed to the Docker container:
+
+```bash
+docker run -it -p 80:80 \
+  -e VITE_API_URL="https://api.deploystack.io" \
+  -e VITE_APP_TITLE="DeployStack" \
+  -e VITE_ENABLE_DEBUG="false" \
+  deploystack/frontend:latest
+```
+
+### Accessing Environment Variables
+
+Use the `getEnv` utility function for consistent access:
+
+```typescript
+import { getEnv } from '@/utils/env'
+
+// In your components
+const apiUrl = getEnv('VITE_API_URL')
+const appTitle = getEnv('VITE_APP_TITLE')
+const debugMode = getEnv('VITE_ENABLE_DEBUG') === 'true'
+```
+
+### Adding New Environment Variables
+
+1. **Add type definitions** in `env.d.ts`:
+
+```typescript
+interface ImportMetaEnv {
+  readonly VITE_API_URL: string
+  readonly VITE_APP_TITLE: string
+  readonly VITE_ENABLE_DEBUG: string
+  readonly VITE_NEW_VARIABLE: string
+}
+
+interface Window {
+  RUNTIME_ENV?: {
+    VITE_API_URL?: string
+    VITE_APP_TITLE?: string
+    VITE_ENABLE_DEBUG?: string
+    VITE_NEW_VARIABLE?: string
+    // Non-VITE variables
+    CUSTOM_VAR?: string
+  }
+}
+```
+
+2. **For non-VITE variables** in Docker, update `env-config.sh`:
+
+```bash
+# Add specific non-VITE_ variables you want to expose
+for var in CUSTOM_VAR OTHER_VAR; do
+  # Script logic here
+done
+```
+
+## API Integration
+
+### Service Layer Pattern
+
+The frontend uses a service layer pattern for API communication:
+
+```typescript
+// services/mcpServerService.ts
+export class McpServerService {
+  private static baseUrl = getEnv('VITE_API_URL')
+
+  static async getAllServers(): Promise<McpServer[]> {
+    const response = await fetch(`${this.baseUrl}/api/mcp-servers`)
+    if (!response.ok) {
+      throw new Error('Failed to fetch MCP servers')
+    }
+    return response.json()
+  }
+
+  static async deployServer(serverId: string, config: DeployConfig): Promise<Deployment> {
+    const response = await fetch(`${this.baseUrl}/api/mcp-servers/${serverId}/deploy`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(config),
+    })
+    
+    if (!response.ok) {
+      throw new Error('Failed to deploy MCP server')
+    }
+    
+    return response.json()
+  }
+}
+```
+
+### Using Services in Components
+
+```vue
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { McpServerService } from '@/services/mcpServerService'
+import type { McpServer } from '@/types/mcp'
+
+const servers = ref<McpServer[]>([])
+const isLoading = ref(false)
+const error = ref<string | null>(null)
+
+async function fetchServers() {
+  isLoading.value = true
+  error.value = null
+  
+  try {
+    servers.value = await McpServerService.getAllServers()
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unknown error'
+    console.error('Failed to fetch servers:', err)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchServers()
+})
+</script>
+```
+
+## Next Steps
+
+Continue reading the detailed guides:
+
+- [Internationalization (i18n)](/deploystack/development/frontend/internationalization) - Multi-language support
+- [Plugin System](/deploystack/development/frontend/plugins) - Extending functionality
+- [Router Optimization](/deploystack/development/frontend/router-optimization) - Performance improvements
+- [Contributing Guidelines](/deploystack/development/frontend/contributing) - How to contribute
+
+## Docker Development
+
+### Building the Frontend
+
+```bash
+# Build the Docker image
+docker build -t deploystack/frontend:dev .
+
+# Run with development configuration
+docker run -it -p 8080:80 \
+  -e VITE_API_URL="http://localhost:3000" \
+  -e VITE_APP_TITLE="DeployStack (Docker Dev)" \
+  deploystack/frontend:dev
+```
+
+### Production Deployment
+
+The frontend is designed to work seamlessly with the backend service:
+
+```bash
+# Production deployment
+docker run -d -p 8080:80 \
+  -e VITE_API_URL="https://api.your-domain.com" \
+  -e VITE_APP_TITLE="DeployStack" \
+  deploystack/frontend:latest
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Build failures**: Check Node.js and npm versions
+2. **API connection issues**: Verify `VITE_API_URL` environment variable
+3. **Styling issues**: Ensure TailwindCSS is properly configured
+4. **TypeScript errors**: Run `npm run lint` to check for issues
+
+### Development Tips
+
+- Use Vue DevTools browser extension for debugging
+- Enable TypeScript strict mode in `tsconfig.json`
+- Use ESLint and Prettier for code consistency
+- Test components in isolation when possible

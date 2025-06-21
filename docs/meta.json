@@ -1,3 +1,7 @@
 {
-  "pages": ["deploystack", "docker-to-iac"]
+  "pages": [
+    "deploystack", 
+    "docker-to-iac",
+    "docker-deployment"
+  ]
 }

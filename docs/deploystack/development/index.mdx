@@ -1,0 +1,138 @@
+---
+title: Development Guide
+description: Complete development documentation for DeployStack - covering frontend, backend, and contribution guidelines for the MCP server deployment platform.
+icon: FileCode
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Code2, Server, GitBranch, Users } from 'lucide-react';
+
+# DeployStack Development
+
+Welcome to the DeployStack development documentation! DeployStack is the leading infrastructure platform for Model Context Protocol (MCP) server deployment, built with modern web technologies and an extensible architecture.
+
+## Architecture Overview
+
+DeployStack follows a modern full-stack architecture:
+
+- **Frontend**: Vue 3 + TypeScript + Vite for the user interface
+- **Backend**: Fastify + TypeScript + SQLite/PostgreSQL for the API and data layer
+- **MCP Focus**: Specialized CI/CD pipeline for MCP server deployments
+- **Multi-Cloud**: Support for AWS, Render.com, Fly.io, DigitalOcean, and more
+
+## Development Areas
+
+<Cards>
+  <Card 
+    icon={<Code2 />} 
+    href="/deploystack/development/frontend" 
+    title="Frontend Development"
+  >
+    Vue 3, TypeScript, and Vite development guide. UI components, state management, internationalization, and plugin system.
+  </Card>
+  
+  <Card 
+    icon={<Server />} 
+    href="/deploystack/development/backend" 
+    title="Backend Development"
+  >
+    Fastify, TypeScript, and Drizzle ORM development guide. API design, database management, authentication, and plugin architecture.
+  </Card>
+</Cards>
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18 or higher
+- npm 8 or higher
+- Git for version control
+
+### Quick Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/deploystackio/deploystack.git
+cd deploystack
+
+# Install dependencies for both frontend and backend
+npm install
+
+# Start development servers
+npm run dev
+```
+
+This will start both the frontend (http://localhost:5173) and backend (http://localhost:3000) development servers.
+
+## Development Workflow
+
+1. **Choose Your Area**: Start with either frontend or backend development
+2. **Set Up Environment**: Follow the specific setup guides for your chosen area
+3. **Make Changes**: Implement features, fix bugs, or improve documentation
+4. **Test**: Run the appropriate test suites
+5. **Submit**: Create pull requests following our contribution guidelines
+
+## Project Structure
+
+```bash
+deploystack/
+├── services/
+│   ├── frontend/           # Vue 3 frontend application
+│   │   ├── src/
+│   │   ├── public/
+│   │   └── package.json
+│   └── backend/            # Fastify backend API
+│       ├── src/
+│       ├── plugins/
+│       └── package.json
+├── docs/                   # Documentation
+└── docker-compose.yml     # Development environment
+```
+
+## Key Technologies
+
+### Frontend Stack
+- **Vue 3** with Composition API for reactive user interfaces
+- **TypeScript** for type safety and better developer experience
+- **Vite** for fast development and building
+- **TailwindCSS** with shadcn-vue for consistent styling
+- **Vue I18n** for internationalization support
+
+### Backend Stack
+- **Fastify** for high-performance HTTP server
+- **TypeScript** for type-safe server development
+- **Drizzle ORM** for database operations and migrations
+- **Zod** for request/response validation
+- **Plugin System** for extensible functionality
+
+## Development Philosophy
+
+### MCP-First Approach
+DeployStack is purpose-built for the Model Context Protocol ecosystem. Our development decisions prioritize:
+
+- **MCP Server Compatibility**: Seamless deployment of MCP servers
+- **Security Isolation**: Plugin system with proper namespacing
+- **Multi-Cloud Support**: Cloud provider agnostic deployments
+- **Developer Experience**: Simple, one-click deployment workflows
+
+### Code Quality
+- **Type Safety**: TypeScript throughout the stack
+- **Testing**: Comprehensive test coverage
+- **Documentation**: Clear, up-to-date documentation
+- **Security**: Built-in security best practices
+
+## Contributing
+
+We welcome contributions to DeployStack! Whether you're:
+
+- **Adding Features**: New MCP server support, UI improvements, API enhancements
+- **Fixing Bugs**: Issues with deployment, UI problems, API errors
+- **Improving Documentation**: Better guides, examples, and explanations
+- **Creating Plugins**: Extending DeployStack functionality
+
+## Community
+
+- **GitHub**: [deploystackio/deploystack](https://github.com/deploystackio/deploystack)
+- **Issues**: Report bugs and request features
+
+For detailed development guides, choose your area of interest from the cards above. Each section contains comprehensive documentation for getting started, best practices, and advanced topics.

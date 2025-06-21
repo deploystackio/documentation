@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { DocsLayout } from 'fumadocs-ui/layouts/docs';
+import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { DocsPage, DocsBody } from 'fumadocs-ui/page';
 import { notFound } from 'next/navigation';
 import { source } from '@/lib/source';
@@ -7,7 +8,8 @@ import { generatePageMetadata, getCanonicalUrl } from '@/lib/seo-utils';
 import { getFinalPageTitle } from '@/lib/h1-extractor';
 import { readFile } from 'fs/promises';
 import { getMDXComponents } from '@/mdx-components';
-import { baseOptions } from '../layout.config';
+import { homeOptions, docsOptions } from '../layout.config';
+import { docs } from '@/.source/index';
 
 export default async function Page({
   params,
@@ -23,9 +25,25 @@ export default async function Page({
 
   const MDX = page.data.body;
 
+  // Determine if this is the root page (no sidebar needed)
+  const isRootPage = !slug || slug.length === 0;
+
+  // Use HomeLayout for root page (no sidebar), DocsLayout for all other pages
+  if (isRootPage) {
+    return (
+      <HomeLayout {...homeOptions}>
+        <div className="container max-w-6xl mx-auto px-4 py-8">
+          <article className="prose prose-neutral dark:prose-invert max-w-none">
+            <MDX components={getMDXComponents()} />
+          </article>
+        </div>
+      </HomeLayout>
+    );
+  }
+
   return (
     <DocsLayout
-      {...baseOptions}
+      {...docsOptions}
       tree={source.pageTree}
       nav={{
         title: 'DeployStack Docs',
@@ -45,7 +63,18 @@ export default async function Page({
 }
 
 export async function generateStaticParams() {
-  return source.generateParams();
+  const params = source.generateParams();
+
+  const result = [
+    ...params,
+    ...docs.docs
+      .filter((page: any) => page._file.flattenedPath)
+      .map((page: any) => ({
+        slug: page._file.flattenedPath.split('/'),
+      })),
+  ];
+
+  return result;
 }
 
 export async function generateMetadata({
