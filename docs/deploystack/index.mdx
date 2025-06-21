@@ -1,46 +1,155 @@
 ---
 title: DeployStack Documentation
 description: Official DeployStack documentation - The first CI/CD platform designed for MCP servers. Deploy Model Context Protocol servers across cloud providers with one click.
-menuTitle: DeployStack
+sidebar: Introduction
+icon: Star
 ---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Rocket, Settings, Users, Code2, ExternalLink, Zap, Shield, Wrench } from 'lucide-react';
 
 # DeployStack - MCP Server CI/CD Platform
 
 DeployStack is the first CI/CD platform specifically designed for Model Context Protocol (MCP) servers. We make it easy to deploy and manage MCP servers across different cloud providers, transforming complex technical processes into one-click solutions.
 
-## Quick Start
-
-**New to MCP servers?** Start here to understand how DeployStack simplifies MCP server deployment and management.
-
-- [Getting Started](/deploystack/getting-started) - Your first MCP server deployment
-- [MCP Server Catalog](https://deploystack.io/mcp) - Browse ready-to-deploy MCP servers
-- [One-Click Deploy](/deploystack/one-click-deploy) - Deploy any MCP server instantly
+<Cards>
+  {/* <Card 
+    icon={<Zap />} 
+    href="/deploystack/getting-started" 
+    title="Getting Started"
+  >
+    Deploy your first MCP server in minutes with our step-by-step guide
+  </Card> */}
+  
+  <Card 
+    icon={<ExternalLink />} 
+    href="https://deploystack.io/mcp" 
+    title="MCP Server Catalog"
+    external
+  >
+    Browse ready-to-deploy MCP servers from the community
+  </Card>
+  
+  <Card 
+    icon={<Rocket />} 
+    href="/deploystack/one-click-deploy" 
+    title="One-Click Deploy"
+  >
+    Deploy any MCP server instantly with zero configuration
+  </Card>
+</Cards>
 
 ## User Guides
 
 **For administrators and team members** using DeployStack:
 
-- [Global Settings](/deploystack/global-settings) - Configure email, authentication, and system preferences
-- [User Roles and Permissions](/deploystack/roles) - Manage user access and team collaboration
-- [Troubleshooting](/deploystack/troubleshooting) - Resolve common deployment issues
+<Cards>
+  <Card 
+    icon={<Settings />} 
+    href="/deploystack/global-settings" 
+    title="Global Settings"
+  >
+    Configure email, authentication, and system preferences
+  </Card>
+  
+  <Card 
+    icon={<Users />} 
+    href="/deploystack/roles" 
+    title="User Roles and Permissions"
+  >
+    Manage user access and team collaboration
+  </Card>
+  
+  {/* <Card 
+    icon={<Wrench />} 
+    href="/deploystack/troubleshooting" 
+    title="Troubleshooting"
+  >
+    Resolve common deployment issues and get help
+  </Card> */}
+</Cards>
 
 ## MCP Server Requirements
 
 **For MCP server creators** who want to make their servers deployable:
 
-- [Docker Compose Requirements](/deploystack/docker-compose-requirements) - Learn about supported configurations
-- [Submit Your MCP Server](https://deploystack.io/submit) - Add your server to our catalog
+<Cards>
+  <Card 
+    icon={<Shield />} 
+    href="/deploystack/docker-compose-requirements" 
+    title="Docker Compose Requirements"
+  >
+    Learn about supported configurations and best practices
+  </Card>
+  
+  <Card 
+    icon={<ExternalLink />} 
+    href="https://deploystack.io/submit" 
+    title="Submit Your MCP Server"
+    external
+  >
+    Add your server to our catalog for the community
+  </Card>
+</Cards>
 
 ## Developer Documentation
 
 **For developers** extending or contributing to DeployStack:
 
-- [Backend Development](/deploystack/development/backend) - API, database, plugins, and testing
-- [Docker-to-IaC Module](/docker-to-iac/index) - Core deployment engine documentation
+<Cards>
+  <Card 
+    icon={<Code2 />} 
+    href="/deploystack/development" 
+    title="Development Guide"
+  >
+    Complete development documentation for frontend and backend
+  </Card>
+  
+  <Card 
+    icon={<Code2 />} 
+    href="/deploystack/development/backend" 
+    title="Backend Development"
+  >
+    API, database, plugins, and testing documentation
+  </Card>
+  
+  <Card 
+    icon={<Rocket />} 
+    href="/docker-to-iac/index" 
+    title="Docker-to-IaC Module"
+  >
+    Core deployment engine and infrastructure automation
+  </Card>
+</Cards>
 
-## Additional Resources
+## Community & Resources
 
-- [Join our Discord](https://discord.gg/UjFWwByB) - Get help and connect with the community
-- [Visit DeployStack](https://deploystack.io) - Main website and MCP server catalog
-- [GitHub Repository](https://github.com/deploystackio/deploystack) - Contribute to the project
+<Cards>
+  <Card 
+    icon={<Users />} 
+    href="https://discord.gg/UjFWwByB" 
+    title="Join our Discord"
+    external
+  >
+    Get help and connect with the DeployStack community
+  </Card>
+  
+  <Card 
+    icon={<ExternalLink />} 
+    href="https://deploystack.io" 
+    title="Visit DeployStack"
+    external
+  >
+    Main website and MCP server catalog
+  </Card>
+  
+  <Card 
+    icon={<Code2 />} 
+    href="https://github.com/deploystackio/deploystack" 
+    title="GitHub Repository"
+    external
+  >
+    Contribute to the project and view source code
+  </Card>
+</Cards>
 
