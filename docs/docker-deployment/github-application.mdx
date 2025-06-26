@@ -11,7 +11,7 @@ The DeployStack GitHub App ensures your Infrastructure as Code (IaC) templates r
 
 When you install the [DeployStack Repository Sync](https://github.com/apps/deploystack-repository-sync) app, it monitors specific files in your repository:
 
-- `.deploystack/` directory - [Contains your Docker configurations and assets](/deploystack/deploystack-configuration-directory)
+- `.deploystack/` directory - [Contains your Docker configurations and assets](/docker-deployment/deploystack-configuration-directory)
 - `README.md` - For README.md updates
 
 When changes are detected in these files, the app automatically triggers an update of your IaC templates in our [deploy-templates](https://github.com/deploystackio/deploy-templates) repository.
@@ -47,12 +47,12 @@ When the app detects changes, it automatically updates:
   - Repository Homepage
   - Description
 - IaC templates
-  - Depends on which technique (docker compose or docker run command) you choose, you can upload the `docker-compose.yml` or `docker-run.txt` in the `.deploystack` directory. Every time you update the files on your main branch (or additional branch), IaC templates will be updated automatically - [Automatic Updates](/deploystack/deploystack-configuration-directory#automatic-updates).
+  - Depends on which technique (docker compose or docker run command) you choose, you can upload the `docker-compose.yml` or `docker-run.txt` in the `.deploystack` directory. Every time you update the files on your main branch (or additional branch), IaC templates will be updated automatically - [Automatic Updates](/docker-deployment/deploystack-configuration-directory#automatic-updates).
 - Environment variables
-  - To make it easier for a user to deploy IaC templates, it is recommended to work with environment variables. For this purpose, you can upload an `env` file and add your appropriate variables - [Environment Variables](/deploystack/deploystack-configuration-directory#environment-variables).
+  - To make it easier for a user to deploy IaC templates, it is recommended to work with environment variables. For this purpose, you can upload an `env` file and add your appropriate variables - [Environment Variables](/docker-deployment/deploystack-configuration-directory#environment-variables).
 - DeployStack Configuration
 - Project / Applicaton Logo
-  - It is possible to upload your own logo to DeployStack catalog. To do this you need to upload a file to our directory `.deploystack`. Read more about it here: [Repository Logo](/deploystack/deploystack-configuration-directory#repository-logo)
+  - It is possible to upload your own logo to DeployStack catalog. To do this you need to upload a file to our directory `.deploystack`. Read more about it here: [Repository Logo](/docker-deployment/deploystack-configuration-directory#repository-logo)
 
 ## Managing the Integration
 
@@ -66,4 +66,4 @@ After installing the app:
 2. Commit and push your changes
 3. DeployStack will automatically update your deployment templates
 
-For details about the `.deploystack` directory structure, check our [.deploystack Directory Reference](/deploystack/deploystack-configuration-directory).
+For details about the `.deploystack` directory structure, check our [.deploystack Directory Reference](/docker-deployment/deploystack-configuration-directory).

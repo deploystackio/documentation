@@ -14,9 +14,9 @@
   },
   "dependencies": {
     "@types/mdx": "^2.0.13",
-    "fumadocs-core": "^15.5.3",
-    "fumadocs-mdx": "^11.6.7",
-    "fumadocs-ui": "^15.5.3",
+    "fumadocs-core": "^15.5.4",
+    "fumadocs-mdx": "^11.6.9",
+    "fumadocs-ui": "^15.5.4",
     "lucide-react": "^0.513.0",
     "mdx": "^0.3.1",
     "next": "^15.3.3",
@@ -27,8 +27,8 @@
   "devDependencies": {
     "@semantic-release/github": "^11.0.3",
     "@tailwindcss/postcss": "^4.1.10",
-    "@types/node": "22.15.30",
-    "@types/react": "^19.1.6",
+    "@types/node": "24.0.4",
+    "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "autoprefixer": "^10.4.21",
     "markdownlint-cli": "^0.45.0",
