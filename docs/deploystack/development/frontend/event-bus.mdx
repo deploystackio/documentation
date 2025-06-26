@@ -1,0 +1,596 @@
+---
+title: Global Event Bus
+description: Complete guide to using the global event bus system for cross-component communication in the DeployStack frontend.
+sidebar: Event Bus
+---
+
+# Global Event Bus
+
+The DeployStack frontend implements a global event bus system using the [mitt](https://github.com/developit/mitt) library to enable efficient cross-component communication. This system provides immediate updates across components without requiring direct parent-child relationships or complex state management.
+
+## Overview
+
+The event bus solves common frontend challenges such as:
+- **Cross-component communication** between unrelated components
+- **Immediate UI updates** when data changes in different parts of the application
+- **Cache invalidation** and data synchronization
+- **Decoupled architecture** for better maintainability
+
+## Architecture
+
+### Event Bus Setup
+
+The event bus is configured globally in `main.ts` using Vue 3's provide/inject pattern:
+
+```typescript
+// main.ts
+import mitt from 'mitt'
+import type { EventBusEvents } from './composables/useEventBus'
+
+// Create typed event bus
+const emitter = mitt<EventBusEvents>()
+
+// Provide globally
+app.provide('emitter', emitter)
+```
+
+### Type Safety
+
+All events are strictly typed using TypeScript interfaces:
+
+```typescript
+// src/composables/useEventBus.ts
+export type EventBusEvents = {
+  'teams-updated': void
+  'team-created': void
+  'team-deleted': void
+  'user-profile-updated': void
+  'mcp-server-deployed': { serverId: string; status: string }
+  'notification-show': { message: string; type: 'success' | 'error' | 'warning' }
+}
+```
+
+## Usage
+
+### Basic Implementation
+
+#### 1. Using the Composable
+
+```typescript
+// In any component
+import { useEventBus } from '@/composables/useEventBus'
+
+export default {
+  setup() {
+    const eventBus = useEventBus()
+    
+    // Emit events
+    eventBus.emit('teams-updated')
+    
+    // Listen to events
+    eventBus.on('teams-updated', () => {
+      console.log('Teams were updated!')
+    })
+    
+    return {}
+  }
+}
+```
+
+#### 2. Component Lifecycle Management
+
+```vue
+<script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue'
+import { useEventBus } from '@/composables/useEventBus'
+
+const eventBus = useEventBus()
+
+// Event handler function
+const handleTeamsUpdate = () => {
+  console.log('Teams updated, refreshing data...')
+  fetchTeams(true) // Force refresh
+}
+
+onMounted(() => {
+  // Register event listeners
+  eventBus.on('teams-updated', handleTeamsUpdate)
+})
+
+onUnmounted(() => {
+  // Clean up event listeners to prevent memory leaks
+  eventBus.off('teams-updated', handleTeamsUpdate)
+})
+</script>
+```
+
+## Real-World Examples
+
+### Example 1: Team Management System
+
+This example shows how the sidebar automatically updates when teams are created from the teams page.
+
+#### Emitting Events (Team Creation)
+
+```vue
+<!-- AddTeamModal.vue -->
+<script setup lang="ts">
+import { useEventBus } from '@/composables/useEventBus'
+import { TeamService } from '@/services/teamService'
+
+const eventBus = useEventBus()
+
+const handleSubmit = async () => {
+  try {
+    await TeamService.createTeam(formData.value)
+    
+    // Emit global event for immediate UI updates
+    eventBus.emit('teams-updated')
+    
+    // Close modal and emit local success
+    isOpen.value = false
+    emit('teamCreated')
+  } catch (error) {
+    console.error('Error creating team:', error)
+  }
+}
+</script>
+```
+
+#### Listening for Events (Sidebar Updates)
+
+```vue
+<!-- AppSidebar.vue -->
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue'
+import { useEventBus } from '@/composables/useEventBus'
+import { TeamService } from '@/services/teamService'
+
+const eventBus = useEventBus()
+const teams = ref([])
+
+const fetchTeams = async (forceRefresh = false) => {
+  try {
+    const userTeams = await TeamService.getUserTeams(forceRefresh)
+    teams.value = userTeams
+  } catch (error) {
+    console.error('Error fetching teams:', error)
+  }
+}
+
+onMounted(() => {
+  fetchTeams()
+  
+  // Listen for team updates from other components
+  eventBus.on('teams-updated', () => {
+    console.log('Teams updated event received, refreshing teams...')
+    fetchTeams(true) // Force refresh to get latest data
+  })
+})
+
+onUnmounted(() => {
+  // Clean up event listeners
+  eventBus.off('teams-updated')
+})
+</script>
+```
+
+### Example 2: Notification System
+
+```vue
+<!-- NotificationManager.vue -->
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue'
+import { useEventBus } from '@/composables/useEventBus'
+
+const eventBus = useEventBus()
+const notifications = ref([])
+
+const showNotification = (data: { message: string; type: string }) => {
+  const notification = {
+    id: Date.now(),
+    message: data.message,
+    type: data.type,
+    timestamp: new Date()
+  }
+  
+  notifications.value.push(notification)
+  
+  // Auto-remove after 5 seconds
+  setTimeout(() => {
+    removeNotification(notification.id)
+  }, 5000)
+}
+
+const removeNotification = (id: number) => {
+  const index = notifications.value.findIndex(n => n.id === id)
+  if (index > -1) {
+    notifications.value.splice(index, 1)
+  }
+}
+
+onMounted(() => {
+  eventBus.on('notification-show', showNotification)
+})
+
+onUnmounted(() => {
+  eventBus.off('notification-show', showNotification)
+})
+</script>
+```
+
+#### Triggering Notifications
+
+```vue
+<!-- Any component -->
+<script setup lang="ts">
+import { useEventBus } from '@/composables/useEventBus'
+
+const eventBus = useEventBus()
+
+const handleSuccess = () => {
+  eventBus.emit('notification-show', {
+    message: 'Team created successfully!',
+    type: 'success'
+  })
+}
+
+const handleError = () => {
+  eventBus.emit('notification-show', {
+    message: 'Failed to create team',
+    type: 'error'
+  })
+}
+</script>
+```
+
+### Example 3: MCP Server Deployment Status
+
+```vue
+<!-- McpServerCard.vue -->
+<script setup lang="ts">
+import { useEventBus } from '@/composables/useEventBus'
+
+const eventBus = useEventBus()
+
+const deployServer = async (serverId: string) => {
+  try {
+    const result = await McpServerService.deploy(serverId)
+    
+    // Notify other components about deployment
+    eventBus.emit('mcp-server-deployed', {
+      serverId,
+      status: result.status
+    })
+  } catch (error) {
+    eventBus.emit('notification-show', {
+      message: 'Deployment failed',
+      type: 'error'
+    })
+  }
+}
+</script>
+```
+
+```vue
+<!-- McpServerList.vue -->
+<script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue'
+import { useEventBus } from '@/composables/useEventBus'
+
+const eventBus = useEventBus()
+
+const handleServerDeployment = (data: { serverId: string; status: string }) => {
+  // Update server status in the list
+  const server = servers.value.find(s => s.id === data.serverId)
+  if (server) {
+    server.status = data.status
+    server.lastDeployed = new Date()
+  }
+}
+
+onMounted(() => {
+  eventBus.on('mcp-server-deployed', handleServerDeployment)
+})
+
+onUnmounted(() => {
+  eventBus.off('mcp-server-deployed', handleServerDeployment)
+})
+</script>
+```
+
+## Best Practices
+
+### 1. Event Naming Convention
+
+Use descriptive, action-based names with consistent patterns:
+
+```typescript
+// Good
+'teams-updated'
+'user-profile-changed'
+'mcp-server-deployed'
+'notification-show'
+
+// Avoid
+'update'
+'change'
+'event1'
+```
+
+### 2. Type Safety
+
+Always define event types in the `EventBusEvents` interface:
+
+```typescript
+export type EventBusEvents = {
+  // Simple events (no data)
+  'teams-updated': void
+  'cache-cleared': void
+  
+  // Events with data
+  'user-updated': { userId: string; changes: Partial<User> }
+  'error-occurred': { message: string; code?: string }
+  'progress-update': { percentage: number; task: string }
+}
+```
+
+### 3. Memory Management
+
+Always clean up event listeners to prevent memory leaks:
+
+```vue
+<script setup lang="ts">
+import { onUnmounted } from 'vue'
+import { useEventBus } from '@/composables/useEventBus'
+
+const eventBus = useEventBus()
+
+// Store handler references for cleanup
+const handleTeamsUpdate = () => { /* handler logic */ }
+const handleUserUpdate = () => { /* handler logic */ }
+
+onMounted(() => {
+  eventBus.on('teams-updated', handleTeamsUpdate)
+  eventBus.on('user-updated', handleUserUpdate)
+})
+
+onUnmounted(() => {
+  // Clean up all listeners
+  eventBus.off('teams-updated', handleTeamsUpdate)
+  eventBus.off('user-updated', handleUserUpdate)
+})
+</script>
+```
+
+### 4. Error Handling
+
+Wrap event handlers in try-catch blocks:
+
+```typescript
+const handleDataUpdate = (data: any) => {
+  try {
+    // Process the event data
+    updateLocalState(data)
+  } catch (error) {
+    console.error('Error handling data update event:', error)
+    // Optionally emit an error event
+    eventBus.emit('error-occurred', {
+      message: 'Failed to process data update',
+      code: 'EVENT_HANDLER_ERROR'
+    })
+  }
+}
+```
+
+### 5. Debugging Events
+
+Add logging for development:
+
+```typescript
+const eventBus = useEventBus()
+
+// Development logging
+if (import.meta.env.DEV) {
+  eventBus.on('*', (type, data) => {
+    console.log(`[EventBus] ${type}:`, data)
+  })
+}
+```
+
+## Common Patterns
+
+### 1. Data Synchronization
+
+```typescript
+// Pattern: Emit after successful API operations
+const createTeam = async (teamData: CreateTeamInput) => {
+  try {
+    const newTeam = await TeamService.createTeam(teamData)
+    eventBus.emit('teams-updated')
+    return newTeam
+  } catch (error) {
+    eventBus.emit('error-occurred', { message: 'Failed to create team' })
+    throw error
+  }
+}
+```
+
+### 2. Cache Invalidation
+
+```typescript
+// Pattern: Clear cache and refresh data
+eventBus.on('teams-updated', () => {
+  TeamService.clearCache()
+  fetchTeams(true) // Force refresh
+})
+```
+
+### 3. UI State Updates
+
+```typescript
+// Pattern: Update UI state across components
+eventBus.on('user-profile-updated', (userData) => {
+  // Update user avatar in header
+  userAvatar.value = userData.avatar
+  // Update user name in sidebar
+  userName.value = userData.name
+})
+```
+
+## Performance Considerations
+
+### 1. Event Frequency
+
+Be mindful of high-frequency events:
+
+```typescript
+// Good: Debounce frequent events
+import { debounce } from 'lodash-es'
+
+const debouncedUpdate = debounce(() => {
+  eventBus.emit('search-updated')
+}, 300)
+
+// Bad: Emitting on every keystroke
+onInput(() => {
+  eventBus.emit('search-updated') // Too frequent!
+})
+```
+
+### 2. Event Data Size
+
+Keep event payloads small:
+
+```typescript
+// Good: Send only necessary data
+eventBus.emit('user-updated', { 
+  userId: user.id, 
+  changes: { name: user.name } 
+})
+
+// Avoid: Sending entire objects
+eventBus.emit('user-updated', entireUserObject) // Too much data!
+```
+
+## Testing
+
+### Unit Testing Events
+
+```typescript
+// tests/components/TeamManager.test.ts
+import { describe, it, expect, vi } from 'vitest'
+import { mount } from '@vue/test-utils'
+import TeamManager from '@/components/TeamManager.vue'
+
+describe('TeamManager', () => {
+  it('emits teams-updated event after creating team', async () => {
+    const mockEventBus = {
+      emit: vi.fn(),
+      on: vi.fn(),
+      off: vi.fn()
+    }
+    
+    const wrapper = mount(TeamManager, {
+      global: {
+        provide: {
+          emitter: mockEventBus
+        }
+      }
+    })
+    
+    await wrapper.vm.createTeam({ name: 'Test Team' })
+    
+    expect(mockEventBus.emit).toHaveBeenCalledWith('teams-updated')
+  })
+})
+```
+
+## Migration Guide
+
+### From Direct Component Communication
+
+**Before:**
+```vue
+<!-- Parent component -->
+<ChildComponent @team-created="handleTeamCreated" />
+
+<!-- Child component -->
+emit('team-created', teamData)
+```
+
+**After:**
+```vue
+<!-- Parent component -->
+<script setup>
+const eventBus = useEventBus()
+
+onMounted(() => {
+  eventBus.on('teams-updated', handleTeamCreated)
+})
+</script>
+
+<!-- Child component -->
+<script setup>
+const eventBus = useEventBus()
+
+const createTeam = async () => {
+  await TeamService.createTeam(data)
+  eventBus.emit('teams-updated')
+}
+</script>
+```
+
+### Adding New Events
+
+1. **Define the event type**:
+```typescript
+// src/composables/useEventBus.ts
+export type EventBusEvents = {
+  // ... existing events
+  'new-feature-updated': { featureId: string; status: string }
+}
+```
+
+2. **Emit the event**:
+```typescript
+eventBus.emit('new-feature-updated', { 
+  featureId: 'feature-123', 
+  status: 'active' 
+})
+```
+
+3. **Listen for the event**:
+```typescript
+eventBus.on('new-feature-updated', (data) => {
+  console.log(`Feature ${data.featureId} is now ${data.status}`)
+})
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Events not firing**: Check if the event name matches exactly
+2. **Memory leaks**: Ensure `eventBus.off()` is called in `onUnmounted()`
+3. **TypeScript errors**: Verify event types are defined in `EventBusEvents`
+4. **Handler not called**: Check if the listener was registered before the event was emitted
+
+### Debugging Tips
+
+```typescript
+// Add global event logging
+if (import.meta.env.DEV) {
+  const eventBus = useEventBus()
+  
+  // Log all events
+  eventBus.on('*', (type, data) => {
+    console.group(`[EventBus] ${type}`)
+    console.log('Data:', data)
+    console.log('Timestamp:', new Date().toISOString())
+    console.groupEnd()
+  })
+}
+```
+
+The global event bus system provides a powerful and type-safe way to handle cross-component communication in the DeployStack frontend, enabling immediate updates and better user experience.

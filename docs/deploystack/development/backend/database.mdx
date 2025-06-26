@@ -96,10 +96,13 @@ This file is automatically managed by the setup API. You typically do not need t
 
 ## Database Structure
 
-The database schema is defined in `src/db/schema.ts`. It contains:
+The database schema is defined in `src/db/schema.sqlite.ts`. This is the **single source of truth** for all database schema definitions. It contains:
 
 1. Base schema tables (core application)
-2. Plugin tables (dynamically loaded)
+2. Plugin table definitions (populated dynamically)
+3. Proper foreign key relationships and constraints
+
+**Important**: Only `schema.sqlite.ts` should be edited for schema changes. The previous `schema.ts` file has been removed to eliminate confusion.
 
 ## Making Schema Changes
 
@@ -107,7 +110,7 @@ Follow these steps to add or modify database tables:
 
 1. **Modify Schema Definition**
 
-   Edit `src/db/schema.ts` to add or modify tables:
+   Edit `src/db/schema.sqlite.ts` to add or modify tables:
 
    ```typescript
    // Example: Adding a new projects table
@@ -115,17 +118,13 @@ Follow these steps to add or modify database tables:
      id: text('id').primaryKey(),
      name: text('name').notNull(),
      description: text('description'),
-     userId: text('user_id').references(() => users.id),
-     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
-     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
+     userId: text('user_id').references(() => authUser.id),
+     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
    });
-
-   // Don't forget to add it to baseSchema
-   export const baseSchema = {
-     users,
-     projects, // Add your new table here
-   };
    ```
+
+   **Note**: Tables are automatically exported and available - no need to manually add them to a base schema object.
 
 2. **Generate Migration**
 
@@ -181,7 +180,7 @@ Tables defined by plugins are automatically created when the plugin is loaded an
 
 ## Development Workflow
 
-1. Make schema changes in `src/db/schema.ts`
+1. Make schema changes in `src/db/schema.sqlite.ts`
 2. Generate migrations with `npm run db:generate`
 3. Restart the server to apply migrations
 4. Update application code to use the modified schema
@@ -193,7 +192,7 @@ Tables defined by plugins are automatically created when the plugin is loaded an
 - Include proper foreign key constraints for relational data
 - Add explicit types for all columns
 - Always use migrations for schema changes in development and production
-- **Important**: When adding foreign key relationships, update the dialect-specific schema files (e.g., `src/db/schema.sqlite.ts`) rather than the central `schema.ts` file, as Drizzle Kit uses these files for migration generation
+- **Important**: All schema changes should be made in `src/db/schema.sqlite.ts` as it is the single source of truth for Drizzle Kit migration generation
 - Never manually create migration files - always use `npm run db:generate` to ensure proper migration structure
 
 ## Inspecting the Database
