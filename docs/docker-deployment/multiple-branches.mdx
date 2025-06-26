@@ -20,7 +20,7 @@ Every repository starts with its default branch (typically `main` or `master`). 
 
 When you change your default branch in GitHub:
 
-- DeployStack automatically detects the change - you need to install [DeployStack GitHub App](/deploystack/github-application)
+- DeployStack automatically detects the change - you need to install [DeployStack GitHub App](/docker-deployment/github-application)
 - Regenerates templates for the new default branch
 - Updates all deployment buttons
 
@@ -80,7 +80,7 @@ This structure allows you to:
 - Modify service configurations independently
 - Keep each version's deployment parameters isolated
 
-Remember: The DeployStack GitHub App only monitors the standard filenames: check [.deploystack Directory Reference for more info](/deploystack/deploystack-configuration-directory)
+Remember: The DeployStack GitHub App only monitors the standard filenames: check [.deploystack Directory Reference for more info](/docker-deployment/deploystack-configuration-directory)
 
 ## Real-World Example
 
@@ -142,7 +142,7 @@ This strategy allows your users to:
 - Maximum of 5 active branches supported
 - Each branch can have unique Docker configurations
 - Default branch can be changed (switch to another branch and make it default) but not excluded
-- Branch configurations ([DeployStack config file](/deploystack/deploystack-config-file)) must be in the default branch
+- Branch configurations ([DeployStack config file](/docker-deployment/deploystack-config-file)) must be in the default branch
 - All branches are automatically monitored for changes
 - Template regeneration happens automatically when:
   - Branch content changes

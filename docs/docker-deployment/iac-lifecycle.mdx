@@ -11,7 +11,7 @@ This guide explains how DeployStack manages and updates your Infrastructure as C
 
 ### Initial Setup
 
-1. Create a `.deploystack` [configuration directory](/deploystack/deploystack-configuration-directory) in your repository
+1. Create a `.deploystack` [configuration directory](/docker-deployment/deploystack-configuration-directory) in your repository
 2. Add your Docker configuration files:
    - `docker-compose.yml` for Compose configurations
    - `docker-run.txt` for Docker run commands
@@ -20,7 +20,7 @@ This guide explains how DeployStack manages and updates your Infrastructure as C
 
 ### Enabling Automatic Updates
 
-Install the [DeployStack Repository Sync](/deploystack/github-application) GitHub App to keep your templates up to date when:
+Install the [DeployStack Repository Sync](/docker-deployment/github-application) GitHub App to keep your templates up to date when:
 
 - You modify Docker configurations in the `.deploystack` directory
 - Cloud providers update their IaC specifications
@@ -36,7 +36,7 @@ All IaC templates are stored in public and open-source repository: [https://gith
 
 ### Prerequisites for activating the flow
 
-1. You have installed the [DeployStack GitHub app](/deploystack/github-application).
+1. You have installed the [DeployStack GitHub app](/docker-deployment/github-application).
 2. You have created the `.deploystack/docker-run.txt` or `.deploystack/docker-compose.yml` file.
 
 The choice between `docker-run.txt` or `docker-compose.yml` depends on the submission process used to DeployStack. When submitting to DeployStack, you can choose two methods -> Docker Run or Docker Compose.
