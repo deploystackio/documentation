@@ -1,0 +1,459 @@
+---
+title: Local Development Setup
+description: Set up DeployStack for local development with npm scripts and hot reloading.
+sidebar: Local Setup
+icon: Code2
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { Steps, Step } from 'fumadocs-ui/components/steps';
+
+# Local Development Setup
+
+This guide is for contributors and developers who want to run DeployStack locally for development purposes. If you want to deploy DeployStack for production use, see our [Self-Hosted Documentation](/deploystack/self-hosted).
+
+<Callout type="info">
+  For production deployments, use our [Docker Compose setup](/deploystack/self-hosted/docker-compose) instead.
+</Callout>
+
+## Prerequisites
+
+<Tabs items={['Linux/macOS', 'Windows (WSL)']}>
+  <Tab value="Linux/macOS">
+    Before you can install and use DeployStack locally, make sure you have the following installed:
+    
+    - **[Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)**: Version control system
+    - **[Node.js v18+](https://nodejs.org/en/download)**: JavaScript runtime (v18 or higher required)
+    - **[npm v8+](https://www.npmjs.com/get-npm)**: Package manager (comes with Node.js)
+    - **[Docker](https://docs.docker.com/get-docker/)**: For running databases (optional but recommended)
+    
+    ### Verify Installation
+    
+    ```bash
+    # Check versions
+    git --version
+    node --version  # Should be v18 or higher
+    npm --version   # Should be v8 or higher
+    docker --version
+    ```
+  </Tab>
+  
+  <Tab value="Windows (WSL)">
+    For Windows development, we recommend using Windows Subsystem for Linux (WSL2):
+    
+    1. **Install WSL2**: Follow [Microsoft's WSL installation guide](https://docs.microsoft.com/en-us/windows/wsl/install)
+    2. **Install Ubuntu**: From Microsoft Store or command line
+    3. **Install development tools in WSL**:
+    
+    ```bash
+    # Update package list
+    sudo apt update
+    
+    # Install Git
+    sudo apt install git
+    
+    # Install Node.js v18 via NodeSource
+    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+    
+    # Install Docker
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sudo sh get-docker.sh
+    sudo usermod -aG docker $USER
+    ```
+    
+    ### Verify Installation
+    
+    ```bash
+    # Check versions
+    git --version
+    node --version  # Should be v18 or higher
+    npm --version   # Should be v8 or higher
+    docker --version
+    ```
+    
+    <Callout type="warn">
+      After installing Docker, you may need to restart your WSL session or run `newgrp docker` to use Docker without sudo.
+    </Callout>
+  </Tab>
+</Tabs>
+
+## Step 1: Clone the Repository
+
+<Tabs items={['SSH (Recommended)', 'HTTPS']}>
+  <Tab value="SSH (Recommended)">
+    If you haven't set up SSH keys, learn how [here](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/about-ssh).
+    
+    ```bash
+    git clone git@github.com:deploystackio/deploystack.git
+    cd deploystack
+    ```
+  </Tab>
+  
+  <Tab value="HTTPS">
+    ```bash
+    git clone https://github.com/deploystackio/deploystack.git
+    cd deploystack
+    ```
+  </Tab>
+</Tabs>
+
+## Step 2: Install Dependencies
+
+Install all project dependencies using npm workspaces:
+
+```bash
+# Install dependencies for all services
+npm install
+```
+
+<Callout type="info">
+  DeployStack uses npm workspaces to manage dependencies across frontend and backend services. The root `npm install` will install dependencies for all services.
+</Callout>
+
+## Step 3: Set Up Environment Variables
+
+### Backend Environment
+
+Create the backend environment file:
+
+```bash
+# Create backend .env file
+cp services/backend/.env.example services/backend/.env
+```
+
+Edit `services/backend/.env` with your configuration:
+
+```bash
+# Required: Generate a secure encryption secret
+DEPLOYSTACK_ENCRYPTION_SECRET=your-32-character-secret-here
+
+# Frontend URL (for CORS and redirects)
+DEPLOYSTACK_FRONTEND_URL=http://localhost:5173
+
+# Development settings
+NODE_ENV=development
+PORT=3000
+LOG_LEVEL=debug
+```
+
+### Frontend Environment
+
+Create the frontend environment file:
+
+```bash
+# Create frontend .env file
+cp services/frontend/.env.example services/frontend/.env
+```
+
+Edit `services/frontend/.env` with your configuration:
+
+```bash
+# Backend API URL
+VITE_DEPLOYSTACK_BACKEND_URL=http://localhost:3000
+
+# App configuration
+VITE_APP_TITLE=DeployStack (Dev)
+```
+
+### Generate Encryption Secret
+
+<Tabs items={['Linux/macOS', 'Windows']}>
+  <Tab value="Linux/macOS">
+    Generate a secure 32-character secret:
+    
+    ```bash
+    # Using OpenSSL (recommended)
+    openssl rand -hex 16
+    
+    # Alternative using Node.js
+    node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
+    ```
+  </Tab>
+  
+  <Tab value="Windows">
+    Generate a secure secret using PowerShell or Node.js:
+    
+    ```powershell
+    # Using PowerShell
+    -join ((1..32) | ForEach {'{0:X}' -f (Get-Random -Max 16)})
+    
+    # Using Node.js (if available)
+    node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
+    ```
+  </Tab>
+</Tabs>
+
+## Step 4: Set Up Database (Optional)
+
+DeployStack uses SQLite by default for development, but you can optionally set up PostgreSQL:
+
+<Tabs items={['SQLite (Default)', 'PostgreSQL (Optional)']}>
+  <Tab value="SQLite (Default)">
+    No additional setup required. DeployStack will create a SQLite database automatically in `services/backend/persistent_data/`.
+    
+    The database file will be created on first run:
+    ```
+    services/backend/persistent_data/database/deploystack.db
+    ```
+  </Tab>
+  
+  <Tab value="PostgreSQL (Optional)">
+    If you prefer PostgreSQL for development:
+    
+    ```bash
+    # Start PostgreSQL with Docker
+    docker run -d \
+      --name deploystack-postgres \
+      -e POSTGRES_DB=deploystack \
+      -e POSTGRES_USER=deploystack \
+      -e POSTGRES_PASSWORD=deploystack \
+      -p 5432:5432 \
+      postgres:16
+    ```
+    
+    Update your `services/backend/.env`:
+    ```bash
+    # Add PostgreSQL configuration
+    DATABASE_URL=postgresql://deploystack:deploystack@localhost:5432/deploystack
+    ```
+  </Tab>
+</Tabs>
+
+## Step 5: Running the Development Servers
+
+DeployStack requires both frontend and backend services to run simultaneously.
+
+### Option 1: Separate Terminals (Recommended)
+
+Run each service in its own terminal for better log visibility:
+
+```bash
+# Terminal 1: Start backend server
+npm run dev:backend
+
+# Terminal 2: Start frontend server (in a new terminal)
+npm run dev:frontend
+```
+
+### Option 2: Background Processes
+
+Run both services from a single terminal:
+
+<Tabs items={['Linux/macOS', 'Windows']}>
+  <Tab value="Linux/macOS">
+    ```bash
+    # Start backend in background
+    npm run dev:backend &
+    
+    # Start frontend
+    npm run dev:frontend
+    
+    # To stop background processes later:
+    # pkill -f "npm run dev:backend"
+    ```
+  </Tab>
+  
+  <Tab value="Windows">
+    ```powershell
+    # Start backend in new window
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "npm run dev:backend"
+    
+    # Start frontend in current window
+    npm run dev:frontend
+    ```
+  </Tab>
+</Tabs>
+
+### Development URLs
+
+Once both services are running:
+
+- **Frontend**: [http://localhost:5173](http://localhost:5173) (Vite dev server)
+- **Backend API**: [http://localhost:3000](http://localhost:3000) (Fastify server)
+- **API Documentation**: [http://localhost:3000/documentation](http://localhost:3000/documentation) (Swagger UI)
+
+## Step 6: Verify Installation
+
+<Steps>
+  <Step>
+    **Check Service Status**
+    
+    Verify both services are running:
+    ```bash
+    # Check if ports are listening
+    curl http://localhost:3000/health  # Backend health check
+    curl http://localhost:5173         # Frontend dev server
+    ```
+  </Step>
+  
+  <Step>
+    **Access the Application**
+    
+    Open [http://localhost:5173](http://localhost:5173) in your browser. You should see the DeployStack interface.
+  </Step>
+  
+  <Step>
+    **Create First User**
+    
+    Follow the on-screen setup wizard to create your first admin user and configure basic settings.
+  </Step>
+</Steps>
+
+## Development Workflow
+
+### Hot Reloading
+
+Both services support hot reloading:
+
+- **Frontend**: Vite automatically reloads on file changes
+- **Backend**: Nodemon restarts the server on file changes
+
+### Available Scripts
+
+From the project root:
+
+```bash
+# Development
+npm run dev:frontend          # Start frontend dev server
+npm run dev:backend           # Start backend dev server
+
+# Building
+npm run build:frontend        # Build frontend for production
+npm run build:backend         # Build backend TypeScript
+
+# Linting
+npm run lint:frontend         # Lint frontend code
+npm run lint:backend          # Lint backend code
+npm run lint:md               # Lint markdown files
+
+# Testing
+npm run test:backend:unit     # Run backend unit tests
+npm run test:backend:e2e      # Run backend e2e tests
+npm run test:backend:unit:coverage  # Run tests with coverage
+
+# Releases
+npm run release:frontend      # Create frontend release
+npm run release:backend       # Create backend release
+```
+
+### Project Structure
+
+```bash
+deploystack/
+├── services/
+│   ├── frontend/           # Vue.js frontend application
+│   │   ├── src/           # Source code
+│   │   ├── public/        # Static assets
+│   │   ├── package.json   # Frontend dependencies
+│   │   └── vite.config.ts # Vite configuration
+│   ├── backend/           # Fastify backend API
+│   │   ├── src/          # Source code
+│   │   ├── tests/        # Test files
+│   │   ├── persistent_data/ # SQLite database and uploads
+│   │   ├── package.json  # Backend dependencies
+│   │   └── tsconfig.json # TypeScript configuration
+│   └── shared/           # Shared utilities and types
+├── scripts/              # Build and deployment scripts
+├── package.json          # Root package.json (workspaces)
+└── docker-compose.yml    # Production deployment
+```
+
+## Troubleshooting
+
+### Common Issues
+
+#### Port Already in Use
+
+```bash
+# Check what's using the port
+lsof -i :3000  # Backend port
+lsof -i :5173  # Frontend port
+
+# Kill process using the port
+kill -9 <PID>
+```
+
+#### Node Version Issues
+
+```bash
+# Check Node version
+node --version
+
+# If using nvm, switch to correct version
+nvm install 18
+nvm use 18
+```
+
+#### Permission Errors
+
+<Tabs items={['Linux/macOS', 'Windows']}>
+  <Tab value="Linux/macOS">
+    ```bash
+    # Fix npm permissions
+    sudo chown -R $(whoami) ~/.npm
+    
+    # Fix project permissions
+    sudo chown -R $(whoami) .
+    ```
+  </Tab>
+  
+  <Tab value="Windows">
+    Run your terminal as Administrator or ensure you have write permissions to the project directory.
+  </Tab>
+</Tabs>
+
+#### Database Connection Issues
+
+```bash
+# Check if database directory exists
+ls -la services/backend/persistent_data/
+
+# Create directory if missing
+mkdir -p services/backend/persistent_data/database
+
+# Check database file permissions
+ls -la services/backend/persistent_data/database/
+```
+
+#### Environment Variable Issues
+
+```bash
+# Verify environment files exist
+ls -la services/backend/.env
+ls -la services/frontend/.env
+
+# Check if encryption secret is set
+grep DEPLOYSTACK_ENCRYPTION_SECRET services/backend/.env
+```
+
+### Getting Help
+
+If you encounter issues not covered here:
+
+1. **Check Logs**: Look at the console output from both frontend and backend servers
+2. **Search Issues**: Look for similar problems in [GitHub Issues](https://github.com/deploystackio/deploystack/issues)
+3. **Community Support**: Ask for help in our [Discord](https://discord.gg/UjFWwByB)
+4. **Create Issue**: Report bugs with detailed logs and system information
+
+## Contributing
+
+Once you have DeployStack running locally:
+
+1. **Read Contributing Guidelines**: Check [CONTRIBUTING.md](https://github.com/deploystackio/deploystack/blob/main/CONTRIBUTING.md)
+2. **Create Feature Branch**: `git checkout -b feature/amazing-feature`
+3. **Make Changes**: Implement your feature or bug fix
+4. **Test Changes**: Run tests and verify functionality
+5. **Submit Pull Request**: Create a PR with detailed description
+
+## Next Steps
+
+- **Explore the Codebase**: Familiarize yourself with the project structure
+- **Read API Documentation**: Check the backend API docs at [http://localhost:3000/documentation](http://localhost:3000/documentation)
+- **Join Development Discussions**: Participate in our [Discord](https://discord.gg/UjFWwByB) development channels
+- **Check Open Issues**: Find issues to work on in our [GitHub repository](https://github.com/deploystackio/deploystack/issues)
+
+---
+
+**Ready to contribute?** Check our [Contributing Guidelines](https://github.com/deploystackio/deploystack/blob/main/CONTRIBUTING.md) to get started!

@@ -44,8 +44,8 @@ Every plugin must implement the `Plugin` interface:
 ```typescript
 interface Plugin {
   meta: PluginMeta
-  initialize(app: App, router: Router, pinia: Pinia, pluginManager?: PluginManager): Promise<void>
-  cleanup(): Promise<void>
+  initialize(app: App, router: Router, pinia: Pinia): Promise<void> | void
+  cleanup?(): Promise<void> | void
 }
 
 interface PluginMeta {
@@ -53,8 +53,7 @@ interface PluginMeta {
   name: string         // Human-readable plugin name
   version: string      // Plugin version (semver)
   description: string  // Plugin description
-  author: string       // Plugin author
-  dependencies?: string[]  // Other plugin IDs this plugin depends on
+  author?: string      // Plugin author (optional)
 }
 ```
 
@@ -65,8 +64,8 @@ interface PluginMeta {
 Create a new directory for your plugin:
 
 ```bash
-mkdir -p src/plugins/mcp-metrics-plugin
-cd src/plugins/mcp-metrics-plugin
+mkdir -p src/plugins/my-custom-plugin
+cd src/plugins/my-custom-plugin
 ```
 
 ### 2. Create a Component
@@ -74,80 +73,80 @@ cd src/plugins/mcp-metrics-plugin
 Start with a simple Vue component:
 
 ```vue
-<!-- src/plugins/mcp-metrics-plugin/components/MetricsWidget.vue -->
-<script setup lang=\"ts\">
+<!-- src/plugins/my-custom-plugin/components/CustomWidget.vue -->
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { BarChart, TrendingUp, Server } from 'lucide-vue-next'
 
-const metrics = ref({
-  totalServers: 0,
-  activeDeployments: 0,
+const data = ref({
+  totalItems: 0,
+  activeItems: 0,
   totalRequests: 0
 })
 
 const isLoading = ref(true)
 
-async function fetchMetrics() {
+async function fetchData() {
   isLoading.value = true
   try {
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000))
-    metrics.value = {
-      totalServers: 12,
-      activeDeployments: 8,
+    data.value = {
+      totalItems: 12,
+      activeItems: 8,
       totalRequests: 1542
     }
   } catch (error) {
-    console.error('Failed to fetch metrics:', error)
+    console.error('Failed to fetch data:', error)
   } finally {
     isLoading.value = false
   }
 }
 
 onMounted(() => {
-  fetchMetrics()
+  fetchData()
 })
 </script>
 
 <template>
-  <div class=\"metrics-widget p-6 bg-white rounded-lg shadow-md border\">
-    <div class=\"flex items-center justify-between mb-4\">
-      <h3 class=\"text-lg font-semibold text-gray-900 flex items-center\">
-        <BarChart class=\"h-5 w-5 mr-2 text-indigo-600\" />
-        MCP Server Metrics
+  <div class="custom-widget p-6 bg-white rounded-lg shadow-md border">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+        <BarChart class="h-5 w-5 mr-2 text-indigo-600" />
+        Custom Plugin Widget
       </h3>
       <button 
-        @click=\"fetchMetrics\" 
-        class=\"text-sm text-indigo-600 hover:text-indigo-800\"
-        :disabled=\"isLoading\"
+        @click="fetchData" 
+        class="text-sm text-indigo-600 hover:text-indigo-800"
+        :disabled="isLoading"
       >
         {{ isLoading ? 'Loading...' : 'Refresh' }}
       </button>
     </div>
     
-    <div v-if=\"isLoading\" class=\"animate-pulse\">
-      <div class=\"grid grid-cols-3 gap-4\">
-        <div v-for=\"i in 3\" :key=\"i\" class=\"h-16 bg-gray-200 rounded\"></div>
+    <div v-if="isLoading" class="animate-pulse">
+      <div class="grid grid-cols-3 gap-4">
+        <div v-for="i in 3" :key="i" class="h-16 bg-gray-200 rounded"></div>
       </div>
     </div>
     
-    <div v-else class=\"grid grid-cols-3 gap-4\">
-      <div class=\"text-center p-4 bg-blue-50 rounded-lg\">
-        <Server class=\"h-6 w-6 mx-auto mb-2 text-blue-600\" />
-        <div class=\"text-2xl font-bold text-blue-700\">{{ metrics.totalServers }}</div>
-        <div class=\"text-sm text-blue-600\">Total Servers</div>
+    <div v-else class="grid grid-cols-3 gap-4">
+      <div class="text-center p-4 bg-blue-50 rounded-lg">
+        <Server class="h-6 w-6 mx-auto mb-2 text-blue-600" />
+        <div class="text-2xl font-bold text-blue-700">{{ data.totalItems }}</div>
+        <div class="text-sm text-blue-600">Total Items</div>
       </div>
       
-      <div class=\"text-center p-4 bg-green-50 rounded-lg\">
-        <TrendingUp class=\"h-6 w-6 mx-auto mb-2 text-green-600\" />
-        <div class=\"text-2xl font-bold text-green-700\">{{ metrics.activeDeployments }}</div>
-        <div class=\"text-sm text-green-600\">Active Deployments</div>
+      <div class="text-center p-4 bg-green-50 rounded-lg">
+        <TrendingUp class="h-6 w-6 mx-auto mb-2 text-green-600" />
+        <div class="text-2xl font-bold text-green-700">{{ data.activeItems }}</div>
+        <div class="text-sm text-green-600">Active Items</div>
       </div>
       
-      <div class=\"text-center p-4 bg-purple-50 rounded-lg\">
-        <BarChart class=\"h-6 w-6 mx-auto mb-2 text-purple-600\" />
-        <div class=\"text-2xl font-bold text-purple-700\">{{ metrics.totalRequests.toLocaleString() }}</div>
-        <div class=\"text-sm text-purple-600\">Total Requests</div>
+      <div class="text-center p-4 bg-purple-50 rounded-lg">
+        <BarChart class="h-6 w-6 mx-auto mb-2 text-purple-600" />
+        <div class="text-2xl font-bold text-purple-700">{{ data.totalRequests.toLocaleString() }}</div>
+        <div class="text-sm text-purple-600">Total Requests</div>
       </div>
     </div>
   </div>
@@ -159,71 +158,56 @@ onMounted(() => {
 Create the main plugin file:
 
 ```typescript
-// src/plugins/mcp-metrics-plugin/index.ts
+// src/plugins/my-custom-plugin/index.ts
 import type { Plugin } from '@/plugin-system/types'
 import type { App } from 'vue'
 import type { Router } from 'vue-router'
 import type { Pinia } from 'pinia'
 import { registerExtensionPoint } from '@/plugin-system/extension-points'
-import MetricsWidget from './components/MetricsWidget.vue'
-import MetricsPage from './views/MetricsPage.vue'
+import CustomWidget from './components/CustomWidget.vue'
+import CustomPage from './views/CustomPage.vue'
 
-class McpMetricsPlugin implements Plugin {
+class MyCustomPlugin implements Plugin {
   meta = {
-    id: 'mcp-metrics-plugin',
-    name: 'MCP Metrics Plugin',
+    id: 'my-custom-plugin',
+    name: 'My Custom Plugin',
     version: '1.0.0',
-    description: 'Provides comprehensive metrics and analytics for MCP server deployments',
-    author: 'DeployStack Team'
+    description: 'Provides custom functionality and widgets for the application',
+    author: 'Your Name'
   }
   
-  async initialize(app: App, router: Router, pinia: Pinia) {
-    console.log('Initializing MCP Metrics Plugin...')
+  initialize(app: App, router: Router, pinia: Pinia) {
+    console.log('Initializing My Custom Plugin...')
     
-    // Register the metrics widget in the dashboard
-    registerExtensionPoint('dashboard-widgets', MetricsWidget, this.meta.id, {
+    // Register the widget at an extension point
+    registerExtensionPoint('dashboard-widgets', CustomWidget, this.meta.id, {
       order: 10, // Show early in the dashboard
       props: {
         refreshInterval: 30000 // Refresh every 30 seconds
       }
     })
     
-    // Register a dedicated metrics page
+    // Register a dedicated page route
     router.addRoute({
-      path: '/metrics',
-      name: 'Metrics',
-      component: MetricsPage,
+      path: '/custom',
+      name: 'Custom',
+      component: CustomPage,
       meta: {
-        title: 'MCP Metrics',
+        title: 'Custom Plugin',
         requiresAuth: true
       }
     })
     
-    // Add navigation item (if supported by your app)
-    registerExtensionPoint('main-navigation', {
-      template: `
-        <router-link 
-          to=\"/metrics\" 
-          class=\"nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-gray-100\"
-        >
-          <BarChart class=\"h-5 w-5\" />
-          <span>Metrics</span>
-        </router-link>
-      `,
-      components: { BarChart: () => import('lucide-vue-next').then(m => m.BarChart) }
-    }, this.meta.id)
-    
-    console.log('MCP Metrics Plugin initialized successfully')
+    console.log('My Custom Plugin initialized successfully')
   }
   
-  async cleanup() {
-    console.log('Cleaning up MCP Metrics Plugin...')
-    // Perform any necessary cleanup
+  cleanup() {
+    console.log('Cleaning up My Custom Plugin...')
     // Extension points are automatically cleaned up by the plugin manager
   }
 }
 
-export default McpMetricsPlugin
+export default MyCustomPlugin
 ```
 
 ### 4. Create a Dedicated Page
@@ -231,126 +215,44 @@ export default McpMetricsPlugin
 Create a full page view for your plugin:
 
 ```vue
-<!-- src/plugins/mcp-metrics-plugin/views/MetricsPage.vue -->
-<script setup lang=\"ts\">
+<!-- src/plugins/my-custom-plugin/views/CustomPage.vue -->
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { BarChart, TrendingUp, Activity, Clock } from 'lucide-vue-next'
-import MetricsWidget from '../components/MetricsWidget.vue'
+import { BarChart, Settings } from 'lucide-vue-next'
+import CustomWidget from '../components/CustomWidget.vue'
 
-const detailedMetrics = ref({
-  responseTime: '125ms',
-  uptime: '99.9%',
-  errorRate: '0.1%',
-  throughput: '1.2k req/min'
-})
-
-const chartData = ref([])
-const isLoading = ref(true)
-
-async function fetchDetailedMetrics() {
-  isLoading.value = true
-  try {
-    // Simulate API call for detailed metrics
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    // Mock chart data
-    chartData.value = Array.from({ length: 24 }, (_, i) => ({
-      hour: i,
-      requests: Math.floor(Math.random() * 100) + 50,
-      errors: Math.floor(Math.random() * 5)
-    }))
-  } catch (error) {
-    console.error('Failed to fetch detailed metrics:', error)
-  } finally {
-    isLoading.value = false
-  }
-}
-
-onMounted(() => {
-  fetchDetailedMetrics()
+const pageData = ref({
+  title: 'Custom Plugin Dashboard',
+  description: 'This page is provided by the custom plugin'
 })
 </script>
 
 <template>
-  <div class=\"metrics-page max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8\">
-    <div class=\"mb-8\">
-      <h1 class=\"text-3xl font-bold text-gray-900 flex items-center\">
-        <BarChart class=\"h-8 w-8 mr-3 text-indigo-600\" />
-        MCP Server Metrics
+  <div class="custom-page max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900 flex items-center">
+        <BarChart class="h-8 w-8 mr-3 text-indigo-600" />
+        {{ pageData.title }}
       </h1>
-      <p class=\"mt-2 text-gray-600\">
-        Comprehensive analytics and performance metrics for your MCP server deployments
+      <p class="mt-2 text-gray-600">
+        {{ pageData.description }}
       </p>
     </div>
     
-    <!-- Overview Widget -->
-    <div class=\"mb-8\">
-      <MetricsWidget />
+    <!-- Include the widget component -->
+    <div class="mb-8">
+      <CustomWidget />
     </div>
     
-    <!-- Detailed Metrics -->
-    <div class=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8\">
-      <div class=\"bg-white p-6 rounded-lg shadow-md border\">
-        <div class=\"flex items-center\">
-          <Clock class=\"h-8 w-8 text-blue-600\" />
-          <div class=\"ml-4\">
-            <div class=\"text-2xl font-bold text-gray-900\">{{ detailedMetrics.responseTime }}</div>
-            <div class=\"text-sm text-gray-600\">Avg Response Time</div>
-          </div>
-        </div>
-      </div>
-      
-      <div class=\"bg-white p-6 rounded-lg shadow-md border\">
-        <div class=\"flex items-center\">
-          <TrendingUp class=\"h-8 w-8 text-green-600\" />
-          <div class=\"ml-4\">
-            <div class=\"text-2xl font-bold text-gray-900\">{{ detailedMetrics.uptime }}</div>
-            <div class=\"text-sm text-gray-600\">Uptime</div>
-          </div>
-        </div>
-      </div>
-      
-      <div class=\"bg-white p-6 rounded-lg shadow-md border\">
-        <div class=\"flex items-center\">
-          <Activity class=\"h-8 w-8 text-red-600\" />
-          <div class=\"ml-4\">
-            <div class=\"text-2xl font-bold text-gray-900\">{{ detailedMetrics.errorRate }}</div>
-            <div class=\"text-sm text-gray-600\">Error Rate</div>
-          </div>
-        </div>
-      </div>
-      
-      <div class=\"bg-white p-6 rounded-lg shadow-md border\">
-        <div class=\"flex items-center\">
-          <BarChart class=\"h-8 w-8 text-purple-600\" />
-          <div class=\"ml-4\">
-            <div class=\"text-2xl font-bold text-gray-900\">{{ detailedMetrics.throughput }}</div>
-            <div class=\"text-sm text-gray-600\">Throughput</div>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Charts Section -->
-    <div class=\"bg-white p-6 rounded-lg shadow-md border\">
-      <h2 class=\"text-xl font-semibold mb-4\">24-Hour Request Pattern</h2>
-      
-      <div v-if=\"isLoading\" class=\"animate-pulse\">
-        <div class=\"h-64 bg-gray-200 rounded\"></div>
-      </div>
-      
-      <div v-else class=\"h-64\">
-        <!-- Simple chart representation -->
-        <div class=\"flex items-end justify-between h-full space-x-1\">
-          <div 
-            v-for=\"(data, index) in chartData\" 
-            :key=\"index\"
-            class=\"bg-indigo-500 min-w-[1rem] rounded-t transition-all hover:bg-indigo-600\"
-            :style=\"{ height: `${(data.requests / 150) * 100}%` }\"
-            :title=\"`Hour ${data.hour}: ${data.requests} requests`\"
-          ></div>
-        </div>
-      </div>
+    <!-- Additional page content -->
+    <div class="bg-white p-6 rounded-lg shadow-md border">
+      <h2 class="text-xl font-semibold mb-4 flex items-center">
+        <Settings class="h-6 w-6 mr-2 text-gray-600" />
+        Plugin Settings
+      </h2>
+      <p class="text-gray-600">
+        This is where you could add plugin-specific settings and configuration options.
+      </p>
     </div>
   </div>
 </template>
@@ -361,115 +263,69 @@ onMounted(() => {
 Create a Pinia store for your plugin:
 
 ```typescript
-// src/plugins/mcp-metrics-plugin/store.ts
+// src/plugins/my-custom-plugin/store.ts
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
-export interface MetricsData {
-  totalServers: number
-  activeDeployments: number
+export interface CustomData {
+  totalItems: number
+  activeItems: number
   totalRequests: number
-  responseTime: string
-  uptime: string
-  errorRate: string
-  throughput: string
 }
 
-export interface ChartDataPoint {
-  hour: number
-  requests: number
-  errors: number
-}
-
-export const useMetricsStore = defineStore('mcp-metrics', () => {
+export const useCustomStore = defineStore('my-custom-plugin', () => {
   // State
-  const metrics = ref<MetricsData>({
-    totalServers: 0,
-    activeDeployments: 0,
-    totalRequests: 0,
-    responseTime: '0ms',
-    uptime: '0%',
-    errorRate: '0%',
-    throughput: '0 req/min'
+  const data = ref<CustomData>({
+    totalItems: 0,
+    activeItems: 0,
+    totalRequests: 0
   })
   
-  const chartData = ref<ChartDataPoint[]>([])
   const isLoading = ref(false)
   const lastUpdated = ref<Date | null>(null)
   
   // Getters
-  const healthScore = computed(() => {
-    const uptimePercent = parseFloat(metrics.value.uptime.replace('%', ''))
-    const errorPercent = parseFloat(metrics.value.errorRate.replace('%', ''))
-    return Math.max(0, 100 - errorPercent * 10) * (uptimePercent / 100)
+  const activePercentage = computed(() => {
+    if (data.value.totalItems === 0) return 0
+    return Math.round((data.value.activeItems / data.value.totalItems) * 100)
   })
   
-  const isHealthy = computed(() => healthScore.value > 80)
+  const isHealthy = computed(() => activePercentage.value > 80)
   
   // Actions
-  async function fetchMetrics() {
+  async function fetchData() {
     isLoading.value = true
     try {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000))
       
-      metrics.value = {
-        totalServers: Math.floor(Math.random() * 20) + 10,
-        activeDeployments: Math.floor(Math.random() * 15) + 5,
-        totalRequests: Math.floor(Math.random() * 5000) + 1000,
-        responseTime: `${Math.floor(Math.random() * 200) + 50}ms`,
-        uptime: `${(99 + Math.random()).toFixed(1)}%`,
-        errorRate: `${(Math.random() * 2).toFixed(1)}%`,
-        throughput: `${(Math.random() * 2 + 0.5).toFixed(1)}k req/min`
+      data.value = {
+        totalItems: Math.floor(Math.random() * 20) + 10,
+        activeItems: Math.floor(Math.random() * 15) + 5,
+        totalRequests: Math.floor(Math.random() * 5000) + 1000
       }
       
       lastUpdated.value = new Date()
     } catch (error) {
-      console.error('Failed to fetch metrics:', error)
+      console.error('Failed to fetch data:', error)
       throw error
     } finally {
       isLoading.value = false
     }
   }
   
-  async function fetchChartData() {
-    try {
-      // Simulate API call for chart data
-      await new Promise(resolve => setTimeout(resolve, 800))
-      
-      chartData.value = Array.from({ length: 24 }, (_, i) => ({
-        hour: i,
-        requests: Math.floor(Math.random() * 100) + 50,
-        errors: Math.floor(Math.random() * 5)
-      }))
-    } catch (error) {
-      console.error('Failed to fetch chart data:', error)
-      throw error
-    }
-  }
-  
-  function refreshAllData() {
-    return Promise.all([
-      fetchMetrics(),
-      fetchChartData()
-    ])
-  }
-  
   return {
     // State
-    metrics,
-    chartData,
+    data,
     isLoading,
     lastUpdated,
     
     // Getters
-    healthScore,
+    activePercentage,
     isHealthy,
     
     // Actions
-    fetchMetrics,
-    fetchChartData,
-    refreshAllData
+    fetchData
   }
 })
 ```
@@ -485,22 +341,22 @@ Add extension points to your main application components:
 ```vue
 <!-- In your Dashboard.vue or other main components -->
 <template>
-  <div class=\"dashboard\">
+  <div class="dashboard">
     <h1>Dashboard</h1>
     
     <!-- Extension point for dashboard widgets -->
-    <div class=\"widgets-grid\">
-      <ExtensionPoint pointId=\"dashboard-widgets\" />
+    <div class="widgets-grid">
+      <ExtensionPoint pointId="dashboard-widgets" />
     </div>
     
     <!-- Extension point for sidebar items -->
-    <aside class=\"sidebar\">
-      <ExtensionPoint pointId=\"sidebar-items\" />
+    <aside class="sidebar">
+      <ExtensionPoint pointId="sidebar-items" />
     </aside>
     
     <!-- Extension point for action buttons -->
-    <div class=\"actions\">
-      <ExtensionPoint pointId=\"action-buttons\" />
+    <div class="actions">
+      <ExtensionPoint pointId="action-buttons" />
     </div>
   </div>
 </template>
@@ -514,7 +370,7 @@ In your plugin's initialize method:
 // Register a single component
 registerExtensionPoint(
   'dashboard-widgets',    // Extension point ID
-  MetricsWidget,         // Vue component
+  CustomWidget,          // Vue component
   this.meta.id,          // Plugin ID
   {
     order: 10,           // Display order (optional)
@@ -536,110 +392,180 @@ Show specific plugin components based on conditions:
 ```vue
 <template>
   <!-- Show only specific plugin -->
-  <ExtensionPoint pointId=\"dashboard-widgets\" pluginName=\"mcp-metrics-plugin\" />
+  <ExtensionPoint pointId="dashboard-widgets" pluginName="my-custom-plugin" />
   
-  <!-- Show all except specific plugin -->
-  <ExtensionPoint pointId=\"dashboard-widgets\" :exclude=\"['debug-plugin']\" />
-  
-  <!-- Show based on user permissions -->
-  <ExtensionPoint 
-    pointId=\"admin-actions\" 
-    v-if=\"userHasAdminRole\"
-  />
+  <!-- Show all plugins at this extension point -->
+  <ExtensionPoint pointId="dashboard-widgets" />
 </template>
 ```
 
-## Advanced Plugin Features
+## Registering Plugins
 
-### Plugin Dependencies
-
-Specify dependencies in your plugin metadata:
+Add your plugin to the plugin loader:
 
 ```typescript
-class AdvancedPlugin implements Plugin {
+// src/plugins/index.ts
+import type { Plugin } from '../plugin-system/types'
+import HelloWorldPlugin from './hello-world'
+import MyCustomPlugin from './my-custom-plugin'
+
+export async function loadPlugins(): Promise<Plugin[]> {
+  return [
+    new HelloWorldPlugin(),
+    new MyCustomPlugin(),
+    // Add more plugins here
+  ]
+}
+```
+
+## Plugin Development Best Practices
+
+### 1. Plugin Naming and Structure
+
+```typescript
+// Good plugin naming
+class ServerMonitoringPlugin implements Plugin {
   meta = {
-    id: 'advanced-plugin',
-    name: 'Advanced Plugin',
-    version: '1.0.0',
-    description: 'Advanced functionality that requires metrics plugin',
-    author: 'You',
-    dependencies: ['mcp-metrics-plugin']  // Require metrics plugin
+    id: 'server-monitoring',               // kebab-case
+    name: 'Server Monitoring',             // Human readable
+    version: '1.2.3',                     // Semantic versioning
+    description: 'Real-time server monitoring', // Clear description
+    author: 'Your Team'
   }
-  
-  async initialize(app: App, router: Router, pinia: Pinia, pluginManager?: PluginManager) {
-    // Check if required plugins are available
-    const metricsPlugin = pluginManager?.getPlugin('mcp-metrics-plugin')
-    if (!metricsPlugin) {
-      throw new Error('MCP Metrics Plugin is required but not available')
+}
+
+// Avoid generic names
+// ❌ class UtilsPlugin
+// ❌ class MyPlugin
+// ❌ class Plugin1
+```
+
+### 2. Component Naming Convention
+
+```vue
+<!-- Good: Prefix with plugin name -->
+<!-- MonitoringWidget.vue -->
+<!-- MonitoringDashboard.vue -->
+<!-- MonitoringChart.vue -->
+
+<!-- Avoid generic names that might conflict -->
+<!-- ❌ Widget.vue -->
+<!-- ❌ Dashboard.vue -->
+<!-- ❌ Chart.vue -->
+```
+
+### 3. Error Handling
+
+```typescript
+class RobustPlugin implements Plugin {
+  initialize(app: App, router: Router, pinia: Pinia) {
+    try {
+      // Plugin initialization logic
+      this.setupComponents()
+      this.registerRoutes(router)
+      this.initializeStore(pinia)
+      
+      console.log(`${this.meta.name} initialized successfully`)
+    } catch (error) {
+      console.error(`Failed to initialize ${this.meta.name}:`, error)
+      
+      // Graceful degradation - don't throw unless critical
+      this.handleInitializationError(error)
     }
-    
-    // Use functionality from the metrics plugin
-    console.log('Metrics plugin available:', metricsPlugin.meta.name)
   }
-}
-```
-
-### Plugin Configuration
-
-Support configuration through the plugin manager:
-
-```typescript
-interface PluginConfig {
-  refreshInterval?: number
-  enableNotifications?: boolean
-  theme?: 'light' | 'dark'
-}
-
-class ConfigurablePlugin implements Plugin {
-  private config: PluginConfig = {}
   
-  async initialize(app: App, router: Router, pinia: Pinia, pluginManager?: PluginManager) {
-    // Get plugin configuration
-    this.config = pluginManager?.getPluginConfig(this.meta.id) || {}
-    
-    // Use configuration
-    const refreshInterval = this.config.refreshInterval || 30000
-    const enableNotifications = this.config.enableNotifications !== false
-    
-    console.log('Plugin config:', this.config)
-  }
-}
-```
-
-### Inter-Plugin Communication
-
-Plugins can communicate through events or shared stores:
-
-```typescript
-// Event-based communication
-class PublisherPlugin implements Plugin {
-  async initialize(app: App) {
-    // Emit events
-    app.config.globalProperties.$pluginEventBus.emit('metrics-updated', data)
-  }
-}
-
-class SubscriberPlugin implements Plugin {
-  async initialize(app: App) {
-    // Listen to events
-    app.config.globalProperties.$pluginEventBus.on('metrics-updated', (data) => {
-      console.log('Received metrics update:', data)
+  private handleInitializationError(error: Error) {
+    // Log detailed error information
+    console.error('Plugin initialization error details:', {
+      pluginId: this.meta.id,
+      version: this.meta.version,
+      error: error.message,
+      stack: error.stack
     })
   }
 }
 ```
 
-### Plugin Composables
+### 4. Resource Cleanup
+
+```typescript
+class CleanPlugin implements Plugin {
+  private intervals: number[] = []
+  private eventListeners: Array<{ element: EventTarget, type: string, listener: EventListener }> = []
+  
+  initialize(app: App, router: Router, pinia: Pinia) {
+    // Set up intervals
+    const intervalId = setInterval(() => {
+      this.refreshData()
+    }, 30000)
+    this.intervals.push(intervalId)
+    
+    // Set up event listeners
+    const listener = (event: Event) => this.handleEvent(event)
+    document.addEventListener('visibilitychange', listener)
+    this.eventListeners.push({
+      element: document,
+      type: 'visibilitychange',
+      listener
+    })
+  }
+  
+  cleanup() {
+    // Clean up intervals
+    this.intervals.forEach(id => clearInterval(id))
+    this.intervals = []
+    
+    // Clean up event listeners
+    this.eventListeners.forEach(({ element, type, listener }) => {
+      element.removeEventListener(type, listener)
+    })
+    this.eventListeners = []
+    
+    console.log(`${this.meta.name} cleaned up successfully`)
+  }
+}
+```
+
+### 5. Type Safety
+
+```typescript
+// Define clear interfaces for your plugin data
+interface PluginData {
+  totalItems: number
+  activeItems: number
+  status: 'active' | 'inactive' | 'error'
+}
+
+interface PluginConfig {
+  refreshInterval?: number
+  enableNotifications?: boolean
+  apiEndpoint?: string
+}
+
+// Use proper typing in components
+interface Props {
+  data: PluginData
+  config?: PluginConfig
+  onRefresh?: () => void
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  config: () => ({}),
+  onRefresh: () => {}
+})
+```
+
+## Plugin Composables
 
 Create reusable composition functions:
 
 ```typescript
-// src/plugins/mcp-metrics-plugin/composables/useMetrics.ts
+// src/plugins/my-custom-plugin/composables/useCustomFeature.ts
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useMetricsStore } from '../store'
+import { useCustomStore } from '../store'
 
-export function useMetrics(refreshInterval = 30000) {
-  const store = useMetricsStore()
+export function useCustomFeature(refreshInterval = 30000) {
+  const store = useCustomStore()
   const isAutoRefreshEnabled = ref(true)
   let intervalId: number | null = null
   
@@ -648,7 +574,7 @@ export function useMetrics(refreshInterval = 30000) {
     
     intervalId = setInterval(() => {
       if (isAutoRefreshEnabled.value) {
-        store.fetchMetrics()
+        store.fetchData()
       }
     }, refreshInterval)
   }
@@ -670,7 +596,7 @@ export function useMetrics(refreshInterval = 30000) {
   }
   
   onMounted(() => {
-    store.fetchMetrics()
+    store.fetchData()
     startAutoRefresh()
   })
   
@@ -679,35 +605,14 @@ export function useMetrics(refreshInterval = 30000) {
   })
   
   return {
-    metrics: store.metrics,
+    data: store.data,
     isLoading: store.isLoading,
-    healthScore: store.healthScore,
+    activePercentage: store.activePercentage,
     isHealthy: store.isHealthy,
     isAutoRefreshEnabled,
-    refreshMetrics: store.fetchMetrics,
+    refreshData: store.fetchData,
     toggleAutoRefresh
   }
-}
-```
-
-## Registering Plugins
-
-Add your plugin to the plugin loader:
-
-```typescript
-// src/plugins/index.ts
-import type { Plugin } from '../plugin-system/types'
-import HelloWorldPlugin from './hello-world'
-import McpMetricsPlugin from './mcp-metrics-plugin'
-import AdvancedPlugin from './advanced-plugin'
-
-export async function loadPlugins(): Promise<Plugin[]> {
-  return [
-    new HelloWorldPlugin(),
-    new McpMetricsPlugin(),
-    new AdvancedPlugin(),
-    // Add more plugins here
-  ]
 }
 ```
 
@@ -716,33 +621,33 @@ export async function loadPlugins(): Promise<Plugin[]> {
 ### Unit Testing Plugin Components
 
 ```typescript
-// tests/plugins/mcp-metrics-plugin/MetricsWidget.test.ts
+// tests/plugins/my-custom-plugin/CustomWidget.test.ts
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import MetricsWidget from '@/plugins/mcp-metrics-plugin/components/MetricsWidget.vue'
+import CustomWidget from '@/plugins/my-custom-plugin/components/CustomWidget.vue'
 
-describe('MetricsWidget', () => {
+describe('CustomWidget', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
   
-  it('should render metrics correctly', async () => {
-    const wrapper = mount(MetricsWidget)
+  it('should render widget correctly', async () => {
+    const wrapper = mount(CustomWidget)
     
     // Wait for component to load
     await wrapper.vm.$nextTick()
     
-    expect(wrapper.find('.metrics-widget').exists()).toBe(true)
-    expect(wrapper.text()).toContain('MCP Server Metrics')
+    expect(wrapper.find('.custom-widget').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Custom Plugin Widget')
   })
   
   it('should show loading state initially', () => {
-    const wrapper = mount(MetricsWidget)
+    const wrapper = mount(CustomWidget)
     expect(wrapper.find('.animate-pulse').exists()).toBe(true)
   })
   
   it('should handle refresh button click', async () => {
-    const wrapper = mount(MetricsWidget)
+    const wrapper = mount(CustomWidget)
     const refreshButton = wrapper.find('button')
     
     await refreshButton.trigger('click')
@@ -754,14 +659,14 @@ describe('MetricsWidget', () => {
 ### Integration Testing
 
 ```typescript
-// tests/plugins/mcp-metrics-plugin/integration.test.ts
+// tests/plugins/my-custom-plugin/integration.test.ts
 import { mount } from '@vue/test-utils'
 import { createRouter, createWebHistory } from 'vue-router'
 import { createPinia } from 'pinia'
-import McpMetricsPlugin from '@/plugins/mcp-metrics-plugin'
-import { PluginManager } from '@/plugin-system/PluginManager'
+import MyCustomPlugin from '@/plugins/my-custom-plugin'
+import { PluginManager } from '@/plugin-system/plugin-manager'
 
-describe('MCP Metrics Plugin Integration', () => {
+describe('My Custom Plugin Integration', () => {
   let pluginManager: PluginManager
   let router: any
   let pinia: any
@@ -776,418 +681,17 @@ describe('MCP Metrics Plugin Integration', () => {
   })
   
   it('should initialize plugin successfully', async () => {
-    const plugin = new McpMetricsPlugin()
+    const plugin = new MyCustomPlugin()
     
     await expect(
-      plugin.initialize(null as any, router, pinia, pluginManager)
+      plugin.initialize(null as any, router, pinia)
     ).resolves.not.toThrow()
     
     // Check if routes were added
     const routes = router.getRoutes()
-    expect(routes.some((route: any) => route.name === 'Metrics')).toBe(true)
-  })
-  
-  it('should register extension points', async () => {
-    const plugin = new McpMetricsPlugin()
-    await plugin.initialize(null as any, router, pinia, pluginManager)
-    
-    // Verify extension points were registered
-    const dashboardExtensions = pluginManager.getExtensionPoints('dashboard-widgets')
-    expect(dashboardExtensions).toHaveLength(1)
-    expect(dashboardExtensions[0].pluginId).toBe(plugin.meta.id)
+    expect(routes.some((route: any) => route.name === 'Custom')).toBe(true)
   })
 })
-```
-
-### Plugin Store Testing
-
-```typescript
-// tests/plugins/mcp-metrics-plugin/store.test.ts
-import { createPinia, setActivePinia } from 'pinia'
-import { useMetricsStore } from '@/plugins/mcp-metrics-plugin/store'
-
-describe('Metrics Store', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-  })
-  
-  it('should initialize with default values', () => {
-    const store = useMetricsStore()
-    
-    expect(store.metrics.totalServers).toBe(0)
-    expect(store.metrics.activeDeployments).toBe(0)
-    expect(store.isLoading).toBe(false)
-    expect(store.lastUpdated).toBeNull()
-  })
-  
-  it('should update metrics after fetching', async () => {
-    const store = useMetricsStore()
-    
-    await store.fetchMetrics()
-    
-    expect(store.metrics.totalServers).toBeGreaterThan(0)
-    expect(store.lastUpdated).toBeInstanceOf(Date)
-  })
-  
-  it('should calculate health score correctly', async () => {
-    const store = useMetricsStore()
-    
-    // Set known values for testing
-    store.metrics.uptime = '99.5%'
-    store.metrics.errorRate = '0.1%'
-    
-    expect(store.healthScore).toBeCloseTo(98.5)
-    expect(store.isHealthy).toBe(true)
-  })
-})
-```
-
-## Plugin Development Best Practices
-
-### 1. Plugin Naming and Structure
-
-```typescript
-// Good plugin naming
-class McpServerMonitoringPlugin implements Plugin {
-  meta = {
-    id: 'mcp-server-monitoring',           // kebab-case
-    name: 'MCP Server Monitoring',         // Human readable
-    version: '1.2.3',                     // Semantic versioning
-    description: 'Real-time monitoring for MCP servers', // Clear description
-    author: 'DeployStack Team'
-  }
-}
-
-// Avoid generic names
-// ❌ class UtilsPlugin
-// ❌ class MyPlugin
-// ❌ class Plugin1
-```
-
-### 2. Component Naming Convention
-
-```vue
-<!-- Good: Prefix with plugin name -->
-<!-- MetricsWidget.vue -->
-<!-- MetricsDashboard.vue -->
-<!-- MetricsChart.vue -->
-
-<!-- Avoid generic names that might conflict -->
-<!-- ❌ Widget.vue -->
-<!-- ❌ Dashboard.vue -->
-<!-- ❌ Chart.vue -->
-```
-
-### 3. Error Handling
-
-```typescript
-class RobustPlugin implements Plugin {
-  async initialize(app: App, router: Router, pinia: Pinia) {
-    try {
-      // Plugin initialization logic
-      await this.setupComponents()
-      await this.registerRoutes(router)
-      await this.initializeStore(pinia)
-      
-      console.log(`${this.meta.name} initialized successfully`)
-    } catch (error) {
-      console.error(`Failed to initialize ${this.meta.name}:`, error)
-      
-      // Graceful degradation
-      this.handleInitializationError(error)
-      
-      // Don't throw unless it's critical
-      // throw error
-    }
-  }
-  
-  private handleInitializationError(error: Error) {
-    // Log detailed error information
-    console.error('Plugin initialization error details:', {
-      pluginId: this.meta.id,
-      version: this.meta.version,
-      error: error.message,
-      stack: error.stack
-    })
-    
-    // Maybe show a user notification
-    // Maybe disable certain features
-    // Maybe use fallback functionality
-  }
-}
-```
-
-### 4. Resource Cleanup
-
-```typescript
-class CleanPlugin implements Plugin {
-  private intervals: number[] = []
-  private eventListeners: Array<{ element: EventTarget, type: string, listener: EventListener }> = []
-  
-  async initialize(app: App, router: Router, pinia: Pinia) {
-    // Set up intervals
-    const intervalId = setInterval(() => {
-      this.refreshData()
-    }, 30000)
-    this.intervals.push(intervalId)
-    
-    // Set up event listeners
-    const listener = (event: Event`
-}) => this.handleEvent(event)
-    document.addEventListener('visibilitychange', listener)
-    this.eventListeners.push({
-      element: document,
-      type: 'visibilitychange',
-      listener
-    })
-  }
-  
-  async cleanup() {
-    // Clean up intervals
-    this.intervals.forEach(id => clearInterval(id))
-    this.intervals = []
-    
-    // Clean up event listeners
-    this.eventListeners.forEach(({ element, type, listener }) => {
-      element.removeEventListener(type, listener)
-    })
-    this.eventListeners = []
-    
-    console.log(`${this.meta.name} cleaned up successfully`)
-  }
-}
-```
-
-### 5. Type Safety
-
-```typescript
-// Define clear interfaces for your plugin data
-interface MetricsData {
-  totalServers: number
-  activeDeployments: number
-  totalRequests: number
-  responseTime: string
-  uptime: string
-  errorRate: string
-  throughput: string
-}
-
-interface PluginConfig {
-  refreshInterval?: number
-  enableNotifications?: boolean
-  apiEndpoint?: string
-}
-
-// Use proper typing in components
-interface Props {
-  data: MetricsData
-  config?: PluginConfig
-  onRefresh?: () => void
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  config: () => ({}),
-  onRefresh: () => {}
-})
-```
-
-### 6. Performance Considerations
-
-```typescript
-class PerformantPlugin implements Plugin {
-  private cache = new Map<string, { data: any, timestamp: number }>()
-  private readonly CACHE_DURATION = 30000 // 30 seconds
-  
-  async fetchData(key: string): Promise<any> {
-    // Check cache first
-    const cached = this.cache.get(key)
-    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
-      return cached.data
-    }
-    
-    // Fetch fresh data
-    const data = await this.performApiCall(key)
-    
-    // Update cache
-    this.cache.set(key, {
-      data,
-      timestamp: Date.now()
-    })
-    
-    return data
-  }
-  
-  private async performApiCall(key: string): Promise<any> {
-    // Actual API call implementation
-    const response = await fetch(`/api/plugin-data/${key}`)
-    return response.json()
-  }
-}
-```
-
-## Plugin Lifecycle Management
-
-### Initialization Order
-
-Plugins are initialized in the order they're listed in the plugin loader, but you can control dependencies:
-
-```typescript
-// In your plugin loader
-export async function loadPlugins(): Promise<Plugin[]> {
-  const plugins = [
-    new CorePlugin(),        // Initialize first (no dependencies)
-    new MetricsPlugin(),     // Depends on core
-    new AdvancedPlugin(),    // Depends on metrics
-  ]
-  
-  // Sort by dependencies if needed
-  return sortPluginsByDependencies(plugins)
-}
-
-function sortPluginsByDependencies(plugins: Plugin[]): Plugin[] {
-  // Implementation to sort plugins based on their dependencies
-  // This ensures plugins are initialized in the correct order
-  return plugins // simplified for example
-}
-```
-
-### Runtime Plugin Management
-
-```typescript
-// Enable/disable plugins at runtime
-class PluginManager {
-  private activePlugins = new Map<string, Plugin>()
-  
-  async enablePlugin(pluginId: string): Promise<void> {
-    const plugin = this.getAvailablePlugin(pluginId)
-    if (!plugin) {
-      throw new Error(`Plugin ${pluginId} not found`)
-    }
-    
-    if (this.activePlugins.has(pluginId)) {
-      console.warn(`Plugin ${pluginId} is already enabled`)
-      return
-    }
-    
-    await plugin.initialize(this.app, this.router, this.pinia, this)
-    this.activePlugins.set(pluginId, plugin)
-    
-    console.log(`Plugin ${pluginId} enabled successfully`)
-  }
-  
-  async disablePlugin(pluginId: string): Promise<void> {
-    const plugin = this.activePlugins.get(pluginId)
-    if (!plugin) {
-      console.warn(`Plugin ${pluginId} is not currently enabled`)
-      return
-    }
-    
-    await plugin.cleanup()
-    this.activePlugins.delete(pluginId)
-    
-    // Remove extension points
-    this.removePluginExtensionPoints(pluginId)
-    
-    console.log(`Plugin ${pluginId} disabled successfully`)
-  }
-}
-```
-
-## Plugin Distribution
-
-### Plugin Packaging
-
-Create a proper plugin package structure:
-
-```bash
-my-plugin-package/
-├── package.json          # NPM package configuration
-├── README.md            # Plugin documentation
-├── CHANGELOG.md         # Version history
-├── LICENSE              # License file
-├── src/
-│   ├── index.ts         # Main plugin export
-│   ├── components/      # Plugin components
-│   ├── stores/          # Plugin stores
-│   └── types/           # Plugin types
-├── dist/                # Compiled plugin (generated)
-├── docs/                # Additional documentation
-└── examples/            # Usage examples
-```
-
-### Package.json for Plugin
-
-```json
-{
-  "name": "@deploystack/mcp-metrics-plugin",
-  "version": "1.0.0",
-  "description": "MCP server metrics and analytics plugin for DeployStack",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "lint": "eslint src/**/*.ts",
-    "test": "vitest"
-  },
-  "keywords": [
-    "deploystack",
-    "plugin",
-    "mcp",
-    "metrics",
-    "analytics"
-  ],
-  "peerDependencies": {
-    "vue": "^3.3.0",
-    "vue-router": "^4.2.0",
-    "pinia": "^2.1.0"
-  },
-  "devDependencies": {
-    "@types/vue": "^3.3.0",
-    "typescript": "^5.0.0",
-    "vite": "^4.3.0"
-  }
-}
-```
-
-### Plugin Registry
-
-For team-wide plugin sharing:
-
-```typescript
-// Plugin registry service
-export class PluginRegistry {
-  private static instance: PluginRegistry
-  private plugins = new Map<string, Plugin>()
-  
-  static getInstance(): PluginRegistry {
-    if (!this.instance) {
-      this.instance = new PluginRegistry()
-    }
-    return this.instance
-  }
-  
-  register(plugin: Plugin): void {
-    if (this.plugins.has(plugin.meta.id)) {
-      throw new Error(`Plugin ${plugin.meta.id} is already registered`)
-    }
-    
-    this.plugins.set(plugin.meta.id, plugin)
-    console.log(`Plugin ${plugin.meta.id} registered successfully`)
-  }
-  
-  getPlugin(id: string): Plugin | undefined {
-    return this.plugins.get(id)
-  }
-  
-  getAllPlugins(): Plugin[] {
-    return Array.from(this.plugins.values())
-  }
-  
-  getPluginsByAuthor(author: string): Plugin[] {
-    return this.getAllPlugins().filter(plugin => plugin.meta.author === author)
-  }
-}
 ```
 
 ## Troubleshooting
@@ -1210,11 +714,11 @@ export async function loadPlugins(): Promise<Plugin[]> {
   }
   
   try {
-    const MetricsPlugin = (await import('./mcp-metrics-plugin')).default
-    plugins.push(new MetricsPlugin())
-    console.log('✅ MetricsPlugin loaded')
+    const CustomPlugin = (await import('./my-custom-plugin')).default
+    plugins.push(new CustomPlugin())
+    console.log('✅ CustomPlugin loaded')
   } catch (error) {
-    console.error('❌ Failed to load MetricsPlugin:', error)
+    console.error('❌ Failed to load CustomPlugin:', error)
   }
   
   return plugins
@@ -1223,35 +727,17 @@ export async function loadPlugins(): Promise<Plugin[]> {
 
 #### Extension Points Not Rendering
 
-```vue
-<!-- Debug extension points -->
-<template>
-  <div>
-    <h3>Debug Extension Points</h3>
-    <div v-for="(point, id) in extensionPoints" :key="id">
-      <strong>{{ id }}:</strong> {{ point.length }} components
-      <ul>
-        <li v-for="ext in point" :key="ext.pluginId">
-          {{ ext.pluginId }} (order: {{ ext.options?.order || 0 }})
-        </li>
-      </ul>
-    </div>
-  </div>
-</template>
-
-<script setup lang="ts">
-import { inject } from 'vue'
-
-const extensionPoints = inject('extensionPoints', {})
-</script>
-```
+1. **Check Extension Point Placement**: Ensure `<ExtensionPoint pointId="your-point-id" />` is placed in your application views
+2. **Verify Point ID**: Make sure the extension point ID matches between registration and usage
+3. **Component Import**: Check that components are correctly imported and registered
+4. **Console Errors**: Look for JavaScript errors that might prevent component rendering
 
 #### Plugin State Issues
 
 ```typescript
 // Debug plugin state
 class DebuggablePlugin implements Plugin {
-  async initialize(app: App, router: Router, pinia: Pinia) {
+  initialize(app: App, router: Router, pinia: Pinia) {
     // Add global debug method
     app.config.globalProperties.$debugPlugin = (pluginId: string) => {
       console.log('Plugin Debug Info:', {
@@ -1275,11 +761,11 @@ class DebuggablePlugin implements Plugin {
 ```typescript
 // Performance monitoring for plugins
 class PerformanceMonitoredPlugin implements Plugin {
-  async initialize(app: App, router: Router, pinia: Pinia) {
+  initialize(app: App, router: Router, pinia: Pinia) {
     const startTime = performance.now()
     
     try {
-      await this.doInitialization()
+      this.doInitialization()
       
       const endTime = performance.now()
       console.log(`${this.meta.id} initialization took ${endTime - startTime}ms`)
@@ -1290,10 +776,10 @@ class PerformanceMonitoredPlugin implements Plugin {
     }
   }
   
-  private async doInitialization() {
+  private doInitialization() {
     // Your plugin initialization logic
   }
 }
 ```
 
-This comprehensive plugin system documentation provides everything needed to create powerful, maintainable, and well-tested plugins for the DeployStack frontend. The modular architecture ensures that functionality can be extended cleanly while maintaining the core application's stability and performance.
+This plugin system documentation provides everything needed to create maintainable and well-tested plugins for the DeployStack frontend. The modular architecture ensures that functionality can be extended cleanly while maintaining the core application's stability and performance.
