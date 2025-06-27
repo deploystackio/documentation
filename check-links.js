@@ -58,8 +58,30 @@ const checkLocalFile = (linkPath, filePath) => {
     return null; // not a local file
 };
 
+// Check if URL is a localhost URL
+const isLocalhostUrl = (url) => {
+    try {
+        const urlObj = new URL(url);
+        const hostname = urlObj.hostname.toLowerCase();
+        
+        // Check for localhost patterns
+        return hostname === 'localhost' || 
+               hostname === '127.0.0.1' || 
+               hostname === '0.0.0.0' ||
+               hostname.endsWith('.localhost');
+    } catch (error) {
+        return false;
+    }
+};
+
 // Check external URL
 const checkExternalUrl = async (url) => {
+    // Check if it's a localhost URL and skip validation
+    if (isLocalhostUrl(url)) {
+        console.log(`  ➡️  ${url} (localhost - skipped)`);
+        return true;
+    }
+    
     try {
         const response = await fetch(url, {
             method: 'HEAD',
