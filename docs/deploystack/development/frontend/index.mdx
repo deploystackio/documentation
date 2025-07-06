@@ -82,15 +82,24 @@ services/frontend/
 
 ### Component Development
 
+#### Vue Component Structure
+
+**Always prefer Vue Single File Components (SFC) with `<script setup>` and `<template>` sections over TypeScript files with render functions.**
+
+✅ **Preferred Approach - Vue SFC:**
+
 ```vue
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Button } from '@/components/ui/button'
+import { Settings } from 'lucide-vue-next'
 
 // Props with TypeScript
 interface Props {
   title: string
   count?: number
+  onAction?: (id: string) => void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -112,17 +121,119 @@ const displayTitle = computed(() =>
 function toggleVisibility() {
   isVisible.value = !isVisible.value
 }
+
+function handleAction(id: string) {
+  props.onAction?.(id)
+}
 </script>
 
 <template>
   <div v-if="isVisible" class="component-container">
     <h2 class="text-xl font-semibold">{{ displayTitle }}</h2>
-    <button 
+    <Button 
       @click="toggleVisibility"
-      class="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+      class="mt-2"
+      variant="outline"
     >
+      <Settings class="h-4 w-4 mr-2" />
       {{ t('common.toggle') }}
-    </button>
+    </Button>
+  </div>
+</template>
+```
+
+❌ **Avoid - TypeScript files with render functions:**
+
+```typescript
+// Don't create files like this for UI components
+import { h } from 'vue'
+import type { ColumnDef } from '@tanstack/vue-table'
+
+export function createColumns(): ColumnDef[] {
+  return [
+    {
+      id: 'actions',
+      cell: ({ row }) => {
+        return h('div', { class: 'flex justify-end' }, [
+          h(Button, {
+            onClick: () => handleAction(row.original.id)
+          }, () => 'Action')
+        ])
+      }
+    }
+  ]
+}
+```
+
+#### Why Vue SFC is Preferred
+
+1. **Better Developer Experience**: Clear separation of logic, template, and styles
+2. **Improved Readability**: Template syntax is more intuitive than render functions
+3. **Better Tooling Support**: Vue DevTools, syntax highlighting, and IntelliSense work better
+4. **Easier Maintenance**: Future developers can understand and modify components more easily
+5. **Vue 3 Best Practices**: Aligns with official Vue 3 recommendations
+
+#### Table Components Example
+
+When creating table components, prefer this structure:
+
+```vue
+<script setup lang="ts">
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Settings } from 'lucide-vue-next'
+
+interface Props {
+  items: Array<{
+    id: string
+    name: string
+    status: string
+  }>
+  onManage: (id: string) => void
+}
+
+const props = defineProps<Props>()
+</script>
+
+<template>
+  <div class="rounded-md border">
+    <table class="w-full">
+      <thead>
+        <tr class="border-b">
+          <th class="h-12 px-4 text-left align-middle font-medium">Name</th>
+          <th class="h-12 px-4 text-left align-middle font-medium">Status</th>
+          <th class="h-12 px-4 text-right align-middle font-medium">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          v-for="item in items"
+          :key="item.id"
+          class="border-b transition-colors hover:bg-muted/50"
+        >
+          <td class="p-4 align-middle">
+            <div class="font-medium">{{ item.name }}</div>
+          </td>
+          <td class="p-4 align-middle">
+            <Badge :variant="item.status === 'active' ? 'default' : 'secondary'">
+              {{ item.status }}
+            </Badge>
+          </td>
+          <td class="p-4 align-middle">
+            <div class="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                @click="props.onManage(item.id)"
+              >
+                <Settings class="h-4 w-4 mr-1" />
+                Manage
+              </Button>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </template>
 ```

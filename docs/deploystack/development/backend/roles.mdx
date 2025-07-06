@@ -40,6 +40,8 @@ The RBAC system provides fine-grained access control through roles and permissio
   - `team.members.view` - View team members
   - `team.members.manage` - Manage team member roles
 
+**Note**: Global administrators have special access to view cloud credentials metadata across all teams, but cannot perform CRUD operations or view credential values. Cloud credentials management is team-contextual.
+
 ### Global User (`global_user`)
 
 - **Description**: Standard user with basic profile access
@@ -153,6 +155,71 @@ When a user registers:
 | `teams.manage` | Full team management |
 | `team.members.view` | View team members |
 | `team.members.manage` | Manage team member roles |
+
+#### Cloud Credentials Permissions (Team-Contextual)
+
+Cloud credentials are team-scoped resources with role-based access control. Unlike other permissions, cloud credentials access is determined by team membership and role, not global permissions.
+
+**Access Control Matrix:**
+
+| Role | Team Access | Can See | Can Do | Secret Values |
+|------|-------------|---------|---------|---------------|
+| `global_admin` | Any team | Metadata only (name, provider, dates) | List/View only | ❌ Never |
+| `team_admin` | Own teams only | Metadata + non-secret field values | Full CRUD | ❌ Never |
+| `team_user` | Own teams only | Metadata only (name, provider, dates) | Read only | ❌ Never |
+| `global_user` | No access | Nothing | Nothing | ❌ Never |
+
+**Security Rules:**
+
+- **Team Membership Required**: Only team members can access team's cloud credentials (except global admins)
+- **Secret Values Protected**: No role can view secret credential values via API
+- **Team Isolation**: Users can only access credentials from teams they belong to
+- **Role-Based Responses**: API responses vary based on user's role within the team
+
+**Response Examples:**
+
+```typescript
+// Team Admin Response (can see non-secret values)
+{
+  "fields": {
+    "access_key_id": {
+      "hasValue": true,
+      "secret": false,
+      "value": "AKIATEST123456789"  // ✅ Non-secret shown
+    },
+    "secret_access_key": {
+      "hasValue": true,
+      "secret": true
+      // ❌ No "value" field - secret never shown
+    }
+  }
+}
+
+// Team User Response (metadata only)
+{
+  "id": "cred123",
+  "name": "Production AWS",
+  "provider": { "name": "Amazon Web Services" },
+  "createdAt": "2025-01-01T00:00:00Z"
+  // ❌ No "fields" object - no values shown
+}
+
+// Global Admin Response (metadata only, any team)
+{
+  "fields": {
+    "access_key_id": {
+      "hasValue": true,
+      "secret": false
+      // ❌ No "value" field - admin sees no values
+    },
+    "secret_access_key": {
+      "hasValue": true,
+      "secret": true
+      // ❌ No "value" field - admin sees no values
+    }
+  }
+}
+```
 
 ### Team API Endpoints
 
@@ -733,15 +800,15 @@ UPDATE authUser SET role_id = 'global_admin' WHERE id = (SELECT id FROM authUser
 ```typescript
 // Check user's current role and permissions
 const userRole = await roleService.getUserRole(userId);
-console.log('User role:', userRole);
+logger.info('User role:', userRole);
 
 // Check specific permission
 const hasPermission = await roleService.userHasPermission(userId, 'users.edit');
-console.log('Has permission:', hasPermission);
+logger.info('Has permission:', hasPermission);
 
 // List all roles
 const allRoles = await roleService.getAllRoles();
-console.log('All roles:', allRoles);
+logger.info('All roles:', allRoles);
 ```
 
 ## Future Enhancements

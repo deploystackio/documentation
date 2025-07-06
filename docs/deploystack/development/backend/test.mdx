@@ -74,6 +74,67 @@ The `globalSetup.ts` script automatically configures the following environment v
 - `PORT`: set to a dedicated test port (e.g., 3002)
 - `DEPLOYSTACK_ENCRYPTION_SECRET`: set to a dummy secret (`test-super-secret-key-for-jest`)
 
+## Database Isolation Strategy
+
+The test suite uses a sophisticated database isolation strategy to ensure complete test independence:
+
+### Test Database Location
+
+- **Normal usage**: `persistent_data/database/deploystack.db`
+- **Test usage**: `persistent_data/database-test/deploystack-{timestamp}.db`
+
+### Timestamp-Based Isolation
+
+Each test run creates a unique SQLite database file with a millisecond timestamp:
+- Example: `deploystack-1704369600000.db`
+- This ensures complete isolation between parallel test runs
+- No conflicts when multiple developers run tests simultaneously
+- Automatic cleanup through directory removal
+
+### Benefits
+
+- **Complete isolation**: Each test run gets a fresh database
+- **Parallel test safety**: Multiple test runs won't interfere with each other
+- **Easy cleanup**: The entire `database-test` directory can be safely removed
+- **No manual intervention**: Tests are self-contained and don't require manual cleanup
+- **Clear separation**: Test and production databases are completely separate
+
+### Implementation Details
+
+The database path selection is handled automatically in `src/db/config.ts`:
+- Detects test environment via `NODE_ENV === 'test'`
+- Generates unique timestamp-based filename for test databases
+- Falls back to standard path for normal usage
+
+## Console Logging in Tests
+
+Unlike the main source code, **console.log statements are allowed in test files** for debugging and test output purposes. However, they are strictly prohibited in source code (`src/` directory).
+
+### CI/CD Enforcement
+
+The project includes automated checks that:
+- ✅ **Allow** `console.log`, `console.error`, etc. in test files (`tests/` directory)
+- ❌ **Block** any console statements in source code (`src/` directory)
+- 🚫 **Prevent PRs from merging** if console statements are found in source code
+
+This check runs automatically on:
+- All pull requests to the main branch
+- Backend release workflows
+
+### For Source Code Logging
+
+When writing source code (not tests), always use the structured Fastify logger instead:
+
+```typescript
+// ❌ Don't use in source code
+console.log('User created:', user);
+
+// ✅ Use in source code
+server.log.info('User created', { userId: user.id });
+```
+
+See the [Backend Logging Guide](./logging.mdx) for complete logging best practices.
+
 ## Writing New Tests
 
 When adding new E2E tests:
@@ -107,14 +168,14 @@ When adding new E2E tests:
 
 ## Current Test Suites
 
-### 1. `setup.e2e.test.ts`
+### 1. `1-setup.e2e.test.ts`
 
 - **Purpose**: Verifies the initial database setup functionality.
 - **Key Checks**:
-  - Ensures the test database file does not exist before setup.
+  - Ensures the test database directory does not exist before setup.
   - Calls `POST /api/db/setup` with `{"type": "sqlite"}`.
-  - Verifies the API response indicates successful setup initiation.
-  - Checks that the SQLite database file is created in the test data directory (`tests/e2e/test-data/deploystack.test.db`).
+  - Verifies the API response indicates successful setup initiation and includes `database_type: "sqlite"`.
+  - Checks that the SQLite database file is created in the test database directory (`persistent_data/database-test/deploystack-{timestamp}.db`).
   - Calls `GET /api/db/status` and verifies the response shows `configured: true`, `initialized: true`, and `dialect: "sqlite"`.
   - Validates global settings initialization without errors.
   - Confirms all migrations are applied successfully.

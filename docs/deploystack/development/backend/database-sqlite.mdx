@@ -1,0 +1,448 @@
+---
+title: SQLite Database Development Guide
+description: Technical implementation details and best practices for SQLite integration in DeployStack Backend development.
+---
+
+# SQLite Database Development Guide
+
+## Overview
+
+SQLite is the default database for DeployStack development and small to medium deployments. It provides excellent performance, zero configuration, and a simple file-based architecture that makes it ideal for development, testing, and single-server deployments.
+
+> **Setup Instructions**: For initial SQLite configuration, see the [Database Setup Guide](/deploystack/self-hosted/database-setup#sqlite).
+
+## Technical Architecture
+
+### File-Based Database
+
+SQLite stores the entire database in a single file, making it extremely portable and easy to manage:
+
+- **Database File**: `persistent_data/database/deploystack.db`
+- **Zero Configuration**: No server setup or network configuration required
+- **ACID Compliance**: Full transaction support with rollback capabilities
+- **Cross-Platform**: Works identically across all operating systems
+
+### Direct Driver Integration
+
+DeployStack uses the `better-sqlite3` driver for optimal SQLite performance:
+
+```typescript
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import Database from 'better-sqlite3';
+
+// Direct file-based connection
+const sqlite = new Database(dbPath);
+const db = drizzle(sqlite, { schema });
+```
+
+## Performance Characteristics
+
+### Advantages
+
+**Fast Local Operations**:
+- No network latency for database operations
+- Direct file system access for maximum speed
+- Excellent read performance for concurrent operations
+
+**Simple Deployment**:
+- Single file contains entire database
+- No separate database server required
+- Easy backup and restore operations
+
+**Development Friendly**:
+- Instant startup with no configuration
+- Easy to reset and recreate for testing
+- Perfect for local development workflows
+
+### Limitations
+
+**Single Server Only**:
+- Cannot be shared across multiple application instances
+- No built-in replication or clustering
+- Limited to single-server deployments
+
+**Concurrent Write Limitations**:
+- Single writer at a time (multiple readers supported)
+- Write operations are serialized
+- May become a bottleneck under heavy write loads
+
+## Development Workflow
+
+### Local Development Setup
+
+SQLite is the recommended database for local development:
+
+```bash
+# SQLite requires no additional setup
+DB_TYPE=sqlite
+
+# Optional: Custom database path
+SQLITE_DB_PATH=persistent_data/database/my-custom.db
+```
+
+### Database File Management
+
+**Default Location**: `services/backend/persistent_data/database/deploystack.db`
+
+**Directory Structure**:
+```
+services/backend/
+├── persistent_data/
+│   ├── database/
+│   │   └── deploystack.db          # Main database file
+│   └── db.selection.json           # Database type selection
+```
+
+### Testing with SQLite
+
+SQLite is excellent for testing due to its simplicity:
+
+```typescript
+// Test setup - create temporary database
+const testDb = new Database(':memory:'); // In-memory for speed
+// or
+const testDb = new Database('test.db');  // File-based for persistence
+
+// Run migrations
+await migrate(drizzle(testDb), { migrationsFolder: './migrations' });
+
+// Run tests
+// ...
+
+// Cleanup
+testDb.close();
+```
+
+## Global Settings Integration
+
+### Batch Operations
+
+SQLite excels at batch operations and can handle large global settings initialization efficiently:
+
+- **Large Batches**: Can insert all 17+ global settings in a single transaction
+- **No Parameter Limits**: Unlike D1, SQLite has no practical parameter limits
+- **Transaction Safety**: All settings created atomically
+
+### Performance Benefits
+
+```typescript
+// SQLite can handle large batch operations efficiently
+await db.transaction(async (tx) => {
+  // Insert all settings in a single transaction
+  await tx.insert(globalSettings).values(allSettingsData);
+  await tx.insert(globalSettingGroups).values(allGroupsData);
+});
+```
+
+## Database Inspection and Debugging
+
+### SQLite CLI
+
+The SQLite command-line interface is the primary tool for database inspection:
+
+```bash
+# Open database
+sqlite3 services/backend/persistent_data/database/deploystack.db
+
+# Common commands
+.tables                    # List all tables
+.schema tablename         # Show table schema
+.headers on               # Show column headers
+.mode column              # Format output in columns
+
+# Query examples
+SELECT * FROM globalSettings LIMIT 10;
+SELECT COUNT(*) FROM users;
+.quit                     # Exit
+```
+
+### GUI Tools
+
+**DB Browser for SQLite** (Recommended):
+- Download: [https://sqlitebrowser.org/](https://sqlitebrowser.org/)
+- Visual table browsing and editing
+- Query execution with syntax highlighting
+- Schema visualization
+
+**Other Options**:
+- **SQLiteStudio**: Cross-platform SQLite manager
+- **DBeaver**: Universal database tool with SQLite support
+- **VS Code Extensions**: SQLite Viewer, SQLite3 Editor
+
+### Programmatic Inspection
+
+```typescript
+// Get database info
+const info = db.prepare("PRAGMA database_list").all();
+const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+
+// Check table structure
+const schema = db.prepare("PRAGMA table_info(globalSettings)").all();
+
+// Performance analysis
+const stats = db.prepare("PRAGMA compile_options").all();
+```
+
+## Backup and Recovery
+
+### File-Based Backup
+
+SQLite's file-based nature makes backup extremely simple:
+
+```bash
+# Simple file copy (when database is not in use)
+cp persistent_data/database/deploystack.db backup/deploystack-$(date +%Y%m%d).db
+
+# Using SQLite backup command (safe during operation)
+sqlite3 persistent_data/database/deploystack.db ".backup backup/deploystack-$(date +%Y%m%d).db"
+```
+
+### Automated Backup Script
+
+```bash
+#!/bin/bash
+# backup-sqlite.sh
+
+DB_PATH="persistent_data/database/deploystack.db"
+BACKUP_DIR="backup"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+mkdir -p $BACKUP_DIR
+
+# Create backup
+sqlite3 $DB_PATH ".backup $BACKUP_DIR/deploystack-$DATE.db"
+
+# Keep only last 7 days of backups
+find $BACKUP_DIR -name "deploystack-*.db" -mtime +7 -delete
+
+echo "Backup created: $BACKUP_DIR/deploystack-$DATE.db"
+```
+
+### Recovery
+
+```bash
+# Restore from backup
+cp backup/deploystack-20250103.db persistent_data/database/deploystack.db
+
+# Or using SQLite restore
+sqlite3 persistent_data/database/deploystack.db ".restore backup/deploystack-20250103.db"
+```
+
+## Performance Optimization
+
+### Indexing Strategy
+
+SQLite benefits greatly from proper indexing:
+
+```sql
+-- Example indexes for common queries
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_global_settings_key ON globalSettings(key);
+CREATE INDEX idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX idx_teams_created_at ON teams(created_at);
+```
+
+### PRAGMA Settings
+
+Optimize SQLite performance with PRAGMA settings:
+
+```typescript
+// Performance optimizations
+db.pragma('journal_mode = WAL');    // Write-Ahead Logging
+db.pragma('synchronous = NORMAL');  // Balanced safety/performance
+db.pragma('cache_size = 1000000');  // 1GB cache
+db.pragma('temp_store = MEMORY');   // Use memory for temp tables
+```
+
+### Connection Pooling
+
+While SQLite doesn't need traditional connection pooling, you can optimize connection usage:
+
+```typescript
+// Reuse single connection
+const sqlite = new Database(dbPath, {
+  readonly: false,
+  fileMustExist: false,
+  timeout: 5000,
+  verbose: process.env.NODE_ENV === 'development' ? (message) => {
+    server.log.debug({ operation: 'sqlite_query' }, message);
+  } : undefined
+});
+
+// Enable WAL mode for better concurrency
+sqlite.pragma('journal_mode = WAL');
+```
+
+## Migration Considerations
+
+### SQLite-Specific Features
+
+SQLite has some unique characteristics for migrations:
+
+```sql
+-- SQLite doesn't support all ALTER TABLE operations
+-- Instead of ALTER COLUMN, you need to recreate the table
+
+-- Example: Adding a column (supported)
+ALTER TABLE users ADD COLUMN phone TEXT;
+
+-- Example: Changing column type (not supported directly)
+-- Requires table recreation:
+CREATE TABLE users_new (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  name TEXT NOT NULL,
+  age INTEGER  -- Changed from TEXT to INTEGER
+);
+
+INSERT INTO users_new SELECT id, email, name, CAST(age AS INTEGER) FROM users;
+DROP TABLE users;
+ALTER TABLE users_new RENAME TO users;
+```
+
+### Migration Best Practices
+
+1. **Test Migrations**: Always test on a copy of production data
+2. **Backup Before Migration**: Create backup before applying migrations
+3. **Use Transactions**: Wrap migrations in transactions for rollback capability
+4. **Check Constraints**: Verify foreign key constraints after table recreation
+
+## Troubleshooting
+
+### Common Issues
+
+**"Database is locked"**
+- **Cause**: Another process has the database open
+- **Solution**: Ensure only one application instance accesses the database
+- **Prevention**: Use WAL mode for better concurrency
+
+**"No such table" errors**
+- **Cause**: Migrations haven't been applied
+- **Solution**: Run `npm run db:up` or restart the server
+- **Check**: Verify migration files exist in `drizzle/migrations_sqlite/`
+
+**Poor performance**
+- **Cause**: Missing indexes or suboptimal queries
+- **Solution**: Add appropriate indexes and optimize queries
+- **Analysis**: Use `EXPLAIN QUERY PLAN` to analyze query performance
+
+**File corruption**
+- **Cause**: Unexpected shutdown or disk issues
+- **Solution**: Restore from backup
+- **Prevention**: Use WAL mode and regular backups
+
+### Debugging Queries
+
+```typescript
+// Enable query logging
+const db = drizzle(sqlite, { 
+  schema,
+  logger: {
+    logQuery: (query, params) => {
+      server.log.debug({ operation: 'sqlite_query', query, params }, 'Executing query');
+    }
+  }
+});
+
+// Analyze query performance
+const explain = db.prepare('EXPLAIN QUERY PLAN SELECT * FROM users WHERE email = ?').all('test@example.com');
+server.log.debug({ operation: 'sqlite_explain', explain }, 'Query execution plan');
+```
+
+## Production Considerations
+
+### When to Use SQLite in Production
+
+**Good For**:
+- Single-server applications
+- Read-heavy workloads
+- Small to medium datasets (< 1TB)
+- Applications with predictable load patterns
+- Embedded applications
+
+**Consider Alternatives When**:
+- Multiple application servers needed
+- High concurrent write requirements
+- Need for real-time replication
+- Distributed deployment requirements
+
+### Production Optimizations
+
+```typescript
+// Production SQLite configuration
+const sqlite = new Database(dbPath, {
+  readonly: false,
+  fileMustExist: true,
+  timeout: 10000
+});
+
+// Production PRAGMA settings
+sqlite.pragma('journal_mode = WAL');
+sqlite.pragma('synchronous = NORMAL');
+sqlite.pragma('cache_size = 2000000');  // 2GB cache
+sqlite.pragma('mmap_size = 268435456'); // 256MB memory-mapped I/O
+sqlite.pragma('optimize');              // Optimize database
+```
+
+### Monitoring
+
+```typescript
+// Monitor database size and performance
+const stats = {
+  fileSize: fs.statSync(dbPath).size,
+  pageCount: db.prepare('PRAGMA page_count').get(),
+  pageSize: db.prepare('PRAGMA page_size').get(),
+  walSize: fs.existsSync(dbPath + '-wal') ? fs.statSync(dbPath + '-wal').size : 0
+};
+
+server.log.info({ operation: 'sqlite_monitoring', stats }, 'Database statistics');
+```
+
+## Integration with DeployStack Features
+
+### Global Settings
+
+SQLite provides optimal performance for global settings:
+- **Fast initialization**: All settings created in single transaction
+- **No batching needed**: No parameter limits to worry about
+- **Immediate consistency**: All changes immediately visible
+
+### Plugin System
+
+Plugins work seamlessly with SQLite:
+- **Table creation**: Plugin tables created through standard migrations
+- **Data operations**: Full SQL feature support
+- **Performance**: Excellent performance for plugin data operations
+
+### Migration System
+
+SQLite migration advantages:
+- **Fast execution**: Local file operations are very fast
+- **Transaction safety**: Full rollback support for failed migrations
+- **Simple debugging**: Easy to inspect database state during development
+
+## Future Considerations
+
+### Scaling Beyond SQLite
+
+When you outgrow SQLite, DeployStack makes migration easy:
+
+1. **Export Data**: Use SQLite's `.dump` command
+2. **Transform Schema**: Convert to target database format
+3. **Update Configuration**: Change database type in setup
+4. **Import Data**: Load data into new database
+
+### Hybrid Approaches
+
+Consider hybrid approaches for scaling:
+- **Read Replicas**: Use D1 or Turso for global read access
+- **Caching Layer**: Add Redis for frequently accessed data
+- **Microservices**: Split into multiple services with separate databases
+
+---
+
+For general database concepts and cross-database functionality, see the [Database Development Guide](/deploystack/development/backend/database).
+
+For initial setup and configuration, see the [Database Setup Guide](/deploystack/self-hosted/database-setup).
+
+For comparison with other databases, see the [Cloudflare D1 Development Guide](/deploystack/development/backend/database-d1).

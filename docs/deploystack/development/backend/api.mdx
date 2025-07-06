@@ -89,6 +89,127 @@ When the server is running (`npm run dev`), you can access:
 4. Select the generated `api-spec.json` file
 5. All API endpoints will be imported with proper documentation
 
+## Route File Structure Rules
+
+**IMPORTANT**: Every new API endpoint must be created in a separate file following the established directory structure pattern. Do not add route definitions directly to `src/routes/index.ts`.
+
+### File Structure Requirements
+
+1. **Separate Files**: Each route or group of related routes must be in its own file
+2. **Directory Organization**: Group related routes in directories (e.g., `/auth/`, `/users/`, `/health/`)
+3. **Import Pattern**: Routes are imported and registered in `src/routes/index.ts`
+4. **Consistent Naming**: Use descriptive names that match the route purpose
+
+### Correct File Structure
+
+```
+services/backend/src/routes/
+├── index.ts              # Main routes registration (imports only)
+├── health/
+│   └── index.ts          # Health check endpoints
+├── auth/
+│   ├── loginEmail.ts     # Email login endpoint
+│   ├── registerEmail.ts  # Email registration endpoint
+│   └── logout.ts         # Logout endpoint
+├── db/
+│   ├── status.ts         # Database status endpoint
+│   └── setup.ts          # Database setup endpoint
+├── users/
+│   └── index.ts          # User management endpoints
+└── teams/
+    └── index.ts          # Team management endpoints
+```
+
+### Route File Template
+
+Each route file should follow this pattern:
+
+```typescript
+import { type FastifyInstance } from 'fastify'
+import { z } from 'zod'
+import { zodToJsonSchema } from 'zod-to-json-schema'
+
+// Define your schemas
+const responseSchema = z.object({
+  // Your response structure
+});
+
+export default async function yourRoute(server: FastifyInstance) {
+  server.get('/your-endpoint', {
+    schema: {
+      tags: ['Your Category'],
+      summary: 'Brief description',
+      description: 'Detailed description',
+      response: {
+        200: zodToJsonSchema(responseSchema, {
+          $refStrategy: 'none',
+          target: 'openApi3'
+        })
+      }
+    }
+  }, async () => {
+    // Your route logic
+    return { /* your response */ }
+  });
+}
+```
+
+### Registration in index.ts
+
+Import and register your route in `src/routes/index.ts`:
+
+```typescript
+// Import your route
+import yourRoute from './your-directory'
+
+export const registerRoutes = (server: FastifyInstance): void => {
+  server.register(async (apiInstance) => {
+    // Register your route
+    await apiInstance.register(yourRoute);
+    
+    // Other route registrations...
+  }, { prefix: '/api' });
+}
+```
+
+### ❌ What NOT to Do
+
+```typescript
+// DON'T: Add routes directly to index.ts
+export const registerRoutes = (server: FastifyInstance): void => {
+  server.register(async (apiInstance) => {
+    // ❌ BAD: Inline route definition
+    apiInstance.get('/my-endpoint', {
+      schema: { /* ... */ }
+    }, async () => {
+      return { message: 'This should be in a separate file!' }
+    });
+  }, { prefix: '/api' });
+}
+```
+
+### ✅ What TO Do
+
+```typescript
+// ✅ GOOD: Import and register separate route files
+import myEndpointRoute from './my-endpoint'
+
+export const registerRoutes = (server: FastifyInstance): void => {
+  server.register(async (apiInstance) => {
+    // ✅ GOOD: Register imported route
+    await apiInstance.register(myEndpointRoute);
+  }, { prefix: '/api' });
+}
+```
+
+### Benefits of This Structure
+
+1. **Maintainability**: Each endpoint is self-contained and easy to find
+2. **Scalability**: Adding new endpoints doesn't clutter the main routes file
+3. **Testing**: Individual route files can be tested in isolation
+4. **Code Organization**: Related functionality is grouped together
+5. **Team Collaboration**: Multiple developers can work on different routes without conflicts
+
 ## Adding Documentation to Routes
 
 To add OpenAPI documentation to your routes, define your request body and response schemas using Zod. Then, use the `zodToJsonSchema` utility to convert these Zod schemas into the JSON Schema format expected by Fastify.

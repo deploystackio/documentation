@@ -401,17 +401,17 @@ const smtpSettings = await GlobalSettings.getGroupValuesWithFullKeys('smtp');
 ```typescript
 // Check if setting exists and has a value
 if (await GlobalSettings.isSet('smtp.host')) {
-  console.log('SMTP host is configured');
+  logger.info('SMTP host is configured');
 }
 
 // Check if setting is empty
 if (await GlobalSettings.isEmpty('api.key')) {
-  console.log('API key needs to be configured');
+  logger.warn('API key needs to be configured');
 }
 
 // Check if setting exists in database (regardless of value)
 if (await GlobalSettings.exists('feature.new_ui')) {
-  console.log('New UI feature flag exists');
+  logger.info('New UI feature flag exists');
 }
 ```
 
@@ -427,7 +427,7 @@ try {
     headers: { 'Authorization': `Bearer ${requiredApiKey}` }
   });
 } catch (error) {
-  console.error('Required setting missing:', error.message);
+  logger.error('Required setting missing:', error.message);
   // Handle missing configuration
 }
 ```
@@ -900,7 +900,7 @@ try {
   }
   // Use the setting
 } catch (error) {
-  console.error('Failed to retrieve setting:', error);
+  logger.error('Failed to retrieve setting:', error);
   // Handle the error appropriately
 }
 ```
