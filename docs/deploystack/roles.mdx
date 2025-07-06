@@ -45,8 +45,37 @@ User roles determine what actions a person can perform in DeployStack. Think of 
 **What they can do**:
 - Manage their team's settings
 - View team members
+- **Add new members to their teams** (up to 3 members total)
+- **Change member roles** (promote team_user to team_admin, or demote)
+- **Remove team members** (except team owners)
+- **Transfer team ownership** to another team member
 - Manage team deployments
-- Delete teams they own
+- Delete teams they own (except default teams)
+
+**Important**: Team admins have full control over team membership and can manage all team members except the team owner.
+
+## Team Member Management Permissions
+
+The following table shows exactly what each role can do with team member management:
+
+| Action | team_user | team_admin | team_admin + owner | global_admin |
+|--------|-----------|------------|-------------------|--------------|
+| List team members | ✅ (own teams) | ✅ (own teams) | ✅ (own teams) | ✅ (any team) |
+| Add team member | ❌ | ✅ (non-default) | ✅ (non-default) | ✅ (any team) |
+| Remove team_user | ❌ | ✅ (non-default) | ✅ (non-default) | ✅ (any team) |
+| Remove team_admin | ❌ | ❌ | ✅ (non-default) | ✅ (any team) |
+| Remove team owner | ❌ | ❌ | ❌ | ✅ (any team) |
+| Promote to team_admin | ❌ | ✅ (non-default) | ✅ (non-default) | ✅ (any team) |
+| Demote team_admin | ❌ | ❌ | ✅ (non-default) | ✅ (any team) |
+| Transfer ownership | ❌ | ❌ | ✅ (non-default) | ✅ (any team) |
+| Delete team | ❌ | ❌ | ✅ (non-default) | ✅ (non-default) |
+
+**Key Notes:**
+- **Default teams** are completely protected - no member management operations allowed
+- **Team admins** can only manage team_users, not other team_admins or owners
+- **Team owners** have full control over their teams (except default teams)
+- **Global admins** can override most restrictions but still cannot modify default teams
+- **3-member limit** applies to all teams (owner + 2 additional members maximum)
 
 ### Team User
 **Who needs this**: Basic team members who participate in deployments.
@@ -55,6 +84,8 @@ User roles determine what actions a person can perform in DeployStack. Think of 
 - View team information
 - See team members
 - Participate in team activities
+
+**Limitations**: Team users cannot add members, change roles, or manage other team members.
 
 ## Understanding Teams
 

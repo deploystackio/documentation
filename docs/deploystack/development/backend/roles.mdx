@@ -74,15 +74,16 @@ The RBAC system provides fine-grained access control through roles and permissio
 
 ## Team System
 
-DeployStack includes a comprehensive team management system that allows users to organize their work into teams. Each user automatically gets their own team upon registration and can create up to 3 teams total.
+DeployStack includes a comprehensive team management system that allows users to organize their work into teams and collaborate with other users. Each user automatically gets their own team upon registration and can create up to 3 teams total.
 
 ### Team Features
 
 - **Automatic Team Creation**: Every new user gets a default team created with their username
 - **Team Ownership**: Each team has an owner who has full administrative control
-- **Single User Teams**: Currently, teams support only one user per team
+- **Multi-User Teams**: Teams support up to 3 members with role-based access control
 - **Team Limits**: Users can create up to 3 teams maximum
 - **Unique Slugs**: Teams have URL-friendly slugs with automatic conflict resolution
+- **Default Team Protection**: Default teams cannot have additional members added (personal workspace)
 
 ### Team Database Schema
 
@@ -301,6 +302,95 @@ GET /api/teams/:id/members
 Authorization: Required (team.members.view permission)
 ```
 
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "membership123",
+      "user_id": "user123",
+      "username": "johndoe",
+      "email": "john@example.com",
+      "first_name": "John",
+      "last_name": "Doe",
+      "role": "team_admin",
+      "is_admin": true,
+      "is_owner": true,
+      "joined_at": "2025-01-30T15:00:00.000Z"
+    }
+  ]
+}
+```
+
+#### Add Team Member
+
+```http
+POST /api/teams/:id/members
+Authorization: Required (team.members.manage permission or global admin)
+Content-Type: application/json
+
+{
+  "userId": "user456",
+  "role": "team_user"
+}
+```
+
+**Restrictions:**
+- Maximum 3 members per team
+- Cannot add members to default teams (protected)
+- User must exist in the system
+- Team admin or global admin required
+
+#### Update Team Member Role
+
+```http
+PUT /api/teams/:id/members/:userId/role
+Authorization: Required (team.members.manage permission or global admin)
+Content-Type: application/json
+
+{
+  "role": "team_admin"
+}
+```
+
+**Restrictions:**
+- Cannot change roles in default teams
+- Must maintain at least one team admin
+- Team admin or global admin required
+
+#### Remove Team Member
+
+```http
+DELETE /api/teams/:id/members/:userId
+Authorization: Required (team.members.manage permission or global admin)
+```
+
+**Restrictions:**
+- Cannot remove from default teams
+- Cannot remove team owner (must transfer ownership first)
+- Cannot remove last member from team
+- Team admin or global admin required
+
+#### Transfer Team Ownership
+
+```http
+PUT /api/teams/:id/ownership
+Authorization: Required (team owner or global admin)
+Content-Type: application/json
+
+{
+  "newOwnerId": "user456"
+}
+```
+
+**Restrictions:**
+- Cannot transfer ownership of default teams
+- New owner must be a team member
+- New owner automatically becomes team_admin
+- Only current owner or global admin can transfer
+
 ### Team Service Methods
 
 The `TeamService` class provides comprehensive team management:
@@ -341,6 +431,38 @@ const isDefault = await TeamService.isDefaultTeam(teamId, userId);
 
 // Get team membership details
 const membership = await TeamService.getTeamMembership(teamId, userId);
+
+// ===== TEAM MEMBER MANAGEMENT METHODS =====
+
+// Add team member
+const membership = await TeamService.addTeamMember(teamId, userId, 'team_user');
+
+// Remove team member
+const removed = await TeamService.removeTeamMember(teamId, userId);
+
+// Update member role
+const updatedMembership = await TeamService.updateMemberRole(teamId, userId, 'team_admin');
+
+// Transfer team ownership
+const transferred = await TeamService.transferOwnership(teamId, newOwnerId);
+
+// Get team members with user info
+const membersWithInfo = await TeamService.getTeamMembersWithUserInfo(teamId);
+
+// Get user teams with role info
+const teamsWithRoles = await TeamService.getUserTeamsWithRoles(userId);
+
+// Team capacity and permission checks
+const canAddMember = await TeamService.canAddMemberToTeam(teamId);
+const canRemoveMember = await TeamService.canRemoveMemberFromTeam(teamId, userId);
+const canManageMember = await TeamService.canUserManageTeamMember(teamId, managerId, targetUserId, 'add');
+
+// Team member counts
+const memberCount = await TeamService.getTeamMemberCount(teamId);
+const adminCount = await TeamService.getTeamAdminCount(teamId);
+
+// Default team protection checks
+const isTeamDefault = await TeamService.isTeamDefault(teamId);
 ```
 
 ### Frontend Team Management

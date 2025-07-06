@@ -16,6 +16,8 @@ In DeployStack, teams provide:
 - **Resource Organization**: All your MCP servers, credentials, and settings are organized within teams
 - **Access Control**: Team-based permissions ensure secure access to your deployment resources
 - **Multi-Project Support**: Create up to 3 teams to organize different projects or environments
+- **Team Collaboration**: Teams support multiple members with role-based access control
+- **Default Team Protection**: Your personal default team cannot have additional members added
 
 Every team acts as a complete deployment environment, containing everything needed to deploy and manage MCP servers across various cloud providers.
 
@@ -135,22 +137,95 @@ The interface provides clear visual feedback:
 
 ### Current Structure
 
-DeployStack teams currently operate with a **single-user model**:
+DeployStack teams support **multi-user collaboration** with role-based access control:
 
-- Each team belongs to one user
-- You have full control over your teams
-- No team sharing or collaboration features (planned for future releases)
+- Teams can have up to **3 members maximum**
+- Each team has one **owner** who created the team
+- Team members can have different roles with specific permissions
+- **Default teams are personal** - no additional members can be added to your default team
 
 ### Team Roles
 
-Within your teams, you automatically have the **Team Administrator** role, which provides:
+Teams support two distinct roles with different capabilities:
 
-- Full access to all team resources
-- Ability to deploy and manage MCP servers
-- Permission to modify team settings
-- Authority to delete the team
+#### Team Administrator
+- **Full team management**: Can add/remove members, change roles, transfer ownership
+- **Resource access**: Full access to all team resources and deployments
+- **Team settings**: Can modify team name, description, and all configurations
+- **Member management**: Can promote team users to admins or demote admins to users
 
-*Note: Team User roles exist in the system for future multi-user team functionality.*
+#### Team User
+- **Basic access**: Can view team information and see team members
+- **Limited permissions**: Cannot add members, change roles, or modify team settings
+- **Resource viewing**: Can see team resources but with restricted management capabilities
+
+**Important**: Your **default team** (created automatically with your username) is protected - you cannot add other members to it. This keeps your personal workspace private.
+
+## Team Member Management
+
+### Adding Team Members
+
+Team administrators can add new members to their teams (except default teams):
+
+1. **Navigate to Team Management**: Go to your team's management page
+2. **Find Members Section**: Look for the team members management area
+3. **Add Member**: Click "Add Member" and enter the user's email or username
+4. **Assign Role**: Choose either "Team Administrator" or "Team User"
+5. **Send Invitation**: The user will be notified and added to the team
+
+**Limitations**:
+- **Maximum 3 members** per team (including the owner)
+- **Default teams**: Cannot add members to your personal default team
+- **Existing users only**: Can only add users who already have DeployStack accounts
+
+### Managing Member Roles
+
+Team administrators and owners can change member roles:
+
+#### Promoting Team Users to Administrators
+- **Who can do this**: Team administrators and team owners
+- **Process**: Select the member and change their role to "Team Administrator"
+- **Result**: User gains full team management capabilities
+
+#### Demoting Team Administrators to Users
+- **Who can do this**: Team owners (and other team administrators)
+- **Restriction**: Must maintain at least one team administrator
+- **Process**: Change the administrator's role to "Team User"
+
+### Removing Team Members
+
+Team administrators can remove members from teams:
+
+- **Who can remove**: Team administrators and owners
+- **Cannot remove**: Team owners (must transfer ownership first)
+- **Default teams**: No members to remove (single-user only)
+- **Process**: Select member and click "Remove from Team"
+
+### Transferring Team Ownership
+
+Team owners can transfer ownership to another team member:
+
+1. **Requirement**: Target user must already be a team member
+2. **Process**: Go to team settings and select "Transfer Ownership"
+3. **Choose New Owner**: Select from existing team administrators
+4. **Confirm Transfer**: Confirm the ownership change
+5. **Result**: New owner gains full control, previous owner becomes team administrator
+
+**Important**: 
+- **Cannot transfer default team ownership** - default teams always belong to the original user
+- **Irreversible action** - ownership transfers cannot be undone
+- **New owner requirements** - Target user must be a team administrator
+
+### Default Team Restrictions
+
+Your automatically created default team has special protections:
+
+- **No Additional Members**: Cannot add other users to your default team
+- **Cannot Transfer Ownership**: Default team ownership cannot be changed
+- **Cannot Leave**: You cannot leave your own default team
+- **Personal Workspace**: Designed to remain your private workspace
+
+These restrictions ensure that every user always has a personal, private team for their individual work.
 
 ### Resource Isolation
 
