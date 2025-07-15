@@ -76,8 +76,6 @@ GITHUB_CLIENT_ID=your-github-client-id
 GITHUB_CLIENT_SECRET=your-github-client-secret
 GITHUB_REDIRECT_URI=http://localhost:3000/api/auth/github/callback
 
-# Application
-DEPLOYSTACK_BACKEND_VERSION=0.20.5
 ```
 
 #### `.env.local` (Local Overrides)
@@ -188,8 +186,7 @@ The production Dockerfile creates a default `.env` file with basic settings:
 ```dockerfile
 # Create a default .env file
 RUN echo "NODE_ENV=production" > .env && \
-    echo "PORT=3000" >> .env && \
-    echo "DEPLOYSTACK_BACKEND_VERSION=${DEPLOYSTACK_BACKEND_VERSION:-$(node -e "console.log(require('./package.json').version)")}" >> .env
+    echo "PORT=3000" >> .env
 
 # Start with env file
 CMD ["node", "--env-file=.env", "dist/index.js"]
@@ -397,7 +394,6 @@ NODE_ENV=development
 
 # Application Specific (use DEPLOYSTACK_ prefix)
 DEPLOYSTACK_FRONTEND_URL=http://localhost:5173
-DEPLOYSTACK_BACKEND_VERSION=0.20.5
 DEPLOYSTACK_ENCRYPTION_SECRET=secret
 
 # Third-party Services (use service name prefix)
@@ -417,10 +413,10 @@ ENABLE_DEBUG_MODE=false
 
 ```typescript
 // Add to your server startup
-console.log('Environment Variables:')
-console.log('PORT:', process.env.PORT)
-console.log('NODE_ENV:', process.env.NODE_ENV)
-console.log('FRONTEND_URL:', process.env.DEPLOYSTACK_FRONTEND_URL)
+logger.info('Environment Variables:')
+logger.info('PORT:', process.env.PORT)
+logger.info('NODE_ENV:', process.env.NODE_ENV)
+logger.info('FRONTEND_URL:', process.env.DEPLOYSTACK_FRONTEND_URL)
 
 // Or create a debug endpoint (development only)
 if (process.env.NODE_ENV === 'development') {
@@ -455,16 +451,14 @@ The backend displays a startup banner with key environment information:
 ```typescript
 // src/utils/banner.ts
 export const displayStartupBanner = (port: number): void => {
-  const version = process.env.DEPLOYSTACK_BACKEND_VERSION || '0.1.0'
   const environment = process.env.NODE_ENV || 'development'
   
-  console.log(`
+  logger.info(`
   ╔══════════════════════════════════════════════════════════════════════════════╗
   ║                            🚀 DeployStack Backend                            ║
   ║                                                                              ║
   ║         Running on port ${port}                                              ║
   ║         Environment: ${environment}                                          ║
-  ║         Version: ${version}                                                  ║
   ╚══════════════════════════════════════════════════════════════════════════════╝
   `)
 }

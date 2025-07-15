@@ -1,0 +1,344 @@
+---
+title: GitHub Integration
+description: Seamless GitHub integration for MCP servers, global settings, and automated synchronization in DeployStack.
+sidebar: GitHub Integration
+---
+
+# GitHub Integration
+
+DeployStack provides comprehensive GitHub integration that enables seamless synchronization of MCP servers, automated repository scanning, and streamlined deployment workflows. This integration connects your GitHub repositories directly with your DeployStack installation.
+
+## Overview
+
+The GitHub integration system offers:
+
+- **MCP Server Synchronization**: Automatic detection and sync of MCP server configurations
+- **Repository Metadata Extraction**: Pull descriptions, languages, licenses, and topics
+- **Version Management**: Automatic version detection from repository tags and releases
+- **Global Settings Integration**: Configure GitHub OAuth and API access
+- **Team-Based Access**: Respect team boundaries and permissions
+- **Real-time Updates**: Monitor repository changes and trigger updates
+
+## GitHub OAuth Configuration
+
+### Setting Up GitHub OAuth
+
+To enable GitHub integration, you need to configure GitHub OAuth in your global settings:
+
+#### 1. Create GitHub OAuth App
+
+1. **Go to GitHub**: Navigate to GitHub.com → Settings → Developer settings → OAuth Apps
+2. **Create New App**: Click "New OAuth App"
+3. **Configure Application**:
+   - **Application Name**: `DeployStack - [Your Instance]`
+   - **Homepage URL**: `https://your-deploystack-domain.com`
+   - **Authorization Callback URL**: `https://your-deploystack-domain.com/auth/github/callback`
+   - **Application Description**: Optional description of your DeployStack instance
+
+#### 2. Configure in DeployStack
+
+1. **Access Global Settings**: Go to Admin → Global Settings → GitHub OAuth
+2. **Enter Credentials**:
+   - **Client ID**: From your GitHub OAuth app
+   - **Client Secret**: From your GitHub OAuth app
+   - **Enable GitHub Integration**: Toggle to activate
+3. **Save Configuration**: Apply the settings
+
+#### 3. Test Integration
+
+1. **Verify Connection**: Use the "Test Connection" button in settings
+2. **Check Permissions**: Ensure the app has necessary repository access
+3. **Validate Callback**: Test the OAuth flow with a user account
+
+### GitHub App vs OAuth App
+
+DeployStack supports both GitHub OAuth Apps and GitHub Apps:
+
+#### GitHub OAuth App (Recommended for most users)
+- **Simpler Setup**: Easier to configure and manage
+- **User-Based Access**: Uses individual user permissions
+- **Public Repositories**: Works well with public repositories
+- **Rate Limits**: Subject to user-based rate limits
+
+#### GitHub App (Enterprise/High-Volume)
+- **Enhanced Security**: App-level permissions and authentication
+- **Higher Rate Limits**: Better rate limiting for high-volume usage
+- **Fine-Grained Permissions**: More granular access control
+- **Installation-Based**: Installed per organization/repository
+
+## MCP Server GitHub Integration
+
+### Automatic Repository Scanning
+
+When you provide a GitHub URL for an MCP server, DeployStack automatically:
+
+#### Repository Information Extraction
+- **Description**: Uses repository description as server description
+- **Language**: Detects primary programming language
+- **License**: Extracts license information
+- **Topics**: Imports repository topics as server tags
+- **Homepage**: Uses repository homepage URL
+- **README**: Processes README for additional metadata
+
+#### MCP Configuration Detection
+- **Package Files**: Scans `package.json`, `pyproject.toml`, `Cargo.toml`
+- **MCP Config**: Looks for MCP-specific configuration files
+- **Dependencies**: Extracts runtime dependencies
+- **Scripts**: Identifies installation and run scripts
+
+### Repository Synchronization
+
+#### Manual Synchronization
+
+1. **Server Management**: Go to your MCP server details
+2. **Sync Repository**: Click "Sync from GitHub" button
+3. **Review Changes**: Preview what will be updated
+4. **Apply Updates**: Confirm synchronization
+
+#### Automatic Synchronization (Future Feature)
+
+- **Webhook Integration**: Automatic updates on repository changes
+- **Scheduled Sync**: Regular synchronization intervals
+- **Conflict Resolution**: Handle conflicts between local and remote changes
+
+### Version Management
+
+#### Automatic Version Detection
+
+DeployStack automatically detects versions from:
+
+- **Git Tags**: Semantic version tags (e.g., `v1.2.3`, `1.2.3`)
+- **GitHub Releases**: Published releases with version numbers
+- **Package Files**: Version information in `package.json`, etc.
+- **Commit History**: Latest commits for development versions
+
+#### Version Synchronization
+
+1. **Scan Repository**: Check for new tags and releases
+2. **Create Versions**: Automatically create version entries
+3. **Update Metadata**: Sync changelog and release notes
+4. **Mark Latest**: Identify the latest stable version
+
+### Supported Repository Structures
+
+#### Node.js MCP Servers
+```
+repository/
+├── package.json          # Required: MCP server configuration
+├── README.md            # Recommended: Documentation
+├── src/                 # Source code
+│   ├── index.ts        # Main server file
+│   └── tools/          # MCP tools
+├── dist/               # Compiled output (optional)
+└── .github/            # GitHub workflows (optional)
+```
+
+#### Python MCP Servers
+```
+repository/
+├── pyproject.toml       # Required: Python project configuration
+├── README.md           # Recommended: Documentation
+├── src/                # Source code
+│   └── mcp_server/     # MCP server package
+├── requirements.txt    # Dependencies (optional)
+└── .github/           # GitHub workflows (optional)
+```
+
+#### Configuration Requirements
+
+For optimal integration, repositories should include:
+
+- **Clear Description**: Repository description explaining the MCP server's purpose
+- **Proper Licensing**: Valid open-source license
+- **Semantic Versioning**: Use semantic version tags
+- **Documentation**: Comprehensive README with usage instructions
+- **Topics/Tags**: Relevant GitHub topics for categorization
+
+## GitHub API Integration
+
+### API Endpoints
+
+#### Repository Information
+```http
+GET /api/mcp/github/repo-info
+Query Parameters:
+  - url: GitHub repository URL
+  - branch: Target branch (default: main)
+
+Response:
+{
+  "success": true,
+  "data": {
+    "name": "example-mcp-server",
+    "description": "An example MCP server",
+    "language": "TypeScript",
+    "license": "MIT",
+    "topics": ["mcp", "ai", "tools"],
+    "homepage": "https://example.com",
+    "default_branch": "main",
+    "latest_commit": {
+      "sha": "abc123",
+      "message": "Update server configuration",
+      "date": "2025-01-07T15:30:00Z"
+    }
+  }
+}
+```
+
+#### Repository Synchronization
+```http
+POST /api/mcp/github/sync/{serverId}
+Authorization: Required (server management permissions)
+
+Response:
+{
+  "success": true,
+  "data": {
+    "server_id": "server123",
+    "sync_status": "completed",
+    "changes": {
+      "description": "Updated from repository",
+      "version": "1.2.3",
+      "tags": ["mcp", "ai", "updated"]
+    },
+    "last_sync_at": "2025-01-07T15:30:00Z"
+  }
+}
+```
+
+### Rate Limiting and Best Practices
+
+#### GitHub API Rate Limits
+- **Authenticated Requests**: 5,000 requests per hour
+- **Unauthenticated Requests**: 60 requests per hour
+- **Search API**: 30 requests per minute
+- **GraphQL API**: 5,000 points per hour
+
+#### Best Practices
+- **Cache Repository Data**: Minimize API calls by caching metadata
+- **Batch Operations**: Group multiple repository operations
+- **Error Handling**: Graceful handling of rate limit errors
+- **Retry Logic**: Implement exponential backoff for failed requests
+
+## Security Considerations
+
+### Access Control
+
+#### Repository Access
+- **Public Repositories**: No special permissions required
+- **Private Repositories**: Requires appropriate GitHub permissions
+- **Organization Repositories**: Respects organization access controls
+- **Team Boundaries**: DeployStack team permissions still apply
+
+#### Token Security
+- **Secure Storage**: GitHub tokens encrypted in database
+- **Scope Limitation**: Minimal required scopes for OAuth apps
+- **Token Rotation**: Regular token refresh and rotation
+- **Audit Logging**: Track all GitHub API operations
+
+### Privacy and Data Handling
+
+#### Data Collection
+- **Repository Metadata**: Only public metadata is collected
+- **No Source Code**: Source code is never stored in DeployStack
+- **Minimal Permissions**: Request only necessary GitHub permissions
+- **User Consent**: Clear disclosure of GitHub integration features
+
+#### Data Retention
+- **Metadata Caching**: Repository metadata cached for performance
+- **Sync History**: Synchronization logs for troubleshooting
+- **User Control**: Users can disable GitHub integration anytime
+
+## Troubleshooting
+
+### Common Issues
+
+#### OAuth Configuration Problems
+
+**Problem**: "GitHub OAuth not configured" error
+**Solution**:
+1. Verify Client ID and Client Secret in global settings
+2. Check callback URL matches GitHub OAuth app configuration
+3. Ensure GitHub OAuth app is not suspended
+4. Test connection using the settings panel
+
+**Problem**: "Access denied" during OAuth flow
+**Solution**:
+1. Check user has access to the repository
+2. Verify OAuth app permissions
+3. Ensure user has granted necessary scopes
+4. Check for organization restrictions
+
+#### Repository Synchronization Issues
+
+**Problem**: "Repository not found" error
+**Solution**:
+1. Verify repository URL is correct and accessible
+2. Check repository is public or user has access
+3. Ensure repository exists and is not archived
+4. Verify GitHub token has repository access
+
+**Problem**: "Sync failed" with rate limit error
+**Solution**:
+1. Wait for rate limit reset (shown in error message)
+2. Reduce frequency of synchronization operations
+3. Consider upgrading to GitHub App for higher limits
+4. Implement retry logic with exponential backoff
+
+#### Version Detection Problems
+
+**Problem**: Versions not detected from repository
+**Solution**:
+1. Ensure repository uses semantic version tags
+2. Check tags follow format: `v1.2.3` or `1.2.3`
+3. Verify releases are published (not just tags)
+4. Check package.json or pyproject.toml version field
+
+### Debug Information
+
+#### Checking GitHub Integration Status
+
+1. **Global Settings**: Admin → Global Settings → GitHub OAuth
+2. **Test Connection**: Use built-in connection test
+3. **API Logs**: Check server logs for GitHub API calls
+4. **Rate Limit Status**: Monitor current rate limit usage
+
+#### Repository Analysis
+
+1. **Repository Info API**: Test `/api/mcp/github/repo-info` endpoint
+2. **Manual Sync**: Try manual synchronization from server details
+3. **Error Logs**: Check synchronization error messages
+4. **GitHub API**: Test direct GitHub API access
+
+## Future Enhancements
+
+### Planned Features
+
+#### Advanced Integration
+- **Webhook Support**: Real-time repository change notifications
+- **GitHub Actions Integration**: Trigger deployments from CI/CD
+- **Pull Request Integration**: Preview changes before merging
+- **Issue Tracking**: Link MCP server issues to GitHub issues
+
+#### Enhanced Automation
+- **Automated Testing**: Run MCP server tests on synchronization
+- **Dependency Scanning**: Security vulnerability detection
+- **License Compliance**: Automated license compatibility checking
+- **Quality Metrics**: Code quality and documentation scoring
+
+#### Enterprise Features
+- **GitHub Enterprise Support**: On-premises GitHub integration
+- **SAML/SSO Integration**: Enterprise authentication flows
+- **Audit Logging**: Comprehensive audit trails
+- **Compliance Reporting**: Generate compliance reports
+
+### Community Contributions
+
+#### Contributing to GitHub Integration
+
+- **Feature Requests**: Submit enhancement requests
+- **Bug Reports**: Report integration issues
+- **Documentation**: Improve integration documentation
+- **Testing**: Help test new GitHub features
+
+The GitHub integration system provides a powerful foundation for connecting your repositories with DeployStack's MCP catalog, enabling streamlined workflows and automated synchronization while maintaining security and team boundaries.
