@@ -1,982 +1,144 @@
 ---
-title: Role-Based Access Control System
-description: Complete RBAC implementation with roles, permissions, team management, and security features for DeployStack Backend development.
+title: Role Management System
+description: Developer guide for managing roles and permissions in DeployStack Backend.
 ---
 
-# Role-Based Access Control System
+# Role Management System
 
-This document describes the role-based access control (RBAC) system implemented in the DeployStack backend.
+This guide explains how to manage roles and permissions in the DeployStack backend for developers.
 
 ## Overview
 
-The RBAC system provides fine-grained access control through roles and permissions. It supports:
+DeployStack uses a centralized role-based access control (RBAC) system with automatic synchronization between code definitions and database storage.
 
-- **Global Roles**: System-wide roles that control access to administrative functions
-- **Permission-Based Access**: Granular permissions for specific actions
-- **Extensible Design**: Easy to add new roles and permissions
-- **Secure Defaults**: Safe fallbacks and protection against privilege escalation
+## Role Definitions
 
-## Default Roles
+All roles and permissions are defined in a single file:
 
-### Global Administrator (`global_admin`)
+**`services/backend/src/permissions/index.ts`**
 
-- **Description**: Full system access with user management capabilities
-- **Permissions**:
-  - `users.list` - List all users
-  - `users.view` - View user details
-  - `users.edit` - Edit user information
-  - `users.delete` - Delete users
-  - `users.create` - Create new users
-  - `roles.manage` - Manage roles and permissions
-  - `system.admin` - Administrative system access
-  - `settings.view` - View global application settings
-  - `settings.edit` - Create and update global application settings
-  - `settings.delete` - Delete global application settings
-  - `teams.create` - Create new teams
-  - `teams.view` - View team details
-  - `teams.edit` - Edit team settings
-  - `teams.delete` - Delete teams
-  - `teams.manage` - Full team management
-  - `team.members.view` - View team members
-  - `team.members.manage` - Manage team member roles
+This is the **single source of truth** for all role definitions. To see current roles and their permissions, check this file.
 
-**Note**: Global administrators have special access to view cloud credentials metadata across all teams, but cannot perform CRUD operations or view credential values. Cloud credentials management is team-contextual.
+### Role Types
 
-### Global User (`global_user`)
+The system supports two types of roles:
 
-- **Description**: Standard user with basic profile access
-- **Permissions**:
-  - `profile.view` - View own profile
-  - `profile.edit` - Edit own profile
-  - `teams.create` - Create new teams (up to 3)
-  - `teams.view` - View team details
-  - `teams.edit` - Edit own team settings
-  - `teams.delete` - Delete own teams
-  - `team.members.view` - View team members
+- **Global Roles**: System-wide roles (`global_admin`, `global_user`)
+- **Team Roles**: Team-specific roles (`team_admin`, `team_user`)
 
-### Team Administrator (`team_admin`)
+Team roles are assigned within team contexts and work alongside global roles to provide fine-grained access control for team-based resources.
 
-- **Description**: Full management access within a specific team
-- **Permissions**:
-  - `teams.view` - View team details
-  - `teams.edit` - Edit team settings
-  - `teams.delete` - Delete team (if owner)
-  - `teams.manage` - Full team management
-  - `team.members.view` - View team members
-  - `team.members.manage` - Manage team member roles
+## Database Storage
 
-### Team User (`team_user`)
+Roles are stored in the `roles` table with the following structure:
 
-- **Description**: Basic team member with limited access
-- **Permissions**:
-  - `teams.view` - View team details
-  - `team.members.view` - View team members
+- **`id`** - Role identifier (e.g., 'global_admin')
+- **`name`** - Display name (e.g., 'Global Administrator') 
+- **`description`** - Role description
+- **`permissions`** - JSON array of permission strings
+- **`is_system_role`** - Boolean flag for core system roles
+- **`created_at`** / **`updated_at`** - Timestamps
 
-## Team System
+User role assignments are stored in the `authUser.role_id` column.
 
-DeployStack includes a comprehensive team management system that allows users to organize their work into teams and collaborate with other users. Each user automatically gets their own team upon registration and can create up to 3 teams total.
+## Automatic Synchronization
 
-### Team Features
+The system automatically syncs role permissions from code to database on server startup. The RoleSyncService compares the definitions in `permissions/index.ts` with the database and updates any differences. This ensures the database always matches your code definitions without manual intervention.
 
-- **Automatic Team Creation**: Every new user gets a default team created with their username
-- **Team Ownership**: Each team has an owner who has full administrative control
-- **Multi-User Teams**: Teams support up to 3 members with role-based access control
-- **Team Limits**: Users can create up to 3 teams maximum
-- **Unique Slugs**: Teams have URL-friendly slugs with automatic conflict resolution
-- **Default Team Protection**: Default teams cannot have additional members added (personal workspace)
+## Adding New Roles
 
-### Team Database Schema
+### 1. Define the Role
 
-#### Teams Table
-
-```sql
-CREATE TABLE teams (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  slug TEXT NOT NULL UNIQUE,
-  description TEXT,
-  owner_id TEXT NOT NULL REFERENCES authUser(id) ON DELETE CASCADE,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-```
-
-#### Team Memberships Table
-
-```sql
-CREATE TABLE teamMemberships (
-  id TEXT PRIMARY KEY,
-  team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL REFERENCES authUser(id) ON DELETE CASCADE,
-  role TEXT NOT NULL, -- 'team_admin' or 'team_user'
-  joined_at INTEGER NOT NULL,
-  UNIQUE(team_id, user_id)
-);
-```
-
-### Team Registration Flow
-
-When a user registers:
-
-1. User account is created with appropriate global role
-2. A default team is automatically created using the user's username
-3. The user is added as `team_admin` of their new team
-4. If username conflicts exist, slug gets incremented (e.g., `john-doe-2`)
-
-### Team Management
-
-#### Team Creation
-
-- Users can create up to 3 teams
-- Team names are converted to URL-friendly slugs
-- Automatic conflict resolution for duplicate slugs
-- Team owner becomes `team_admin` automatically
-
-#### Default Team Protection
-
-- **Default Team Identification**: Teams created during user registration (name matches username)
-- **Name Protection**: Default team names cannot be changed via API or UI
-- **Deletion Protection**: Default teams cannot be deleted
-- **Description Editing**: Default team descriptions can still be modified
-- **UI Indicators**: Frontend shows lock icons and explanatory text for protected fields
-
-#### Team Roles
-
-- **Team Admin**: Full control over team settings and management
-- **Team User**: Basic team member (for future expansion)
-
-#### Team Permissions
-
-| Permission | Description |
-|------------|-------------|
-| `teams.create` | Create new teams (up to limit) |
-| `teams.view` | View team details |
-| `teams.edit` | Edit team settings |
-| `teams.delete` | Delete team |
-| `teams.manage` | Full team management |
-| `team.members.view` | View team members |
-| `team.members.manage` | Manage team member roles |
-
-#### Cloud Credentials Permissions (Team-Contextual)
-
-Cloud credentials are team-scoped resources with role-based access control. Unlike other permissions, cloud credentials access is determined by team membership and role, not global permissions.
-
-**Access Control Matrix:**
-
-| Role | Team Access | Can See | Can Do | Secret Values |
-|------|-------------|---------|---------|---------------|
-| `global_admin` | Any team | Metadata only (name, provider, dates) | List/View only | ❌ Never |
-| `team_admin` | Own teams only | Metadata + non-secret field values | Full CRUD | ❌ Never |
-| `team_user` | Own teams only | Metadata only (name, provider, dates) | Read only | ❌ Never |
-| `global_user` | No access | Nothing | Nothing | ❌ Never |
-
-**Security Rules:**
-
-- **Team Membership Required**: Only team members can access team's cloud credentials (except global admins)
-- **Secret Values Protected**: No role can view secret credential values via API
-- **Team Isolation**: Users can only access credentials from teams they belong to
-- **Role-Based Responses**: API responses vary based on user's role within the team
-
-**Response Examples:**
+Add your new role to `services/backend/src/permissions/index.ts`:
 
 ```typescript
-// Team Admin Response (can see non-secret values)
-{
-  "fields": {
-    "access_key_id": {
-      "hasValue": true,
-      "secret": false,
-      "value": "AKIATEST123456789"  // ✅ Non-secret shown
-    },
-    "secret_access_key": {
-      "hasValue": true,
-      "secret": true
-      // ❌ No "value" field - secret never shown
-    }
-  }
-}
-
-// Team User Response (metadata only)
-{
-  "id": "cred123",
-  "name": "Production AWS",
-  "provider": { "name": "Amazon Web Services" },
-  "createdAt": "2025-01-01T00:00:00Z"
-  // ❌ No "fields" object - no values shown
-}
-
-// Global Admin Response (metadata only, any team)
-{
-  "fields": {
-    "access_key_id": {
-      "hasValue": true,
-      "secret": false
-      // ❌ No "value" field - admin sees no values
-    },
-    "secret_access_key": {
-      "hasValue": true,
-      "secret": true
-      // ❌ No "value" field - admin sees no values
-    }
-  }
-}
+export const ROLE_DEFINITIONS = {
+  // ... existing roles
+  content_moderator: [
+    'users.view',
+    'content.moderate',
+    'reports.view',
+  ],
+} as const;
 ```
 
-### Team API Endpoints
+### 2. Create Database Migration (Optional)
 
-#### Get User's Teams
-
-```http
-GET /api/users/me/teams
-Authorization: Required (authenticated user)
-```
-
-#### Create Team
-
-```http
-POST /api/teams
-Authorization: Required (teams.create permission)
-Content-Type: application/json
-
-{
-  "name": "My New Team",
-  "description": "Team description"
-}
-```
-
-#### Get Team by ID
-
-```http
-GET /api/teams/:id
-Authorization: Required (teams.view permission)
-```
-
-#### Update Team
-
-```http
-PUT /api/teams/:id
-Authorization: Required (teams.edit permission)
-Content-Type: application/json
-
-{
-  "name": "Updated Team Name",
-  "description": "Updated description"
-}
-```
-
-#### Delete Team
-
-```http
-DELETE /api/teams/:id
-Authorization: Required (teams.delete permission)
-```
-
-#### Get Team by ID
-
-```http
-GET /api/teams/:id
-Authorization: Required (teams.view permission)
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "team123",
-    "name": "My Team",
-    "slug": "my-team",
-    "description": "Team description",
-    "owner_id": "user123",
-    "created_at": "2025-01-30T15:00:00.000Z",
-    "updated_at": "2025-01-30T15:00:00.000Z"
-  }
-}
-```
-
-#### Get Team Members
-
-```http
-GET /api/teams/:id/members
-Authorization: Required (team.members.view permission)
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "membership123",
-      "user_id": "user123",
-      "username": "johndoe",
-      "email": "john@example.com",
-      "first_name": "John",
-      "last_name": "Doe",
-      "role": "team_admin",
-      "is_admin": true,
-      "is_owner": true,
-      "joined_at": "2025-01-30T15:00:00.000Z"
-    }
-  ]
-}
-```
-
-#### Add Team Member
-
-```http
-POST /api/teams/:id/members
-Authorization: Required (team.members.manage permission or global admin)
-Content-Type: application/json
-
-{
-  "userId": "user456",
-  "role": "team_user"
-}
-```
-
-**Restrictions:**
-- Maximum 3 members per team
-- Cannot add members to default teams (protected)
-- User must exist in the system
-- Team admin or global admin required
-
-#### Update Team Member Role
-
-```http
-PUT /api/teams/:id/members/:userId/role
-Authorization: Required (team.members.manage permission or global admin)
-Content-Type: application/json
-
-{
-  "role": "team_admin"
-}
-```
-
-**Restrictions:**
-- Cannot change roles in default teams
-- Must maintain at least one team admin
-- Team admin or global admin required
-
-#### Remove Team Member
-
-```http
-DELETE /api/teams/:id/members/:userId
-Authorization: Required (team.members.manage permission or global admin)
-```
-
-**Restrictions:**
-- Cannot remove from default teams
-- Cannot remove team owner (must transfer ownership first)
-- Cannot remove last member from team
-- Team admin or global admin required
-
-#### Transfer Team Ownership
-
-```http
-PUT /api/teams/:id/ownership
-Authorization: Required (team owner or global admin)
-Content-Type: application/json
-
-{
-  "newOwnerId": "user456"
-}
-```
-
-**Restrictions:**
-- Cannot transfer ownership of default teams
-- New owner must be a team member
-- New owner automatically becomes team_admin
-- Only current owner or global admin can transfer
-
-### Team Service Methods
-
-The `TeamService` class provides comprehensive team management:
-
-```typescript
-// Create team
-const team = await TeamService.createTeam({
-  name: 'My Team',
-  owner_id: userId,
-  description: 'Team description'
-});
-
-// Get user's teams
-const teams = await TeamService.getUserTeams(userId);
-
-// Get team by ID
-const team = await TeamService.getTeamById(teamId);
-
-// Update team
-const updatedTeam = await TeamService.updateTeam(teamId, {
-  name: 'New Name',
-  description: 'New description'
-});
-
-// Delete team
-const deleted = await TeamService.deleteTeam(teamId);
-
-// Check team limits
-const canCreate = await TeamService.canUserCreateTeam(userId);
-
-// Team membership checks
-const isAdmin = await TeamService.isTeamAdmin(teamId, userId);
-const isOwner = await TeamService.isTeamOwner(teamId, userId);
-const isMember = await TeamService.isTeamMember(teamId, userId);
-
-// Default team checks
-const isDefault = await TeamService.isDefaultTeam(teamId, userId);
-
-// Get team membership details
-const membership = await TeamService.getTeamMembership(teamId, userId);
-
-// ===== TEAM MEMBER MANAGEMENT METHODS =====
-
-// Add team member
-const membership = await TeamService.addTeamMember(teamId, userId, 'team_user');
-
-// Remove team member
-const removed = await TeamService.removeTeamMember(teamId, userId);
-
-// Update member role
-const updatedMembership = await TeamService.updateMemberRole(teamId, userId, 'team_admin');
-
-// Transfer team ownership
-const transferred = await TeamService.transferOwnership(teamId, newOwnerId);
-
-// Get team members with user info
-const membersWithInfo = await TeamService.getTeamMembersWithUserInfo(teamId);
-
-// Get user teams with role info
-const teamsWithRoles = await TeamService.getUserTeamsWithRoles(userId);
-
-// Team capacity and permission checks
-const canAddMember = await TeamService.canAddMemberToTeam(teamId);
-const canRemoveMember = await TeamService.canRemoveMemberFromTeam(teamId, userId);
-const canManageMember = await TeamService.canUserManageTeamMember(teamId, managerId, targetUserId, 'add');
-
-// Team member counts
-const memberCount = await TeamService.getTeamMemberCount(teamId);
-const adminCount = await TeamService.getTeamAdminCount(teamId);
-
-// Default team protection checks
-const isTeamDefault = await TeamService.isTeamDefault(teamId);
-```
-
-### Frontend Team Management
-
-The system includes a comprehensive team management interface:
-
-#### Teams List Page (`/teams`)
-
-- Displays all user's teams in a data table
-- Shows team name, description, creation date, and member count
-- Includes "Manage" button for team administrators
-- Uses shadcn/ui components for consistent styling
-
-#### Team Management Page (`/teams/manage/:id`)
-
-- **URL Pattern**: `/teams/manage/{teamId}`
-- **Access Control**: Only team administrators can access
-- **Design**: Matches admin interface styling (`/admin/users/:id`)
-- **Features**:
-  - Team information display (ID, creation date, update date)
-  - Editable team name (disabled for default teams with lock icon)
-  - Editable team description (always available)
-  - Default team badge and explanations
-  - Danger zone with team deletion (protected for default teams)
-  - Confirmation modal for team deletion using shadcn dialog
-
-#### UI Components
-
-```typescript
-// Team management form validation
-const teamSchema = z.object({
-  name: z.string().min(1, 'Team name is required'),
-  description: z.string().optional()
-});
-
-// Default team protection in UI
-const isDefaultTeam = computed(() => {
-  return team.value?.name === user.value?.username;
-});
-```
-
-#### Internationalization
-
-Complete i18n support with translation keys:
-
-- `teams.manage.title` - Page title
-- `teams.manage.defaultTeam.badge` - Default team indicator
-- `teams.manage.form.name.disabled` - Lock explanation
-- `teams.manage.dangerZone.title` - Deletion section
-- `teams.manage.delete.confirmation` - Confirmation dialog
-
-## Database Schema
-
-### Roles Table
+If you want the role available immediately in existing databases, create a migration:
 
 ```sql
-CREATE TABLE roles (
-  id TEXT PRIMARY KEY,                    -- Role identifier (e.g., 'global_admin')
-  name TEXT NOT NULL UNIQUE,              -- Display name (e.g., 'Global Administrator')
-  description TEXT,                       -- Role description
-  permissions TEXT NOT NULL,              -- JSON array of permissions
-  is_system_role BOOLEAN DEFAULT FALSE,   -- Prevents deletion of core roles
-  created_at INTEGER NOT NULL,            -- Creation timestamp
-  updated_at INTEGER NOT NULL             -- Last update timestamp
-);
+-- Add new role to existing databases
+INSERT OR IGNORE INTO `roles` (`id`, `name`, `description`, `permissions`, `is_system_role`, `created_at`, `updated_at`) VALUES 
+('content_moderator', 'Content Moderator', 'Manages user content', '[]', 1, strftime('%s', 'now') * 1000, strftime('%s', 'now') * 1000);
 ```
 
-### User Role Assignment
+### 3. Restart Server
 
-The `authUser` table includes a `role_id` column that references the `roles` table:
-
-```sql
-ALTER TABLE authUser ADD COLUMN role_id TEXT DEFAULT 'global_user' REFERENCES roles(id);
-```
-
-## API Endpoints
-
-### Role Management
-
-#### List Roles
-
-```http
-GET /api/roles
-Authorization: Required (roles.manage permission)
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "global_admin",
-      "name": "Global Administrator",
-      "description": "Full system access with user management capabilities",
-      "permissions": ["users.list", "users.view", "users.edit", "users.delete", "users.create", "roles.manage", "system.admin"],
-      "is_system_role": true,
-      "created_at": "2025-01-30T15:00:00.000Z",
-      "updated_at": "2025-01-30T15:00:00.000Z"
-    }
-  ]
-}
-```
-
-#### Get Role by ID
-
-```http
-GET /api/roles/:id
-Authorization: Required (roles.manage permission)
-```
-
-#### Create Role
-
-```http
-POST /api/roles
-Authorization: Required (roles.manage permission)
-Content-Type: application/json
-
-{
-  "id": "moderator",
-  "name": "Moderator",
-  "description": "Content moderation capabilities",
-  "permissions": ["users.view", "content.moderate"]
-}
-```
-
-#### Update Role
-
-```http
-PUT /api/roles/:id
-Authorization: Required (roles.manage permission)
-Content-Type: application/json
-
-{
-  "name": "Updated Role Name",
-  "description": "Updated description",
-  "permissions": ["updated.permission"]
-}
-```
-
-**Note:** System roles (`is_system_role: true`) cannot be updated or deleted.
-
-#### Delete Role
-
-```http
-DELETE /api/roles/:id
-Authorization: Required (roles.manage permission)
-```
-
-**Restrictions:**
-
-- Cannot delete system roles
-- Cannot delete roles that are assigned to users
-
-#### Get Available Permissions
-
-```http
-GET /api/roles/permissions
-Authorization: Required (roles.manage permission)
-```
-
-### User Management
-
-#### List Users
-
-```http
-GET /api/users
-Authorization: Required (users.list permission)
-```
-
-#### Get User by ID
-
-```http
-GET /api/users/:id
-Authorization: Required (own profile or system.admin permission)
-```
-
-#### Update User
-
-```http
-PUT /api/users/:id
-Authorization: Required (own profile or system.admin permission)
-Content-Type: application/json
-
-{
-  "username": "newusername",
-  "email": "newemail@example.com",
-  "first_name": "John",
-  "last_name": "Doe",
-  "role_id": "global_user"
-}
-```
-
-**Restrictions:**
-
-- Users cannot change their own role (only admins can)
-- Email and username must be unique
-
-#### Delete User
-
-```http
-DELETE /api/users/:id
-Authorization: Required (users.delete permission)
-```
-
-**Restrictions:**
-
-- Cannot delete your own account
-- Cannot delete the last global administrator
-
-#### Assign Role to User
-
-```http
-PUT /api/users/:id/role
-Authorization: Required (users.edit permission)
-Content-Type: application/json
-
-{
-  "role_id": "global_admin"
-}
-```
-
-**Restrictions:**
-
-- Cannot change your own role
-
-#### Get Current User Profile
-
-```http
-GET /api/users/me
-Authorization: Required (authenticated user)
-```
-
-#### Get User Statistics
-
-```http
-GET /api/users/stats
-Authorization: Required (users.list permission)
-```
-
-#### Get Users by Role
-
-```http
-GET /api/users/role/:roleId
-Authorization: Required (users.list permission)
-```
+The RoleSyncService will automatically populate the role's permissions from your code definition on the next server startup.
 
 ## Permission System
 
 ### Available Permissions
 
-| Permission | Description |
-|------------|-------------|
-| `users.list` | List all users in the system |
-| `users.view` | View detailed user information |
-| `users.edit` | Edit user information and assign roles |
-| `users.delete` | Delete user accounts |
-| `users.create` | Create new user accounts |
-| `roles.manage` | Create, update, and delete roles |
-| `system.admin` | Administrative system access |
-| `settings.view` | View global application settings |
-| `settings.edit` | Create and update global application settings |
-| `settings.delete` | Delete global application settings |
-| `profile.view` | View own profile information |
-| `profile.edit` | Edit own profile information |
-| `teams.create` | Create new teams (up to limit) |
-| `teams.view` | View team details |
-| `teams.edit` | Edit team settings |
-| `teams.delete` | Delete team |
-| `teams.manage` | Full team management |
-| `team.members.view` | View team members |
-| `team.members.manage` | Manage team member roles |
+All permissions are auto-generated from role definitions. The `AVAILABLE_PERMISSIONS` array in `permissions/index.ts` contains all unique permissions across all roles, sorted alphabetically.
 
 ### Permission Checking
 
-The system provides several ways to check permissions:
-
-#### Middleware Functions
+Use the middleware functions for route protection:
 
 ```typescript
-import { requirePermission, requireRole, requireGlobalAdmin } from '../middleware/roleMiddleware';
+import { requirePermission } from '../middleware/roleMiddleware';
 
 // Require specific permission
-fastify.get('/admin-only', {
-  preHandler: requirePermission('system.admin')
-}, handler);
-
-// Require specific role
-fastify.get('/admin-role', {
-  preHandler: requireRole('global_admin')
-}, handler);
-
-// Require global admin (shorthand)
-fastify.get('/global-admin', {
-  preHandler: requireGlobalAdmin()
+fastify.get('/admin-endpoint', {
+  preValidation: requirePermission('system.admin')
 }, handler);
 ```
 
-#### Utility Functions
+For team-based resources, use team-aware permissions:
 
 ```typescript
-import { checkUserPermission, getUserRole } from '../middleware/roleMiddleware';
+import { requireTeamPermission } from '../middleware/roleMiddleware';
 
-// Check permission programmatically
+// Team-specific permission checking
+fastify.post('/teams/:teamId/resources', {
+  preValidation: requireTeamPermission('resources.create')
+}, handler);
+```
+
+See [API Security Best Practices](./api-security.mdx) for detailed information about team-aware permissions and security patterns.
+
+### Programmatic Checks
+
+```typescript
+import { checkUserPermission } from '../middleware/roleMiddleware';
+
 const hasPermission = await checkUserPermission(userId, 'users.edit');
-
-// Get user's role information
-const userRole = await getUserRole(userId);
 ```
 
-## User Registration Flow
+## API Endpoints
 
-### First User
+### Role Management
+- `GET /api/roles` - List all roles
+- `POST /api/roles` - Create new role
+- `PUT /api/roles/:id` - Update role
+- `DELETE /api/roles/:id` - Delete role
 
-When the first user registers in the system:
-
-1. They are automatically assigned the `global_admin` role
-2. This ensures there's always at least one administrator
-
-### Subsequent Users
-
-All subsequent users are assigned the `global_user` role by default.
-
-### Registration Code Example
-
-```typescript
-// Check if this is the first user
-const allUsers = await db.select().from(authUserTable).limit(1);
-const isFirstUser = allUsers.length === 0;
-const defaultRole = isFirstUser ? 'global_admin' : 'global_user';
-
-// Create user with appropriate role
-await db.insert(authUserTable).values({
-  // ... other user data
-  role_id: defaultRole
-});
-```
-
-## Security Considerations
-
-### Role Protection
-
-- **System Roles**: Cannot be modified or deleted
-- **Last Admin Protection**: Cannot delete the last global administrator
-- **Self-Role Protection**: Users cannot change their own roles
-- **Self-Delete Protection**: Users cannot delete their own accounts
-
-### Permission Validation
-
-- All permissions are validated against a whitelist
-- Invalid permissions are rejected during role creation/update
-- Database constraints ensure referential integrity
-
-### Session Security
-
-- Role information is fetched fresh for each permission check
-- No role caching to prevent stale permission issues
-- Lucia v3 handles secure session management
-
-## Adding New Roles
-
-### 1. Define Permissions
-
-First, add any new permissions to the available permissions list:
-
-```typescript
-// In services/backend/src/routes/roles/schemas.ts
-export const AVAILABLE_PERMISSIONS = [
-  // ... existing permissions
-  'content.moderate',
-  'reports.view',
-  'analytics.access',
-] as const;
-```
-
-### 2. Create Role via API
-
-Use the role creation API to add new roles:
-
-```http
-POST /api/roles
-{
-  "id": "content_moderator",
-  "name": "Content Moderator",
-  "description": "Manages user-generated content",
-  "permissions": ["users.view", "content.moderate", "reports.view"]
-}
-```
-
-### 3. Update Default Permissions (Optional)
-
-If you want to include the role in default setups:
-
-```typescript
-// In services/backend/src/services/roleService.ts
-static getDefaultPermissions() {
-  return {
-    global_admin: [/* ... */],
-    global_user: [/* ... */],
-    content_moderator: ['users.view', 'content.moderate', 'reports.view'],
-  };
-}
-```
-
-## Migration and Setup
-
-### Database Migration
-
-The role system is set up through migration `0003_huge_prism.sql` (generated using `npm run db:generate`):
-
-1. Creates the `roles` table
-2. Adds `role_id` column to `authUser` table
-3. Seeds default roles (`global_admin`, `global_user`)
-4. Assigns existing users to `global_user`
-5. Promotes the first user to `global_admin`
-
-### Manual Setup
-
-If you need to manually set up roles:
-
-```sql
--- Insert default roles
-INSERT INTO roles (id, name, description, permissions, is_system_role, created_at, updated_at) VALUES 
-('global_admin', 'Global Administrator', 'Full system access', '["users.list","users.view","users.edit","users.delete","users.create","roles.manage","system.admin"]', 1, strftime('%s', 'now') * 1000, strftime('%s', 'now') * 1000),
-('global_user', 'Global User', 'Standard user access', '["profile.view","profile.edit"]', 1, strftime('%s', 'now') * 1000, strftime('%s', 'now') * 1000);
-
--- Assign roles to users
-UPDATE authUser SET role_id = 'global_user' WHERE role_id IS NULL;
-UPDATE authUser SET role_id = 'global_admin' WHERE id = (SELECT id FROM authUser ORDER BY id ASC LIMIT 1);
-```
-
-## Troubleshooting
-
-### Common Issues
-
-#### Permission Denied Errors
-
-- Verify the user has the required permission
-- Check if the user's role includes the necessary permission
-- Ensure the role exists and is properly assigned
-
-#### Role Assignment Failures
-
-- Verify the target role exists
-- Check if you're trying to assign a role to yourself (not allowed)
-- Ensure you have `users.edit` permission
-
-#### Migration Issues
-
-- Ensure the database is properly initialized
-- Check that previous migrations have been applied
-- Verify foreign key constraints are working
-
-### Debug Commands
-
-```typescript
-// Check user's current role and permissions
-const userRole = await roleService.getUserRole(userId);
-logger.info('User role:', userRole);
-
-// Check specific permission
-const hasPermission = await roleService.userHasPermission(userId, 'users.edit');
-logger.info('Has permission:', hasPermission);
-
-// List all roles
-const allRoles = await roleService.getAllRoles();
-logger.info('All roles:', allRoles);
-```
-
-## Future Enhancements
-
-### Planned Features
-
-- **Hierarchical Roles**: Parent-child role relationships
-- **Temporary Permissions**: Time-limited access grants
-- **Permission Groups**: Logical grouping of related permissions
-- **Audit Logging**: Track role and permission changes
-- **Role Templates**: Predefined role configurations
-
-### Extension Points
-
-The system is designed to be extensible:
-
-- Add new permissions by updating the `AVAILABLE_PERMISSIONS` array
-- Create custom middleware for complex permission logic
-- Implement role-based UI components in the frontend
-- Add role-specific business logic in services
+### User Role Assignment
+- `PUT /api/users/:id/role` - Assign role to user
+- `GET /api/users/me` - Get current user with role info
 
 ## Best Practices
 
-### Role Design
+- **Single Source**: Always define roles in `permissions/index.ts`
+- **Descriptive Names**: Use clear permission names with dot notation (`users.edit`, `content.moderate`)
+- **Minimal Permissions**: Give roles only the permissions they need
+- **System Roles**: Mark core roles as `is_system_role: true` to prevent deletion
+- **Testing**: Test permission changes in development before deploying
 
-- Keep roles focused and specific
-- Use descriptive names and descriptions
-- Group related permissions logically
-- Avoid overly broad permissions
+## Security Notes
 
-### Permission Naming
-
-- Use dot notation for hierarchy (`users.edit`, `content.moderate`)
-- Be specific about the action (`view`, `edit`, `delete`, `create`)
-- Use consistent naming patterns
-
-### Security
-
-- Always check permissions at the API level
-- Don't rely solely on frontend permission checks
-- Regularly audit role assignments
-- Monitor for privilege escalation attempts
-
-### Performance
-
-- Permission checks are lightweight but avoid excessive calls
-- Consider caching user roles for high-frequency operations
-- Use middleware for route-level protection
-- Batch permission checks when possible
+- System roles cannot be modified or deleted via API
+- Users cannot change their own roles
+- The last global administrator cannot be deleted
+- All permission checks happen server-side

@@ -1,0 +1,371 @@
+---
+title: MCP Server Catalog
+description: Discover, manage, and deploy Model Context Protocol (MCP) servers through DeployStack's comprehensive catalog system.
+sidebar: MCP Catalog
+---
+
+# MCP Server Catalog
+
+The MCP (Model Context Protocol) Server Catalog is DeployStack's comprehensive system for discovering, managing, and deploying MCP servers. It provides a centralized repository where you can find pre-configured MCP servers, contribute your own, and manage deployments across your teams.
+
+## What is the MCP Catalog?
+
+The MCP Catalog serves as a marketplace and management system for MCP servers, offering:
+
+- **Server Discovery**: Browse available MCP servers by category, language, and functionality
+- **Team-Based Management**: Organize servers within your teams with proper access control
+- **Version Management**: Track different versions of MCP servers with changelog support
+- **GitHub Integration**: Automatic synchronization with GitHub repositories
+- **Global and Team Servers**: Support for both community-wide and team-specific servers
+
+## Catalog Structure
+
+### Server Visibility Levels
+
+The catalog supports two types of servers:
+
+#### Global Servers
+- **Visibility**: Available to all users across the platform
+- **Management**: Only Global Administrators can create, edit, and delete
+- **Purpose**: Community-contributed servers, official integrations, popular tools
+- **Examples**: Official OpenAI MCP server, popular GitHub integrations, common utilities
+
+#### Team Servers
+- **Visibility**: Only visible to team members
+- **Management**: Team administrators can create, edit, and delete within their teams
+- **Purpose**: Custom integrations, private tools, team-specific configurations
+- **Examples**: Internal API integrations, custom business logic, proprietary tools
+
+### Categories
+
+Servers are organized into categories for easy discovery:
+
+- **Development Tools**: Code analysis, Git integration, CI/CD tools
+- **Data Sources**: Database connectors, API integrations, file systems
+- **AI & ML**: Machine learning models, AI services, data processing
+- **Communication**: Chat platforms, email services, notification systems
+- **Productivity**: Task management, calendars, document processing
+- **Custom**: User-defined categories for specialized use cases
+
+**Note**: Only Global Administrators can create and manage categories.
+
+## User Permissions
+
+Access to the MCP catalog is controlled by your role and team membership:
+
+### Permission Matrix
+
+| Role | Global Servers | Team Servers | Can Create | Can Edit | Can Delete | Categories |
+|------|----------------|--------------|------------|----------|------------|------------|
+| global_admin | ✅ View/Manage All | ✅ View All Teams | ✅ Global only | ✅ Global only | ✅ Global only | ✅ Full CRUD |
+| team_admin | ✅ View only | ✅ View/Manage own team | ✅ Team only | ✅ Team only | ✅ Team only | ❌ View only |
+| team_user | ✅ View only | ✅ View team servers | ❌ No | ❌ No | ❌ No | ❌ View only |
+| global_user | ✅ View only | ❌ No access | ❌ No | ❌ No | ❌ No | ❌ View only |
+| unauthenticated | ❌ No access | ❌ No access | ❌ No | ❌ No | ❌ No | ❌ No access |
+
+**Note**: Authentication is required for all MCP catalog access. Unauthenticated users cannot access any servers or catalog features.
+
+### Detailed Permissions
+
+#### Global Administrator
+- **Global Servers**: Full management capabilities - create, edit, delete, and feature servers
+- **Team Servers**: Read-only access to all team servers across the platform for administrative oversight
+- **Categories**: Complete category management - create, edit, delete, and organize categories
+- **Special Privileges**: Can mark servers as "featured" and manage server visibility
+
+#### Team Administrator
+- **Global Servers**: Can browse and view all global servers but cannot modify them
+- **Team Servers**: Full management within their own teams - create, edit, delete team-specific servers
+- **Server Creation**: Can create new servers that are automatically scoped to their team
+- **Team Scope**: All created servers are marked with team visibility and ownership
+
+#### Team User
+- **Global Servers**: Can browse and view all global servers
+- **Team Servers**: Can view servers within their teams but cannot modify them
+- **Read-Only Access**: Cannot create, edit, or delete any servers
+- **Discovery**: Can search and filter servers for deployment purposes
+
+#### Global User
+- **Global Servers**: Can browse and view all global servers
+- **Team Servers**: No access to any team-specific servers
+- **Limited Scope**: Most restricted authenticated access level for catalog browsing
+
+#### Unauthenticated Users
+- **No Access**: Cannot access any MCP catalog features
+- **Authentication Required**: Must log in to view any servers
+- **Security**: All MCP endpoints require valid authentication
+
+## Server Management
+
+### Creating Servers
+
+#### Global Servers (Global Admin Only)
+1. **Navigate to Catalog**: Access the MCP catalog from your admin dashboard
+2. **Create Global Server**: Click "Create Global Server" button
+3. **Server Details**: Fill in comprehensive server information:
+   - **Basic Info**: Name, description, category
+   - **Technical Details**: Language, runtime, minimum version requirements
+   - **Installation**: Supported installation methods (npm, pip, docker, etc.)
+   - **Capabilities**: Tools, resources, and prompts provided
+   - **Repository**: GitHub URL for automatic synchronization
+   - **Metadata**: Author information, license, organization
+4. **Visibility Settings**: Configure as global server
+5. **Featured Status**: Optionally mark as featured for prominence
+
+#### Team Servers (Team Admin)
+1. **Team Context**: Navigate to your team's MCP catalog section
+2. **Create Team Server**: Click "Create Server" within your team
+3. **Server Configuration**: Same detailed form as global servers
+4. **Team Scope**: Server is automatically assigned to your team
+5. **Team Visibility**: Only your team members can see and use this server
+
+### Server Information
+
+Each server in the catalog includes comprehensive metadata:
+
+#### Basic Information
+- **Name & Description**: Clear identification and purpose
+- **Category**: Organizational classification
+- **Tags**: Searchable keywords and labels
+- **Status**: Active, deprecated, or maintenance mode
+
+#### Technical Specifications
+- **Language**: Programming language (Node.js, Python, etc.)
+- **Runtime**: Specific runtime requirements
+- **Minimum Version**: Required runtime version
+- **Dependencies**: External dependencies and requirements
+
+#### Capabilities
+- **Tools**: Available MCP tools and their functions
+- **Resources**: Data sources and resource types
+- **Prompts**: Pre-configured prompts and templates
+- **Configuration**: Default settings and environment variables
+
+#### Repository Integration
+- **GitHub URL**: Source code repository
+- **Branch**: Target branch for synchronization
+- **Last Sync**: When repository was last synchronized
+- **Version Tracking**: Automatic version detection from repository
+
+### Version Management
+
+The catalog supports comprehensive version tracking:
+
+#### Version Information
+- **Version Numbers**: Semantic versioning (e.g., 1.2.3)
+- **Git Commits**: Linked to specific repository commits
+- **Changelog**: Detailed change descriptions
+- **Stability**: Stable vs. beta/alpha versions
+- **Latest Flag**: Automatic latest version detection
+
+#### Version Operations
+- **Create Version**: Add new versions manually or via GitHub sync
+- **Update Version**: Modify version information and changelog
+- **Version History**: Complete timeline of all versions
+- **Rollback Support**: Deploy specific versions as needed
+
+### GitHub Integration
+
+Seamless integration with GitHub repositories for automatic synchronization and metadata extraction. For complete details on setting up and using GitHub integration, see the [GitHub Integration Guide](./github-integration.mdx).
+
+**Key Features:**
+- **Automatic Repository Sync**: Pull server metadata from GitHub repositories
+- **Version Detection**: Automatic version tracking from repository tags
+- **Metadata Extraction**: Import descriptions, licenses, and topics
+- **Manual and Scheduled Sync**: Flexible synchronization options
+
+## Browsing and Discovery
+
+### Catalog Interface
+
+The catalog provides multiple ways to discover servers:
+
+#### Browse by Category
+- **Category Navigation**: Organized browsing by functional categories
+- **Category Descriptions**: Clear explanations of each category's purpose
+- **Server Counts**: Number of servers in each category
+
+#### Search and Filtering
+- **Text Search**: Search by name, description, and tags
+- **Language Filter**: Filter by programming language
+- **Runtime Filter**: Filter by runtime environment
+- **Status Filter**: Show only active, deprecated, or maintenance servers
+- **Featured Filter**: Highlight featured and recommended servers
+
+#### Server Listings
+- **Grid View**: Visual cards showing server information
+- **List View**: Detailed table with comprehensive information
+- **Sorting Options**: Sort by name, popularity, recent updates, or featured status
+- **Pagination**: Efficient browsing of large server collections
+
+### Server Details
+
+Detailed server pages provide comprehensive information:
+
+#### Overview Section
+- **Server Description**: Detailed explanation of functionality
+- **Quick Stats**: Language, runtime, last update, version count
+- **Installation Preview**: Quick installation commands
+- **Author Information**: Creator and maintainer details
+
+#### Technical Details
+- **Capabilities Breakdown**: Detailed tool, resource, and prompt listings
+- **Configuration Options**: Available settings and customizations
+- **Environment Variables**: Required and optional environment settings
+- **Dependencies**: External requirements and compatibility
+
+#### Version History
+- **Version Timeline**: Chronological list of all versions
+- **Changelog Details**: Comprehensive change descriptions
+- **Download/Deploy Options**: Direct deployment links
+- **Stability Indicators**: Version stability and recommendation status
+
+## Team Integration
+
+### Team-Scoped Servers
+
+Team servers provide private server management:
+
+#### Team Server Benefits
+- **Privacy**: Servers visible only to team members
+- **Customization**: Team-specific configurations and settings
+- **Control**: Full management by team administrators
+- **Integration**: Seamless integration with team deployments
+
+#### Team Server Management
+- **Team Dashboard**: Dedicated section for team's MCP servers
+- **Member Access**: All team members can view team servers
+- **Admin Control**: Team administrators manage server lifecycle
+- **Deployment Integration**: Direct deployment to team environments
+
+### Cross-Team Visibility
+
+#### Global Admin Oversight
+- **Administrative View**: Global admins can see all team servers
+- **Read-Only Access**: Cannot modify team servers, only view for support
+- **System Monitoring**: Track server usage and adoption across teams
+- **Support Capabilities**: Assist teams with server-related issues
+
+#### Team Isolation
+- **Secure Boundaries**: Teams cannot see other teams' servers
+- **Data Protection**: Team server configurations remain private
+- **Access Control**: Strict enforcement of team-based permissions
+
+## Server Deployment
+
+### From Catalog to Deployment
+
+The catalog integrates seamlessly with DeployStack's deployment system:
+
+#### Deployment Process
+1. **Server Selection**: Choose server from catalog
+2. **Version Selection**: Pick specific version to deploy
+3. **Configuration**: Customize settings and environment variables
+4. **Team Context**: Deploy within appropriate team context
+5. **Cloud Provider**: Select target deployment platform
+6. **Launch**: Deploy server to chosen environment
+
+#### Deployment Options
+- **Quick Deploy**: One-click deployment with default settings
+- **Custom Deploy**: Full configuration customization
+- **Template Deploy**: Use pre-configured deployment templates
+- **Batch Deploy**: Deploy multiple servers simultaneously
+
+### Configuration Management
+
+#### Default Configurations
+- **Server Defaults**: Pre-configured settings from catalog
+- **Team Overrides**: Team-specific configuration templates
+- **Environment Variables**: Secure handling of sensitive configuration
+- **Validation**: Configuration validation before deployment
+
+#### Custom Configurations
+- **Parameter Customization**: Modify server parameters
+- **Environment Setup**: Configure runtime environment
+- **Resource Allocation**: Set memory, CPU, and storage requirements
+- **Network Configuration**: Configure ports, domains, and routing
+
+## Best Practices
+
+### For Server Contributors
+
+#### Creating Quality Servers
+- **Clear Documentation**: Comprehensive README and documentation
+- **Semantic Versioning**: Follow proper version numbering
+- **Changelog Maintenance**: Keep detailed change logs
+- **Testing**: Ensure servers work across different environments
+- **Security**: Follow security best practices for MCP servers
+
+#### Repository Management
+- **Clean Structure**: Organize repository with clear structure
+- **Configuration Files**: Include proper MCP configuration
+- **Examples**: Provide usage examples and tutorials
+- **License**: Include appropriate open-source license
+- **Maintenance**: Regular updates and issue resolution
+
+### For Server Users
+
+#### Server Selection
+- **Requirements Analysis**: Understand your specific needs
+- **Version Consideration**: Choose stable versions for production
+- **Documentation Review**: Read server documentation thoroughly
+- **Testing**: Test servers in development before production deployment
+- **Updates**: Keep servers updated to latest stable versions
+
+#### Team Management
+- **Server Organization**: Organize team servers logically
+- **Access Control**: Manage team member access appropriately
+- **Documentation**: Document team-specific server configurations
+- **Monitoring**: Monitor server performance and usage
+
+### For Administrators
+
+#### Catalog Management
+- **Category Organization**: Maintain clear category structure
+- **Quality Control**: Review and curate global servers
+- **Featured Servers**: Highlight high-quality, popular servers
+- **Community Engagement**: Encourage community contributions
+- **Performance Monitoring**: Monitor catalog performance and usage
+
+#### User Support
+- **Documentation**: Maintain comprehensive user documentation
+- **Training**: Provide training on catalog usage
+- **Support Channels**: Establish clear support processes
+- **Feedback Collection**: Gather user feedback for improvements
+
+## Security Considerations
+
+### Access Control
+- **Role-Based Permissions**: Strict enforcement of role-based access
+- **Team Isolation**: Secure boundaries between teams
+- **Admin Oversight**: Appropriate administrative visibility
+- **Audit Logging**: Track all catalog operations (future feature)
+
+### Server Security
+- **Source Verification**: Verify server sources and authenticity
+- **Security Scanning**: Scan servers for security vulnerabilities (future feature)
+- **Safe Defaults**: Secure default configurations
+- **Update Notifications**: Alert users to security updates
+
+### Data Protection
+- **Configuration Security**: Secure handling of server configurations
+- **Environment Variables**: Encrypted storage of sensitive settings
+- **Repository Access**: Secure GitHub integration
+- **Privacy Controls**: Respect team privacy and data boundaries
+
+## Future Enhancements
+
+### Planned Features
+- **Server Ratings**: Community rating and review system
+- **Usage Analytics**: Server usage statistics and trends
+- **Automated Testing**: Continuous integration for server validation
+- **Marketplace**: Enhanced discovery and recommendation engine
+- **API Integration**: Programmatic catalog access
+
+### Community Features
+- **Contribution Guidelines**: Streamlined server contribution process
+- **Community Voting**: Community-driven server curation
+- **Discussion Forums**: Server-specific discussion and support
+- **Contributor Recognition**: Acknowledge active contributors
+
+The MCP Server Catalog transforms how you discover, manage, and deploy MCP servers, providing a comprehensive platform for both individual users and teams to leverage the power of the Model Context Protocol ecosystem.

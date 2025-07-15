@@ -1,0 +1,379 @@
+---
+title: Table Design System
+description: Developer guide for implementing data tables in DeployStack frontend using shadcn-vue Table components.
+---
+
+# Table Design System
+
+This guide shows developers how to implement consistent, accessible data tables in the DeployStack frontend.
+
+## Quick Implementation
+
+### Basic Table Structure
+
+```vue
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { MoreHorizontal, Edit, Trash2 } from 'lucide-vue-next'
+
+const { t } = useI18n()
+
+interface Props {
+  items: Array<{
+    id: string
+    name: string
+    description?: string
+    status: string
+    created_at: string
+  }>
+  onEditItem: (item: any) => void
+  onDeleteItem: (itemId: string) => void
+}
+
+const props = defineProps<Props>()
+
+// Sort items by name
+const sortedItems = computed(() => {
+  return [...props.items].sort((a, b) => a.name.localeCompare(b.name))
+})
+
+// Format date for display
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString()
+}
+</script>
+
+<template>
+  <div class="rounded-md border">
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>{{ t('table.columns.name') }}</TableHead>
+          <TableHead>{{ t('table.columns.description') }}</TableHead>
+          <TableHead>{{ t('table.columns.status') }}</TableHead>
+          <TableHead>{{ t('table.columns.created') }}</TableHead>
+          <TableHead class="w-[100px]">{{ t('table.columns.actions') }}</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <!-- Empty State -->
+        <TableRow v-if="sortedItems.length === 0">
+          <TableCell :colspan="5" class="h-24 text-center">
+            {{ t('table.noData') }}
+          </TableCell>
+        </TableRow>
+        
+        <!-- Data Rows -->
+        <TableRow v-for="item in sortedItems" :key="item.id">
+          <TableCell class="font-medium">{{ item.name }}</TableCell>
+          <TableCell>
+            <span v-if="item.description" class="text-sm text-muted-foreground">
+              {{ item.description }}
+            </span>
+            <span v-else class="text-sm text-muted-foreground italic">
+              {{ t('table.noDescription') }}
+            </span>
+          </TableCell>
+          <TableCell>
+            <Badge variant="outline">{{ item.status }}</Badge>
+          </TableCell>
+          <TableCell class="text-sm text-muted-foreground">
+            {{ formatDate(item.created_at) }}
+          </TableCell>
+          <TableCell>
+            <!-- Action buttons here -->
+          </TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
+  </div>
+</template>
+```
+
+## shadcn-vue Table Components
+
+### Required Components
+```vue
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+```
+
+### Component Structure
+- `Table` - Main table wrapper
+- `TableHeader` - Table header section
+- `TableBody` - Table body section  
+- `TableRow` - Table row (for both header and body)
+- `TableHead` - Header cell
+- `TableCell` - Data cell
+
+## Design Patterns
+
+### 1. Container Structure
+```vue
+<div class="rounded-md border">
+  <Table>
+    <!-- Table content -->
+  </Table>
+</div>
+```
+
+### 2. Header Pattern
+```vue
+<TableHeader>
+  <TableRow>
+    <TableHead>Column Name</TableHead>
+    <TableHead>Another Column</TableHead>
+    <TableHead class="w-[100px]">Actions</TableHead> <!-- Fixed width for actions -->
+  </TableRow>
+</TableHeader>
+```
+
+### 3. Empty State Handling
+```vue
+<TableBody>
+  <TableRow v-if="items.length === 0">
+    <TableCell :colspan="totalColumns" class="h-24 text-center">
+      {{ t('table.noData') }}
+    </TableCell>
+  </TableRow>
+  <!-- Regular rows -->
+</TableBody>
+```
+
+### 4. Data Cell Patterns
+
+**Primary Content (Names, Titles):**
+```vue
+<TableCell class="font-medium">
+  {{ item.name }}
+</TableCell>
+```
+
+**Secondary Content (Descriptions, Metadata):**
+```vue
+<TableCell>
+  <span v-if="item.description" class="text-sm text-muted-foreground">
+    {{ item.description }}
+  </span>
+  <span v-else class="text-sm text-muted-foreground italic">
+    {{ t('table.noDescription') }}
+  </span>
+</TableCell>
+```
+
+**Status Indicators:**
+```vue
+<TableCell>
+  <Badge variant="outline">{{ item.status }}</Badge>
+</TableCell>
+```
+
+**Dates and Timestamps:**
+```vue
+<TableCell class="text-sm text-muted-foreground">
+  {{ formatDate(item.created_at) }}
+</TableCell>
+```
+
+## Action Menu Pattern
+
+For table actions, use DropdownMenu with AlertDialog for destructive actions:
+
+```vue
+<script setup lang="ts">
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+</script>
+
+<template>
+  <TableCell>
+    <DropdownMenu>
+      <DropdownMenuTrigger as-child>
+        <Button variant="ghost" class="h-8 w-8 p-0">
+          <span class="sr-only">{{ t('table.openMenu') }}</span>
+          <MoreHorizontal class="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem @click="handleEdit(item)">
+          <Edit class="mr-2 h-4 w-4" />
+          {{ t('table.actions.edit') }}
+        </DropdownMenuItem>
+        <!-- Destructive actions with confirmation -->
+        <AlertDialog>
+          <AlertDialogTrigger as-child>
+            <DropdownMenuItem @click.prevent class="text-destructive focus:text-destructive">
+              <Trash2 class="mr-2 h-4 w-4" />
+              {{ t('table.actions.delete') }}
+            </DropdownMenuItem>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{{ t('deleteDialog.title') }}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {{ t('deleteDialog.description', { itemName: item.name }) }}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{{ t('deleteDialog.cancel') }}</AlertDialogCancel>
+              <AlertDialogAction
+                @click="handleDelete(item.id)"
+                class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {{ t('deleteDialog.confirm') }}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  </TableCell>
+</template>
+```
+
+## Badge Patterns for Tables
+
+### Status Badges
+```vue
+<Badge variant="default">Active</Badge>
+<Badge variant="secondary">Inactive</Badge>
+<Badge variant="destructive">Error</Badge>
+<Badge variant="outline">Pending</Badge>
+```
+
+### Category/Tag Badges
+```vue
+<Badge variant="secondary" class="font-mono text-xs">
+  {{ category.icon }}
+</Badge>
+```
+
+### Numeric Badges
+```vue
+<Badge variant="outline">
+  {{ item.sort_order }}
+</Badge>
+```
+
+## Migration from Raw HTML
+
+### ❌ Deprecated Pattern - Raw HTML Tables
+```vue
+<!-- DON'T DO THIS -->
+<table class="w-full">
+  <thead>
+    <tr class="border-b">
+      <th class="h-12 px-4 text-left align-middle font-medium">Name</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="border-b transition-colors hover:bg-muted/50">
+      <td class="p-4 align-middle">{{ item.name }}</td>
+    </tr>
+  </tbody>
+</table>
+```
+
+### ✅ Preferred Pattern - shadcn-vue Components
+```vue
+<Table>
+  <TableHeader>
+    <TableRow>
+      <TableHead>Name</TableHead>
+    </TableRow>
+  </TableHeader>
+  <TableBody>
+    <TableRow>
+      <TableCell class="font-medium">{{ item.name }}</TableCell>
+    </TableRow>
+  </TableBody>
+</Table>
+```
+
+## Migration Steps
+
+1. **Replace HTML elements** with shadcn-vue components:
+   - `<table>` → `<Table>`
+   - `<thead>` → `<TableHeader>`
+   - `<tbody>` → `<TableBody>`
+   - `<tr>` → `<TableRow>`
+   - `<th>` → `<TableHead>`
+   - `<td>` → `<TableCell>`
+
+2. **Update imports**:
+   ```vue
+   import {
+     Table,
+     TableBody,
+     TableCell,
+     TableHead,
+     TableHeader,
+     TableRow,
+   } from '@/components/ui/table'
+   ```
+
+3. **Add proper empty state handling**
+4. **Update action menus** to use AlertDialog for destructive actions
+5. **Ensure proper badge usage** for status indicators
+
+## Required Translations
+
+Add to your i18n file:
+
+```typescript
+table: {
+  noData: 'No data available',
+  noDescription: 'No description provided',
+  openMenu: 'Open menu',
+  columns: {
+    name: 'Name',
+    description: 'Description',
+    status: 'Status',
+    created: 'Created',
+    actions: 'Actions'
+  },
+  actions: {
+    edit: 'Edit',
+    delete: 'Delete',
+    view: 'View Details'
+  }
+},
+deleteDialog: {
+  title: 'Delete Item',
+  description: 'Are you sure you want to delete "{itemName}"? This action cannot be undone.',
+  cancel: 'Cancel',
+  confirm: 'Delete'
+}
+```
