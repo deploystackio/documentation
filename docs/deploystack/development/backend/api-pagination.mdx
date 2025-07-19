@@ -121,7 +121,7 @@ const paginatedResponseSchema = z.object({
 
 ```typescript
 import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { createSchema } from 'zod-openapi';
 
 // Query parameters (including pagination)
 const querySchema = z.object({
@@ -168,15 +168,9 @@ export default async function listItems(server: FastifyInstance) {
       tags: ['Items'],
       summary: 'List items with pagination',
       description: 'Retrieve items with pagination support. Supports filtering and sorting.',
-      querystring: zodToJsonSchema(querySchema, {
-        $refStrategy: 'none',
-        target: 'openApi3'
-      }),
+      querystring: createSchema(querySchema),
       response: {
-        200: zodToJsonSchema(responseSchema, {
-          $refStrategy: 'none',
-          target: 'openApi3'
-        })
+        200: createSchema(responseSchema)
       }
     }
   }, async (request, reply) => {
@@ -559,15 +553,9 @@ export default async function listServers(server: FastifyInstance) {
       tags: ['MCP Servers'],
       summary: 'List MCP servers',
       description: 'Retrieve MCP servers with pagination support...',
-      querystring: zodToJsonSchema(querySchema, {
-        $refStrategy: 'none',
-        target: 'openApi3'
-      }),
+      querystring: createSchema(querySchema),
       response: {
-        200: zodToJsonSchema(listServersResponseSchema, {
-          $refStrategy: 'none',
-          target: 'openApi3'
-        })
+        200: createSchema(listServersResponseSchema)
       }
     }
   }, async (request, reply) => {

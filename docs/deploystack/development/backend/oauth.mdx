@@ -149,7 +149,7 @@ Create the OAuth routes file:
 // services/backend/src/routes/auth/google.ts
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { createSchema } from 'zod-openapi';
 import { getLucia } from '../../lib/lucia';
 import { getDb, getSchema } from '../../db';
 import { eq } from 'drizzle-orm';
@@ -379,7 +379,7 @@ Create a status endpoint for the provider:
 // services/backend/src/routes/auth/googleStatus.ts
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { createSchema } from 'zod-openapi';
 import { GlobalSettingsInitService } from '../../global-settings';
 
 const GoogleStatusResponseSchema = z.object({
@@ -395,10 +395,7 @@ export default async function googleStatusRoutes(fastify: FastifyInstance) {
       summary: 'Get Google OAuth status',
       description: 'Returns the current status and configuration of Google OAuth',
       response: {
-        200: zodToJsonSchema(GoogleStatusResponseSchema, {
-          $refStrategy: 'none',
-          target: 'openApi3'
-        })
+        200: createSchema(GoogleStatusResponseSchema)
       }
     }
   }, async (_request, reply) => {
