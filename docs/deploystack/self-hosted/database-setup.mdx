@@ -1,0 +1,167 @@
+---
+title: Database Setup for Self-Hosting
+description: Step-by-step guide to configure your database when self-hosting DeployStack - designed for non-technical users.
+---
+
+# Database Setup for Self-Hosting
+
+## Overview
+
+When you first start your self-hosted DeployStack instance, you'll need to choose and configure a database. This guide will walk you through the process step-by-step.
+
+**Important**: This setup only needs to be done once when you first install DeployStack.
+
+## What You'll Need
+
+- Your DeployStack instance running (backend and frontend)
+- Access to your server's environment variables (if choosing cloud databases)
+- About 5-10 minutes to complete the setup
+
+## Step 1: Access the Setup Page
+
+1. **Start your DeployStack instance** following your installation guide
+2. **Open your web browser** and navigate to your DeployStack URL
+3. **You'll be automatically redirected** to the setup page at `/setup`
+
+If you see a message like "Database setup required" or are redirected to a setup page, you're in the right place!
+
+## Step 2: Choose Your Database
+
+You'll see two database options. Here's what each one means:
+
+### Option 1: SQLite (Recommended for Most Users)
+- **Best for**: Small to medium teams, development, testing
+- **Pros**: 
+  - No additional setup required
+  - Works immediately
+  - No external dependencies
+  - Perfect for getting started
+- **Cons**: 
+  - Single server only (no clustering)
+  - Limited to one database file
+
+**Choose this if**: You're just getting started, have a small team, or want the simplest setup.
+
+### Option 2: Turso (For Advanced Users)
+- **Best for**: Advanced users needing distributed databases
+- **Pros**: 
+  - Multi-region replication
+  - Advanced SQLite features
+  - Good performance
+- **Cons**: 
+  - Requires Turso account
+  - More complex setup
+
+**Choose this if**: You need advanced database features or multi-region deployment.
+
+## Step 3: Configure Your Chosen Database
+
+### If You Chose SQLite (Easiest)
+
+1. **Select "SQLite"** from the options
+2. **Click "Setup Database"**
+3. **Wait for confirmation** (usually takes 10-30 seconds)
+4. **Done!** You'll be redirected to the main application
+
+No additional configuration needed - SQLite works out of the box!
+
+### If You Chose Turso
+
+Before you can use Turso, you need to set up environment variables:
+
+#### Prerequisites
+1. **Create a Turso account** at [turso.tech](https://turso.tech)
+2. **Install Turso CLI** and create a database:
+   ```bash
+   turso db create deploystack-db
+   ```
+3. **Get your database URL and auth token**:
+   ```bash
+   turso db show deploystack-db
+   turso db tokens create deploystack-db
+   ```
+
+#### Server Configuration
+Add these environment variables to your server:
+
+```bash
+TURSO_DATABASE_URL=libsql://your-database-url
+TURSO_AUTH_TOKEN=your_auth_token_here
+```
+
+#### Complete Setup
+1. **Restart your DeployStack instance** after setting the environment variables
+2. **Go back to the setup page** (`/setup`)
+3. **Select "Turso"**
+4. **Click "Setup Database"**
+5. **Wait for confirmation**
+
+## Step 4: Verify Setup
+
+After successful setup, you should:
+
+1. **See a success message** confirming database initialization
+2. **Be redirected to the main application**
+3. **Be able to create your first user account**
+
+If you see any errors, check the troubleshooting section below.
+
+## Troubleshooting
+
+### "Database setup has already been performed"
+- This means your database is already configured
+- You can proceed to use the application normally
+- If you need to change databases, contact your system administrator
+
+### "Configuration incomplete" or "Missing environment variables"
+- **For Turso**: Check that both Turso environment variables are set correctly
+- **Restart your server** after setting environment variables
+
+### "Failed to connect" or "Network error"
+- **Check your internet connection**
+- **For Turso**: Verify your database URL and auth token are correct
+- **Check server logs** for more detailed error messages
+
+### Setup page keeps loading
+- **Check that your backend server is running**
+- **Verify the backend is accessible** from your browser
+- **Check browser console** for any JavaScript errors
+
+## Changing Databases Later
+
+**Important**: Once you've set up a database, changing to a different type requires:
+
+1. **Backing up your data** (if you have important information)
+2. **Stopping your DeployStack instance**
+3. **Removing the database selection file** (`persistent_data/db.selection.json`)
+4. **Updating environment variables** for the new database type
+5. **Restarting and going through setup again**
+
+**Note**: This will reset your application data, so make sure to backup anything important first.
+
+## Getting Help
+
+If you're having trouble with database setup:
+
+1. **Check the server logs** for detailed error messages
+2. **Verify environment variables** are set correctly
+3. **Ensure your server has internet access** (for cloud databases)
+4. **Contact support** with your error messages and setup details
+
+## Security Notes
+
+- **Keep your API tokens secure** - never share them publicly
+- **Use environment variables** - don't put credentials directly in code
+- **Regularly rotate API tokens** for cloud databases
+- **Backup your SQLite database file** if using SQLite
+
+## Next Steps
+
+After successful database setup:
+
+1. **Create your administrator account**
+2. **Configure your application settings**
+3. **Set up user authentication** (email, GitHub, etc.)
+4. **Invite your team members**
+
+Your DeployStack instance is now ready to use!

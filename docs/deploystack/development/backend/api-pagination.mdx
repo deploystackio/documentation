@@ -1,0 +1,655 @@
+---
+title: API Pagination Guide
+description: Complete guide to implementing pagination in DeployStack Backend APIs, including best practices, patterns, and examples.
+---
+
+# API Pagination Guide
+
+This document provides comprehensive guidance on implementing pagination in DeployStack Backend APIs. Pagination is essential for handling large datasets efficiently and providing a good user experience.
+
+## Overview
+
+DeployStack uses **offset-based pagination** with standardized query parameters and response formats. This approach provides:
+
+- **Consistent API Interface**: All paginated endpoints use the same parameter names and response structure
+- **Performance**: Reduces memory usage and response times for large datasets
+- **User Experience**: Enables smooth navigation through large result sets
+- **Scalability**: Handles growing datasets without performance degradation
+
+## Standard Pagination Parameters
+
+### Query Parameters
+
+All paginated endpoints should accept these standardized query parameters:
+
+```typescript
+const paginationQuerySchema = z.object({
+  limit: z.string()
+    .regex(/^\d+$/, 'Limit must be a number')
+    .transform(Number)
+    .refine(n => n > 0 && n <= 100, 'Limit must be between 1 and 100')
+    .optional()
+    .default('20'),
+  offset: z.string()
+    .regex(/^\d+$/, 'Offset must be a number')
+    .transform(Number)
+    .refine(n => n >= 0, 'Offset must be non-negative')
+    .optional()
+    .default('0')
+});
+```
+
+#### Parameter Details
+
+- **`limit`** (optional, default: 20)
+  - Type: String (converted to Number)
+  - Range: 1-100
+  - Description: Maximum number of items to return
+  - Validation: Must be a positive integer between 1 and 100
+
+- **`offset`** (optional, default: 0)
+  - Type: String (converted to Number)
+  - Range: ≥ 0
+  - Description: Number of items to skip from the beginning
+  - Validation: Must be a non-negative integer
+
+### Why String Parameters?
+
+Query parameters are always strings in HTTP. We use Zod's `.transform(Number)` to:
+1. **Validate Format**: Ensure the string contains only digits
+2. **Type Safety**: Convert to number for internal use
+3. **Error Handling**: Provide clear validation messages
+
+## Standard Response Format
+
+### Response Schema
+
+All paginated endpoints should return responses in this format:
+
+```typescript
+const paginatedResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    // Your actual data array
+    [dataArrayName]: z.array(yourItemSchema),
+    
+    // Pagination metadata
+    pagination: z.object({
+      total: z.number(),        // Total number of items available
+      limit: z.number(),        // Items per page (as requested)
+      offset: z.number(),       // Current offset (as requested)
+      has_more: z.boolean()     // Whether more items are available
+    })
+  })
+});
+```
+
+### Response Example
+
+```json
+{
+  "success": true,
+  "data": {
+    "servers": [
+      {
+        "id": "server-1",
+        "name": "Example Server",
+        // ... other server fields
+      }
+      // ... more servers
+    ],
+    "pagination": {
+      "total": 150,
+      "limit": 20,
+      "offset": 40,
+      "has_more": true
+    }
+  }
+}
+```
+
+### Pagination Metadata Fields
+
+- **`total`**: Total number of items available (across all pages)
+- **`limit`**: Number of items per page (echoes the request parameter)
+- **`offset`**: Current starting position (echoes the request parameter)
+- **`has_more`**: Boolean indicating if more items are available after this page
+
+## Implementation Pattern
+
+### 1. Route Schema Definition
+
+```typescript
+import { z } from 'zod';
+import { createSchema } from 'zod-openapi';
+
+// Query parameters (including pagination)
+const querySchema = z.object({
+  // Your filtering parameters
+  category: z.string().optional(),
+  status: z.enum(['active', 'inactive']).optional(),
+  
+  // Standard pagination parameters
+  limit: z.string()
+    .regex(/^\d+$/, 'Limit must be a number')
+    .transform(Number)
+    .refine(n => n > 0 && n <= 100, 'Limit must be between 1 and 100')
+    .optional()
+    .default('20'),
+  offset: z.string()
+    .regex(/^\d+$/, 'Offset must be a number')
+    .transform(Number)
+    .refine(n => n >= 0, 'Offset must be non-negative')
+    .optional()
+    .default('0')
+});
+
+// Response schema
+const responseSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    items: z.array(yourItemSchema),
+    pagination: z.object({
+      total: z.number(),
+      limit: z.number(),
+      offset: z.number(),
+      has_more: z.boolean()
+    })
+  })
+});
+```
+
+### 2. Route Handler Implementation
+
+```typescript
+export default async function listItems(server: FastifyInstance) {
+  server.get('/api/items', {
+    schema: {
+      tags: ['Items'],
+      summary: 'List items with pagination',
+      description: 'Retrieve items with pagination support. Supports filtering and sorting.',
+      querystring: createSchema(querySchema),
+      response: {
+        200: createSchema(responseSchema)
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      // Parse and validate query parameters
+      const params = querySchema.parse(request.query);
+      
+      // Extract pagination parameters
+      const { limit, offset, ...filters } = params;
+      
+      // Get all items (with filtering applied)
+      const allItems = await yourService.getItems(filters);
+      
+      // Apply pagination
+      const total = allItems.length;
+      const paginatedItems = allItems.slice(offset, offset + limit);
+      
+      // Log pagination info
+      server.log.info({
+        operation: 'list_items',
+        totalResults: total,
+        returnedResults: paginatedItems.length,
+        pagination: { limit, offset }
+      }, 'Items list completed');
+      
+      // Return paginated response
+      return reply.send({
+        success: true,
+        data: {
+          items: paginatedItems,
+          pagination: {
+            total,
+            limit,
+            offset,
+            has_more: offset + limit < total
+          }
+        }
+      });
+    } catch (error) {
+      server.log.error({ error }, 'Failed to list items');
+      return reply.status(500).send({
+        success: false,
+        error: 'Failed to retrieve items'
+      });
+    }
+  });
+}
+```
+
+## Database-Level Pagination (Advanced)
+
+For better performance with large datasets, implement pagination at the database level:
+
+### Using Drizzle ORM
+
+```typescript
+import { desc, asc } from 'drizzle-orm';
+
+async getItemsPaginated(
+  filters: ItemFilters,
+  limit: number,
+  offset: number
+): Promise<{ items: Item[], total: number }> {
+  // Build base query with filters
+  let query = this.db.select().from(items);
+  
+  // Apply filters
+  if (filters.category) {
+    query = query.where(eq(items.category, filters.category));
+  }
+  
+  // Get total count (before pagination)
+  const countQuery = this.db.select({ count: sql<number>`count(*)` }).from(items);
+  // Apply same filters to count query
+  if (filters.category) {
+    countQuery = countQuery.where(eq(items.category, filters.category));
+  }
+  const [{ count: total }] = await countQuery;
+  
+  // Apply pagination and ordering
+  const paginatedItems = await query
+    .orderBy(desc(items.created_at))
+    .limit(limit)
+    .offset(offset);
+  
+  return {
+    items: paginatedItems,
+    total
+  };
+}
+```
+
+### Updated Route Handler
+
+```typescript
+// In your route handler
+const { items, total } = await yourService.getItemsPaginated(filters, limit, offset);
+
+return reply.send({
+  success: true,
+  data: {
+    items,
+    pagination: {
+      total,
+      limit,
+      offset,
+      has_more: offset + limit < total
+    }
+  }
+});
+```
+
+## Client-Side Usage Examples
+
+### JavaScript/TypeScript
+
+```typescript
+interface PaginationParams {
+  limit?: number;
+  offset?: number;
+}
+
+interface PaginatedResponse<T> {
+  success: boolean;
+  data: {
+    items: T[];
+    pagination: {
+      total: number;
+      limit: number;
+      offset: number;
+      has_more: boolean;
+    };
+  };
+}
+
+async function fetchItems(params: PaginationParams = {}): Promise<PaginatedResponse<Item>> {
+  const url = new URL('/api/items', baseUrl);
+  
+  if (params.limit) url.searchParams.set('limit', params.limit.toString());
+  if (params.offset) url.searchParams.set('offset', params.offset.toString());
+  
+  const response = await fetch(url.toString(), {
+    credentials: 'include',
+    headers: { 'Accept': 'application/json' }
+  });
+  
+  return await response.json();
+}
+
+// Usage examples
+const firstPage = await fetchItems({ limit: 20, offset: 0 });
+const secondPage = await fetchItems({ limit: 20, offset: 20 });
+const customPage = await fetchItems({ limit: 50, offset: 100 });
+```
+
+### Vue.js Composable
+
+```typescript
+import { ref, computed } from 'vue';
+
+export function usePagination<T>(
+  fetchFunction: (limit: number, offset: number) => Promise<PaginatedResponse<T>>,
+  initialLimit = 20
+) {
+  const items = ref<T[]>([]);
+  const currentPage = ref(1);
+  const limit = ref(initialLimit);
+  const total = ref(0);
+  const loading = ref(false);
+  
+  const totalPages = computed(() => Math.ceil(total.value / limit.value));
+  const hasNextPage = computed(() => currentPage.value < totalPages.value);
+  const hasPrevPage = computed(() => currentPage.value > 1);
+  
+  const offset = computed(() => (currentPage.value - 1) * limit.value);
+  
+  async function loadPage(page: number) {
+    if (page < 1 || page > totalPages.value) return;
+    
+    loading.value = true;
+    try {
+      const response = await fetchFunction(limit.value, (page - 1) * limit.value);
+      items.value = response.data.items;
+      total.value = response.data.pagination.total;
+      currentPage.value = page;
+    } finally {
+      loading.value = false;
+    }
+  }
+  
+  async function nextPage() {
+    if (hasNextPage.value) {
+      await loadPage(currentPage.value + 1);
+    }
+  }
+  
+  async function prevPage() {
+    if (hasPrevPage.value) {
+      await loadPage(currentPage.value - 1);
+    }
+  }
+  
+  return {
+    items,
+    currentPage,
+    limit,
+    total,
+    totalPages,
+    loading,
+    hasNextPage,
+    hasPrevPage,
+    loadPage,
+    nextPage,
+    prevPage
+  };
+}
+```
+
+## Best Practices
+
+### 1. Consistent Parameter Validation
+
+Always use the same validation rules across all endpoints:
+
+```typescript
+// Create a reusable schema
+export const paginationSchema = z.object({
+  limit: z.string()
+    .regex(/^\d+$/, 'Limit must be a number')
+    .transform(Number)
+    .refine(n => n > 0 && n <= 100, 'Limit must be between 1 and 100')
+    .optional()
+    .default('20'),
+  offset: z.string()
+    .regex(/^\d+$/, 'Offset must be a number')
+    .transform(Number)
+    .refine(n => n >= 0, 'Offset must be non-negative')
+    .optional()
+    .default('0')
+});
+
+// Use in your endpoint schemas
+const querySchema = z.object({
+  // Your specific filters
+  category: z.string().optional(),
+  status: z.enum(['active', 'inactive']).optional(),
+  
+  // Include pagination
+  ...paginationSchema.shape
+});
+```
+
+### 2. Proper Error Handling
+
+```typescript
+try {
+  const params = querySchema.parse(request.query);
+} catch (error) {
+  if (error instanceof z.ZodError) {
+    return reply.status(400).send({
+      success: false,
+      error: 'Invalid query parameters',
+      details: error.errors
+    });
+  }
+  throw error;
+}
+```
+
+### 3. Performance Considerations
+
+- **Database Pagination**: Use `LIMIT` and `OFFSET` at the database level for large datasets
+- **Indexing**: Ensure proper database indexes on columns used for sorting
+- **Caching**: Consider caching total counts for frequently accessed endpoints
+- **Reasonable Limits**: Enforce maximum page sizes (e.g., 100 items)
+
+### 4. OpenAPI Documentation
+
+Include clear pagination documentation in your API specs:
+
+```typescript
+schema: {
+  tags: ['Items'],
+  summary: 'List items with pagination',
+  description: `
+    Retrieve items with pagination support. 
+    
+    **Pagination Parameters:**
+    - \`limit\`: Items per page (1-100, default: 20)
+    - \`offset\`: Items to skip (≥0, default: 0)
+    
+    **Response includes:**
+    - \`data.items\`: Array of items for current page
+    - \`data.pagination.total\`: Total items available
+    - \`data.pagination.has_more\`: Whether more pages exist
+  `,
+  // ... rest of schema
+}
+```
+
+## Common Pitfalls and Solutions
+
+### 1. Inconsistent Response Formats
+
+❌ **Wrong**: Different endpoints use different response structures
+```typescript
+// Endpoint A
+{ data: items, total: 100, page: 1 }
+
+// Endpoint B  
+{ results: items, count: 100, offset: 20 }
+```
+
+✅ **Correct**: Use standardized response format
+```typescript
+// All endpoints
+{
+  success: true,
+  data: {
+    items: [...],
+    pagination: { total, limit, offset, has_more }
+  }
+}
+```
+
+### 2. Missing Validation
+
+❌ **Wrong**: No parameter validation
+```typescript
+const limit = parseInt(request.query.limit) || 20;
+const offset = parseInt(request.query.offset) || 0;
+```
+
+✅ **Correct**: Proper Zod validation
+```typescript
+const params = paginationSchema.parse(request.query);
+const { limit, offset } = params;
+```
+
+### 3. Performance Issues
+
+❌ **Wrong**: Loading all data then slicing
+```typescript
+const allItems = await db.select().from(items); // Loads everything!
+const paginated = allItems.slice(offset, offset + limit);
+```
+
+✅ **Correct**: Database-level pagination
+```typescript
+const items = await db.select().from(items)
+  .limit(limit)
+  .offset(offset);
+```
+
+### 4. Incorrect Total Count
+
+❌ **Wrong**: Using paginated results length
+```typescript
+const items = await getItemsPaginated(limit, offset);
+const total = items.length; // Wrong! This is just current page
+```
+
+✅ **Correct**: Separate count query
+```typescript
+const [items, total] = await Promise.all([
+  getItemsPaginated(limit, offset),
+  getItemsCount(filters)
+]);
+```
+
+## Real-World Examples
+
+### Example 1: MCP Servers List (Current Implementation)
+
+```typescript
+// File: services/backend/src/routes/mcp/servers/list.ts
+export default async function listServers(server: FastifyInstance) {
+  server.get('/mcp/servers', {
+    schema: {
+      tags: ['MCP Servers'],
+      summary: 'List MCP servers',
+      description: 'Retrieve MCP servers with pagination support...',
+      querystring: createSchema(querySchema),
+      response: {
+        200: createSchema(listServersResponseSchema)
+      }
+    }
+  }, async (request, reply) => {
+    const { limit, offset, ...filters } = querySchema.parse(request.query);
+    
+    const allServers = await catalogService.getServersForUser(
+      userId, userRole, teamIds, filters
+    );
+    
+    const total = allServers.length;
+    const paginatedServers = allServers.slice(offset, offset + limit);
+    
+    return reply.send({
+      success: true,
+      data: {
+        servers: paginatedServers,
+        pagination: {
+          total,
+          limit,
+          offset,
+          has_more: offset + limit < total
+        }
+      }
+    });
+  });
+}
+```
+
+### Example 2: Search Endpoint (Reference Implementation)
+
+The search endpoint (`/mcp/servers/search`) demonstrates the complete pagination pattern and can serve as a reference for implementing pagination in other endpoints.
+
+## Testing Pagination
+
+### Unit Tests
+
+```typescript
+describe('Pagination', () => {
+  test('should return first page with default limit', async () => {
+    const response = await request(app)
+      .get('/api/items')
+      .expect(200);
+    
+    expect(response.body.data.pagination).toEqual({
+      total: expect.any(Number),
+      limit: 20,
+      offset: 0,
+      has_more: expect.any(Boolean)
+    });
+  });
+  
+  test('should handle custom pagination parameters', async () => {
+    const response = await request(app)
+      .get('/api/items?limit=10&offset=20')
+      .expect(200);
+    
+    expect(response.body.data.pagination.limit).toBe(10);
+    expect(response.body.data.pagination.offset).toBe(20);
+  });
+  
+  test('should validate pagination parameters', async () => {
+    await request(app)
+      .get('/api/items?limit=invalid')
+      .expect(400);
+      
+    await request(app)
+      .get('/api/items?limit=101') // Over maximum
+      .expect(400);
+  });
+});
+```
+
+### Integration Tests
+
+```typescript
+test('should paginate through all results', async () => {
+  const limit = 5;
+  let offset = 0;
+  let allItems = [];
+  let hasMore = true;
+  
+  while (hasMore) {
+    const response = await request(app)
+      .get(`/api/items?limit=${limit}&offset=${offset}`)
+      .expect(200);
+    
+    const { items, pagination } = response.body.data;
+    allItems.push(...items);
+    
+    hasMore = pagination.has_more;
+    offset += limit;
+  }
+  
+  // Verify we got all items
+  expect(allItems.length).toBe(totalExpectedItems);
+});
+```

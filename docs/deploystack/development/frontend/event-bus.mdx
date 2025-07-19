@@ -47,8 +47,30 @@ export type EventBusEvents = {
   'user-profile-updated': void
   'mcp-server-deployed': { serverId: string; status: string }
   'notification-show': { message: string; type: 'success' | 'error' | 'warning' }
+  'storage-changed': { key: string; oldValue: any; newValue: any }
 }
 ```
+
+## Storage Integration
+
+The event bus includes built-in storage capabilities for persistent state management. When you use storage methods, they automatically emit events for reactive updates.
+
+### Storage Events
+
+The storage system emits `storage-changed` events whenever data is modified:
+
+```typescript
+// Automatically emitted when using storage methods
+eventBus.setState('selected_team_id', 'team-123')
+// Emits: { key: 'selected_team_id', oldValue: null, newValue: 'team-123' }
+
+// Listen for storage changes
+eventBus.on('storage-changed', (data) => {
+  console.log(`Storage key "${data.key}" changed from ${data.oldValue} to ${data.newValue}`)
+})
+```
+
+> **📖 For detailed storage usage, see [Frontend Storage System](./storage)**
 
 ## Usage
 
@@ -592,5 +614,9 @@ if (import.meta.env.DEV) {
   })
 }
 ```
+
+## Related Documentation
+
+- **[Frontend Storage System](/deploystack/development/frontend/storage)** - Persistent state management with automatic event emission
 
 The global event bus system provides a powerful and type-safe way to handle cross-component communication in the DeployStack frontend, enabling immediate updates and better user experience.

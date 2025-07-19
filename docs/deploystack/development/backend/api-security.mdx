@@ -1,0 +1,458 @@
+---
+title: API Security Best Practices
+description: Essential security patterns for DeployStack Backend API development, including proper authorization hook usage and security-first development principles.
+---
+
+# API Security Best Practices
+
+This document outlines critical security patterns and best practices for developing secure APIs in the DeployStack Backend. Following these guidelines ensures consistent security behavior and prevents common vulnerabilities.
+
+## Overview
+
+Security in API development requires careful consideration of the order in which validation and authorization occur. The DeployStack Backend uses Fastify's hook system to implement security controls, and understanding the proper hook usage is crucial for maintaining security.
+
+## The Critical Security Pattern: Authorization Before Validation
+
+### The Problem
+
+A common security anti-pattern occurs when authorization checks happen **after** input validation. This can lead to:
+
+- **Information Disclosure**: Unauthorized users receive validation errors instead of proper 403 Forbidden responses
+- **Inconsistent Error Responses**: Some endpoints return 400 (validation errors) while others return 403 (authorization errors)
+- **Security Through Obscurity Violation**: API structure and validation rules are leaked to unauthorized users
+
+### Real-World Example
+
+Consider this test failure that led to the discovery of this pattern:
+
+```javascript
+// Test expectation
+expect(response.status).toBe(403); // Expected: Forbidden
+
+// Actual result  
+expect(response.status).toBe(400); // Received: Bad Request (validation error)
+```
+
+The test was sending invalid data to a protected endpoint, expecting a 403 Forbidden response. Instead, it received a 400 Bad Request because validation ran before authorization.
+
+## Fastify Hook Execution Order
+
+Understanding Fastify's hook execution order is essential for proper security implementation:
+
+```
+1. onRequest          ← Use for early authentication setup
+2. preParsing         ← Use for request preprocessing  
+3. preValidation      ← ✅ USE FOR AUTHORIZATION
+4. preHandler         ← Use for post-validation processing
+5. Route Handler      ← Your business logic
+```
+
+### Key Security Principle
+
+**Authorization must happen in `preValidation` to ensure it runs before schema validation.**
+
+## Correct Implementation Patterns
+
+### ✅ Secure Pattern: preValidation for Authorization
+
+```typescript
+import { requireGlobalAdmin } from '../../../middleware/roleMiddleware';
+
+export default async function secureRoute(fastify: FastifyInstance) {
+  fastify.post<{ Body: RequestInput }>('/protected-endpoint', {
+    schema: {
+      tags: ['Protected'],
+      summary: 'Protected endpoint',
+      description: 'Requires admin permissions',
+      security: [{ cookieAuth: [] }],
+      body: createSchema(RequestSchema),
+      response: {
+        200: createSchema(SuccessResponseSchema.describe('Success')),
+        401: createSchema(ErrorResponseSchema.describe('Unauthorized')),
+        403: createSchema(ErrorResponseSchema.describe('Forbidden')),
+        400: createSchema(ErrorResponseSchema.describe('Bad Request'))
+      }
+    },
+    preValidation: requireGlobalAdmin(), // ✅ CORRECT: Runs before validation,
+  }, async (request, reply) => {
+    // If we reach here, user is authorized AND input is validated
+    const validatedData = request.body;
+    // Your business logic here
+  });
+}
+```
+
+### ❌ Insecure Pattern: preHandler for Authorization
+
+```typescript
+export default async function insecureRoute(fastify: FastifyInstance) {
+  fastify.post<{ Body: RequestInput }>('/protected-endpoint', {
+    schema: {
+      // Schema definition...
+      body: zodToJsonSchema(RequestSchema, {
+        $refStrategy: 'none',
+        target: 'openApi3'
+      })
+    },
+    preHandler: requireGlobalAdmin(), // ❌ WRONG: Runs after validation
+  }, async (request, reply) => {
+    // This handler may never be reached if validation fails first
+  });
+}
+```
+
+## Security Implications
+
+### With Incorrect Pattern (preHandler)
+
+```
+Request Flow:
+1. Request received
+2. Schema validation runs → Returns 400 if invalid
+3. Authorization check (never reached if validation fails)
+4. Handler execution
+```
+
+**Result**: Unauthorized users get validation errors, leaking API structure.
+
+### With Correct Pattern (preValidation)
+
+```
+Request Flow:
+1. Request received  
+2. Authorization check → Returns 401/403 if unauthorized
+3. Schema validation (only for authorized users)
+4. Handler execution
+```
+
+**Result**: Unauthorized users always get proper 401/403 responses.
+
+## Authorization Middleware Usage
+
+### Available Middleware Functions
+
+The DeployStack Backend provides several authorization middleware functions:
+
+```typescript
+// Role-based authorization
+requireGlobalAdmin()     // Requires 'global_admin' role
+requireRole('role_id')   // Requires specific role
+
+// Permission-based authorization  
+requirePermission('permission.name')           // Requires specific permission
+requireAnyPermission(['perm1', 'perm2'])      // Requires any of the permissions
+
+// Team-aware permission authorization
+requireTeamPermission('permission.name')       // Requires permission within team context
+requireTeamPermission('permission.name', getTeamIdFn) // Custom team ID extraction
+
+// Ownership-based authorization
+requireOwnershipOrAdmin(getUserIdFromRequest) // User owns resource OR is admin
+```
+
+### Team-Aware Permission System
+
+For endpoints that operate within team contexts (e.g., `/teams/:teamId/resource`), use the team-aware permission middleware:
+
+```typescript
+import { requireTeamPermission } from '../../../middleware/roleMiddleware';
+
+export default async function teamResourceRoute(fastify: FastifyInstance) {
+  fastify.post<{
+    Params: { teamId: string };
+    Body: CreateResourceRequest;
+  }>('/teams/:teamId/resources', {
+    schema: {
+      tags: ['Team Resources'],
+      summary: 'Create team resource',
+      description: 'Creates a resource within the specified team context',
+      security: [{ cookieAuth: [] }],
+      params: zodToJsonSchema(z.object({
+        teamId: z.string().min(1, 'Team ID is required')
+      })),
+      body: zodToJsonSchema(CreateResourceSchema),
+      response: {
+        201: zodToJsonSchema(SuccessResponseSchema),
+        401: zodToJsonSchema(ErrorResponseSchema.describe('Unauthorized')),
+        403: zodToJsonSchema(ErrorResponseSchema.describe('Forbidden - Not team member or insufficient permissions')),
+        400: zodToJsonSchema(ErrorResponseSchema.describe('Bad Request'))
+      }
+    },
+    preValidation: requireTeamPermission('resources.create'), // ✅ Team-aware authorization
+  }, async (request, reply) => {
+    const { teamId } = request.params;
+    const resourceData = request.body;
+    
+    // User is guaranteed to be:
+    // 1. Authenticated
+    // 2. A member of the specified team
+    // 3. Have the 'resources.create' permission within that team
+    // 4. Input is validated
+    
+    // Your business logic here
+  });
+}
+```
+
+#### How Team-Aware Permissions Work
+
+The `requireTeamPermission()` middleware performs these security checks in order:
+
+1. **Authentication Check**: Verifies user is logged in
+2. **Team ID Extraction**: Gets team ID from URL params (`:teamId`) or custom function
+3. **Global Admin Bypass**: Global admins can access any team's resources
+4. **Team Membership**: Verifies user belongs to the specified team
+5. **Team Role Lookup**: Gets user's role within that team (`team_admin` or `team_user`)
+6. **Permission Check**: Verifies the team role has the required permission
+
+#### Team Permission Security Model
+
+```typescript
+// Global Admin - Can access any team's resources
+if (userRole?.id === 'global_admin') {
+  // Check if global admin role has the permission
+  return globalPermissions.includes(permission);
+}
+
+// Team Member - Must be member with appropriate role
+const teamMembership = await TeamService.getTeamMembership(teamId, userId);
+const teamRole = teamMembership.role; // 'team_admin' or 'team_user'
+
+// Check if team role has required permission
+const rolePermissions = ROLE_DEFINITIONS[teamRole];
+return rolePermissions.includes(permission);
+```
+
+#### Error Responses for Team Permissions
+
+Team-aware endpoints return specific error messages:
+
+```typescript
+// 401 - Not authenticated
+{
+  "success": false,
+  "error": "Authentication required"
+}
+
+// 403 - Not a team member
+{
+  "success": false,
+  "error": "You are not a member of this team"
+}
+
+// 403 - Team member but insufficient permissions
+{
+  "success": false,
+  "error": "Insufficient permissions for this team operation",
+  "required_permission": "resources.create",
+  "user_team_role": "team_user"
+}
+
+// 400 - Invalid team ID
+{
+  "success": false,
+  "error": "Team ID is required"
+}
+```
+
+### Permission-Based Authorization (Recommended)
+
+**Permission-based authorization is the preferred approach** for most endpoints as it provides:
+
+- **Granular Control**: Fine-grained access control per feature
+- **Scalability**: Easy to add new permissions without role changes
+- **Flexibility**: Users can have different permission combinations
+- **Maintainability**: Clear separation between authentication and authorization
+
+#### Current Permission Structure
+
+The system includes these MCP-related permissions:
+
+```typescript
+// MCP Categories (Admin-only operations)
+'mcp.categories.view'     // View category listings
+'mcp.categories.create'   // Create new categories
+'mcp.categories.edit'     // Modify existing categories
+'mcp.categories.delete'   // Remove categories
+
+// MCP Servers (User-accessible operations)
+'mcp.servers.read'        // List and search servers (all authenticated users)
+'mcp.servers.global.view' // View global server details (admin-only)
+'mcp.servers.global.create' // Create global servers (admin-only)
+'mcp.servers.global.edit'   // Modify global servers (admin-only)
+'mcp.servers.global.delete' // Delete global servers (admin-only)
+
+// MCP Team Servers
+'mcp.servers.team.view_all' // View all team servers (admin-only)
+
+// MCP Versions
+'mcp.versions.manage'     // Manage server versions (admin-only)
+```
+
+#### Permission Assignment by Role
+
+```typescript
+// Global Admin - Full access to all MCP features
+global_admin: [
+  'mcp.servers.read',           // Basic server access
+  'mcp.servers.global.view',    // Global server management
+  'mcp.servers.global.create',
+  'mcp.servers.global.edit', 
+  'mcp.servers.global.delete',
+  'mcp.servers.team.view_all',  // Cross-team visibility
+  'mcp.categories.view',        // Category management
+  'mcp.categories.create',
+  'mcp.categories.edit',
+  'mcp.categories.delete',
+  'mcp.versions.manage'         // Version management
+]
+
+// Global User - Basic server access only
+global_user: [
+  'mcp.servers.read'            // Can list and search servers
+]
+
+// Team Admin - Basic server access (team servers managed separately)
+team_admin: [
+  'mcp.servers.read'            // Can list and search servers
+]
+
+// Team User - Basic server access
+team_user: [
+  'mcp.servers.read'            // Can list and search servers
+]
+```
+
+### Correct Usage Examples
+
+```typescript
+// Global admin only
+fastify.delete('/admin/users/:id', {
+  schema: { /* ... */ },
+  preValidation: requireGlobalAdmin(),
+}, handler);
+
+// Specific permission required
+fastify.post('/settings/bulk', {
+  schema: { /* ... */ },
+  preValidation: requirePermission('settings.edit'),
+}, handler);
+
+// User can access own data OR admin can access any
+fastify.get('/users/:id/profile', {
+  schema: { /* ... */ },
+  preValidation: requireOwnershipOrAdmin(getUserIdFromParams),
+}, handler);
+```
+
+## Error Response Consistency
+
+### Proper Error Response Structure
+
+All authorization errors should follow this structure:
+
+```typescript
+// 401 Unauthorized (not authenticated)
+{
+  success: false,
+  error: "Authentication required"
+}
+
+// 403 Forbidden (authenticated but insufficient permissions)
+{
+  success: false,
+  error: "Insufficient permissions",
+  required_permission: "settings.edit" // Optional: what was required
+}
+```
+
+### Response Status Code Guidelines
+
+- **401 Unauthorized**: User is not authenticated (no valid session)
+- **403 Forbidden**: User is authenticated but lacks required permissions
+- **400 Bad Request**: Input validation failed (only for authorized users)
+
+## Testing Security Properly
+
+### Test Authorization Before Validation
+
+```typescript
+describe('Security Tests', () => {
+  it('should return 403 for unauthorized users regardless of input validity', async () => {
+    // Test with invalid data - should still get 403, not 400
+    const response = await request(server)
+      .post('/protected-endpoint')
+      .set('Cookie', unauthorizedUserCookie)
+      .send({ invalid: 'data' }); // Intentionally invalid
+
+    expect(response.status).toBe(403); // Should be 403, not 400
+    expect(response.body.error).toContain('permission');
+  });
+
+  it('should return 400 for authorized users with invalid input', async () => {
+    // Test with invalid data - authorized user should get validation error
+    const response = await request(server)
+      .post('/protected-endpoint')
+      .set('Cookie', authorizedUserCookie)
+      .send({ invalid: 'data' }); // Intentionally invalid
+
+    expect(response.status).toBe(400); // Now validation error is appropriate
+    expect(response.body.error).toContain('validation');
+  });
+});
+```
+
+## Advanced Security Patterns
+
+### Multiple Authorization Checks
+
+For complex authorization requirements:
+
+```typescript
+// Multiple checks in sequence
+fastify.post('/complex-endpoint', {
+  schema: { /* ... */ },
+  preValidation: [
+    requireAuthentication(),     // Must be logged in
+    requireRole('team_member'),  // Must have team role
+    requirePermission('data.write') // Must have write permission
+  ],
+}, handler);
+```
+
+### Conditional Authorization
+
+```typescript
+// Different auth requirements based on request
+async function conditionalAuth(request: FastifyRequest, reply: FastifyReply) {
+  const { action } = request.body as { action: string };
+  
+  if (action === 'delete') {
+    return requireGlobalAdmin()(request, reply);
+  } else {
+    return requirePermission('data.edit')(request, reply);
+  }
+}
+
+fastify.post('/conditional-endpoint', {
+  schema: { /* ... */ },
+  preValidation: conditionalAuth,
+}, handler);
+```
+
+## Security Checklist
+
+Before deploying any protected endpoint, verify:
+
+- [ ] Authorization uses `preValidation`, not `preHandler`
+- [ ] Unauthorized users get 401/403, never validation errors
+- [ ] Tests verify proper status codes for unauthorized access
+- [ ] Error responses don't leak sensitive information
+- [ ] Schema validation only runs for authorized users
+- [ ] Documentation reflects security requirements
+
+## Related Documentation
+
+- [API Documentation Generation](/deploystack/development/backend/api) - General API development patterns
+- [Authentication System](deploystack/auth) - User authentication implementation
+- [Role-Based Access Control](/deploystack/development/backend/roles) - Permission system details

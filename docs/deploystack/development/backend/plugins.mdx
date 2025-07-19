@@ -152,8 +152,12 @@ function isSQLiteDB(db: AnyDatabase): db is BetterSQLite3Database<any> {
  * /api/plugin/my-custom-plugin/
  */
 export async function registerRoutes(routeManager: PluginRouteManager, db: AnyDatabase | null): Promise<void> {
+  // Note: In actual plugin development, you should receive a logger instance
+  // For this example, we'll show the pattern you should follow
+  const logger = routeManager.getLogger(); // Assuming this method exists
+  
   if (!db) {
-    console.warn(`[${routeManager.getPluginId()}] Database not available, skipping routes.`);
+    logger?.warn(`Database not available, skipping routes.`);
     return;
   }
 
@@ -162,7 +166,7 @@ export async function registerRoutes(routeManager: PluginRouteManager, db: AnyDa
   const table = currentSchema[tableNameInSchema];
 
   if (!table) {
-    console.error(`[${routeManager.getPluginId()}] Table ${tableNameInSchema} not found in schema!`);
+    logger?.error(`Table ${tableNameInSchema} not found in schema!`);
     return;
   }
 
@@ -231,7 +235,7 @@ export async function registerRoutes(routeManager: PluginRouteManager, db: AnyDa
     return { id, ...body };
   });
 
-  console.log(`[${routeManager.getPluginId()}] Routes registered successfully under ${routeManager.getNamespace()}`);
+  logger?.info(`Routes registered successfully under ${routeManager.getNamespace()}`);
 }
 ```
 
@@ -284,15 +288,16 @@ class MyCustomPlugin implements Plugin {
     tableDefinitions: myCustomPluginTableDefinitions,
     
     // Optional initialization function for seeding data
-    onDatabaseInit: async (db: AnyDatabase) => {
-      console.log(`[${this.meta.id}] Initializing database...`);
+    onDatabaseInit: async (db: AnyDatabase, logger?: FastifyBaseLogger) => {
+      // Note: In actual implementation, logger should be passed from PluginManager
+      logger?.info(`Initializing database...`);
 
       const currentSchema = getSchema();
       const tableNameInSchema = `${this.meta.id}_my_custom_entities`;
       const table = currentSchema[tableNameInSchema];
 
       if (!table) {
-        console.error(`[${this.meta.id}] Table ${tableNameInSchema} not found in schema!`);
+        logger?.error(`Table ${tableNameInSchema} not found in schema!`);
         return;
       }
 
@@ -311,7 +316,7 @@ class MyCustomPlugin implements Plugin {
       }
 
       if (currentCount === 0) {
-        console.log(`[${this.meta.id}] Seeding initial data...`);
+        logger?.info(`Seeding initial data...`);
         const dataToSeed = {
           id: 'initial-entity',
           name: 'Initial Entity',
@@ -323,16 +328,17 @@ class MyCustomPlugin implements Plugin {
         } else {
           await (db as NodePgDatabase).insert(table as PgTable).values(dataToSeed);
         }
-        console.log(`[${this.meta.id}] Seeded initial data`);
+        logger?.info(`Seeded initial data`);
       }
     },
   };
   
   // Plugin initialization (non-route initialization only)
-  async initialize(db: AnyDatabase | null) {
-    console.log(`[${this.meta.id}] Initializing...`);
+  async initialize(db: AnyDatabase | null, logger?: FastifyBaseLogger) {
+    // Note: In actual implementation, logger should be passed from PluginManager
+    logger?.info(`Initializing...`);
     // Non-route initialization only - routes are registered via registerRoutes method
-    console.log(`[${this.meta.id}] Initialized successfully`);
+    logger?.info(`Initialized successfully`);
   }
 
   // Register plugin routes using the isolated route manager
@@ -342,8 +348,9 @@ class MyCustomPlugin implements Plugin {
   }
   
   // Optional shutdown method for cleanup
-  async shutdown() {
-    console.log(`[${this.meta.id}] Shutting down...`);
+  async shutdown(logger?: FastifyBaseLogger) {
+    // Note: In actual implementation, logger should be passed from PluginManager
+    logger?.info(`Shutting down...`);
     // Perform any cleanup needed
   }
 }
@@ -577,8 +584,9 @@ class MyAwesomePlugin implements Plugin {
   };
 
   // ... rest of your plugin implementation (databaseExtension, initialize, etc.)
-  async initialize(app: FastifyInstance, db: AnyDatabase | null) {
-    console.log(`[${this.meta.id}] Initializing...`);
+  async initialize(app: FastifyInstance, db: AnyDatabase | null, logger?: FastifyBaseLogger) {
+    // Note: In actual implementation, logger should be passed from PluginManager
+    logger?.info(`Initializing...`);
     
     // You can try to access your plugin's settings here if needed during init,
     // using GlobalSettingsService.get('myAwesomePlugin.features.enableSuperFeature')

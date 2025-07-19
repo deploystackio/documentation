@@ -75,9 +75,17 @@ const result = await EmailService.sendEmail({
 });
 
 if (result.success) {
-  console.log('Email sent successfully:', result.messageId);
+  request.log.info({
+    messageId: result.messageId,
+    recipients: result.recipients,
+    operation: 'send_email'
+  }, 'Email sent successfully');
 } else {
-  console.error('Failed to send email:', result.error);
+  request.log.error({
+    error: result.error,
+    recipients: result.recipients,
+    operation: 'send_email'
+  }, 'Failed to send email');
 }
 ```
 
@@ -310,22 +318,32 @@ To customize the layout, modify the files in `src/email/templates/layouts/`:
 ### Test SMTP Connection
 
 ```typescript
-const status = await EmailService.testConnection();
+const status = await EmailService.testConnection(request.log);
 if (status.success) {
-  console.log('SMTP connection successful');
+  request.log.info({
+    operation: 'test_smtp_connection'
+  }, 'SMTP connection successful');
 } else {
-  console.error('SMTP connection failed:', status.error);
+  request.log.error({
+    error: status.error,
+    operation: 'test_smtp_connection'
+  }, 'SMTP connection failed');
 }
 ```
 
 ### Check SMTP Configuration
 
 ```typescript
-const status = await EmailService.getSmtpStatus();
+const status = await EmailService.getSmtpStatus(request.log);
 if (status.configured) {
-  console.log('SMTP is configured');
+  request.log.info({
+    operation: 'check_smtp_status'
+  }, 'SMTP is configured');
 } else {
-  console.error('SMTP not configured:', status.error);
+  request.log.error({
+    error: status.error,
+    operation: 'check_smtp_status'
+  }, 'SMTP not configured');
 }
 ```
 
@@ -333,14 +351,18 @@ if (status.configured) {
 
 ```typescript
 // Call this after updating SMTP settings
-await EmailService.refreshConfiguration();
+await EmailService.refreshConfiguration(request.log);
 ```
 
 ### Get Available Templates
 
 ```typescript
-const templates = EmailService.getAvailableTemplates();
-console.log('Available templates:', templates);
+const templates = EmailService.getAvailableTemplates(request.log);
+request.log.info({
+  templates,
+  templateCount: templates.length,
+  operation: 'get_available_templates'
+}, 'Available templates retrieved');
 // Output: ['welcome', 'password-reset', 'notification']
 ```
 
@@ -354,9 +376,17 @@ const validation = await EmailService.validateTemplate('welcome', {
 });
 
 if (validation.valid) {
-  console.log('Template is valid');
+  request.log.info({
+    template: 'welcome',
+    operation: 'validate_template'
+  }, 'Template is valid');
 } else {
-  console.error('Template validation failed:', validation.errors);
+  request.log.error({
+    template: 'welcome',
+    errors: validation.errors,
+    missingVariables: validation.missingVariables,
+    operation: 'validate_template'
+  }, 'Template validation failed');
 }
 ```
 
@@ -382,7 +412,10 @@ if (!result.success) {
       break;
     default:
       // Handle other errors
-      console.error('Email failed:', result.error);
+      request.log.error({
+        error: result.error,
+        operation: 'send_email'
+      }, 'Email failed');
   }
 }
 ```
@@ -469,7 +502,11 @@ export class UserService {
     });
     
     if (!emailResult.success) {
-      console.error('Failed to send welcome email:', emailResult.error);
+      request.log.error({
+        error: emailResult.error,
+        userId: user.id,
+        operation: 'send_welcome_email'
+      }, 'Failed to send welcome email');
       // Don't fail registration if email fails
     }
     
@@ -534,7 +571,12 @@ export class DeploymentService {
     });
     
     if (!emailResult.success) {
-      console.error('Failed to send deployment notification:', emailResult.error);
+      request.log.error({
+        error: emailResult.error,
+        deploymentId,
+        userId: user.id,
+        operation: 'send_deployment_notification'
+      }, 'Failed to send deployment notification');
     }
   }
 }
@@ -585,22 +627,30 @@ Enable debug logging for email operations:
 process.env.DEBUG_EMAIL = 'true';
 
 // Or log email results
-const result = await EmailService.sendEmail({...});
-console.log('Email result:', result);
+const result = await EmailService.sendEmail({...}, request.log);
+request.log.debug({
+  success: result.success,
+  messageId: result.messageId,
+  recipients: result.recipients,
+  operation: 'send_email'
+}, 'Email result');
 ```
 
 ### Testing SMTP Configuration
 
 ```typescript
 // Test SMTP connection before sending emails
-const connectionTest = await EmailService.testConnection();
+const connectionTest = await EmailService.testConnection(request.log);
 if (!connectionTest.success) {
-  console.error('SMTP test failed:', connectionTest.error);
+  request.log.error({
+    error: connectionTest.error,
+    operation: 'test_smtp_connection'
+  }, 'SMTP test failed');
   return;
 }
 
 // Proceed with sending emails
-const emailResult = await EmailService.sendEmail({...});
+const emailResult = await EmailService.sendEmail({...}, request.log);
 ```
 
 ## Best Practices

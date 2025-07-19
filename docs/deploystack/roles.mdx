@@ -22,8 +22,13 @@ User roles determine what actions a person can perform in DeployStack. Think of 
 - Manage roles and permissions
 - Access all system features
 - Manage all teams
+- View cloud credentials metadata across all teams (no credential values shown)
+- **MCP Catalog**: Full management of global MCP servers and categories
+- **MCP Oversight**: View all team MCP servers across the platform (read-only)
 
 **Important**: The first person to register automatically becomes a Global Administrator.
+
+**Note**: Global Administrators can see that teams have cloud credentials but cannot view the actual credential values for security reasons.
 
 ### Global User
 **Who needs this**: Regular users who want to deploy applications.
@@ -33,6 +38,7 @@ User roles determine what actions a person can perform in DeployStack. Think of 
 - Create up to 3 teams
 - Manage their own teams
 - Deploy applications through their teams
+- **MCP Catalog**: Browse and view global MCP servers only
 
 **Note**: This is the default role for new users.
 
@@ -42,8 +48,56 @@ User roles determine what actions a person can perform in DeployStack. Think of 
 **What they can do**:
 - Manage their team's settings
 - View team members
+- **Add new members to their teams** (up to 3 members total)
+- **Change member roles** (promote team_user to team_admin, or demote)
+- **Remove team members** (except team owners)
+- **Transfer team ownership** to another team member
 - Manage team deployments
-- Delete teams they own
+- Delete teams they own (except default teams)
+- **MCP Catalog**: View global servers + full management of team MCP servers
+
+**Important**: Team admins have full control over team membership and can manage all team members except the team owner.
+
+## Team Member Management Permissions
+
+The following table shows exactly what each role can do with team member management:
+
+| Action | team_user | team_admin | team_admin + owner | global_admin |
+|--------|-----------|------------|-------------------|--------------|
+| List team members | ✅ (own teams) | ✅ (own teams) | ✅ (own teams) | ✅ (any team) |
+| Add team member | ❌ | ✅ (non-default) | ✅ (non-default) | ✅ (any team) |
+| Remove team_user | ❌ | ✅ (non-default) | ✅ (non-default) | ✅ (any team) |
+| Remove team_admin | ❌ | ❌ | ✅ (non-default) | ✅ (any team) |
+| Remove team owner | ❌ | ❌ | ❌ | ✅ (any team) |
+| Promote to team_admin | ❌ | ✅ (non-default) | ✅ (non-default) | ✅ (any team) |
+| Demote team_admin | ❌ | ❌ | ✅ (non-default) | ✅ (any team) |
+| Transfer ownership | ❌ | ❌ | ✅ (non-default) | ✅ (any team) |
+| Delete team | ❌ | ❌ | ✅ (non-default) | ✅ (non-default) |
+
+**Key Notes:**
+- **Default teams** are completely protected - no member management operations allowed
+- **Team admins** can only manage team_users, not other team_admins or owners
+- **Team owners** have full control over their teams (except default teams)
+- **Global admins** can override most restrictions but still cannot modify default teams
+- **3-member limit** applies to all teams (owner + 2 additional members maximum)
+
+## MCP Catalog Permissions
+
+The MCP (Model Context Protocol) Catalog has specific permissions based on your role:
+
+| Role | Global Servers | Team Servers | Can Create | Can Edit | Can Delete | Categories |
+|------|----------------|--------------|------------|----------|------------|------------|
+| global_admin | ✅ View/Manage All | ✅ View All Teams | ✅ Global only | ✅ Global only | ✅ Global only | ✅ Full CRUD |
+| team_admin | ✅ View only | ✅ View/Manage own team | ✅ Team only | ✅ Team only | ✅ Team only | ❌ View only |
+| team_user | ✅ View only | ✅ View team servers | ❌ No | ❌ No | ❌ No | ❌ View only |
+| global_user | ✅ View only | ❌ No access | ❌ No | ❌ No | ❌ No | ❌ View only |
+
+**MCP Catalog Notes:**
+- **Global Servers**: Community-wide MCP servers available to all users
+- **Team Servers**: Private MCP servers visible only to team members
+- **Categories**: Organizational categories for MCP servers (admin-managed)
+- **Global Admins**: Can see all team servers for administrative oversight but cannot modify them
+- **Team Isolation**: Teams can only manage their own servers, not other teams' servers
 
 ### Team User
 **Who needs this**: Basic team members who participate in deployments.
@@ -52,6 +106,9 @@ User roles determine what actions a person can perform in DeployStack. Think of 
 - View team information
 - See team members
 - Participate in team activities
+- **MCP Catalog**: View global servers + view team MCP servers (read-only)
+
+**Limitations**: Team users cannot add members, change roles, manage other team members, or create/edit MCP servers.
 
 ## Understanding Teams
 
