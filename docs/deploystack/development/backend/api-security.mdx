@@ -65,30 +65,15 @@ export default async function secureRoute(fastify: FastifyInstance) {
       summary: 'Protected endpoint',
       description: 'Requires admin permissions',
       security: [{ cookieAuth: [] }],
-      body: zodToJsonSchema(RequestSchema, {
-        $refStrategy: 'none',
-        target: 'openApi3'
-      }),
+      body: createSchema(RequestSchema),
       response: {
-        200: zodToJsonSchema(SuccessResponseSchema, {
-          $refStrategy: 'none',
-          target: 'openApi3'
-        }),
-        401: zodToJsonSchema(ErrorResponseSchema.describe('Unauthorized'), {
-          $refStrategy: 'none',
-          target: 'openApi3'
-        }),
-        403: zodToJsonSchema(ErrorResponseSchema.describe('Forbidden'), {
-          $refStrategy: 'none',
-          target: 'openApi3'
-        }),
-        400: zodToJsonSchema(ErrorResponseSchema.describe('Bad Request'), {
-          $refStrategy: 'none',
-          target: 'openApi3'
-        })
+        200: createSchema(SuccessResponseSchema.describe('Success')),
+        401: createSchema(ErrorResponseSchema.describe('Unauthorized')),
+        403: createSchema(ErrorResponseSchema.describe('Forbidden')),
+        400: createSchema(ErrorResponseSchema.describe('Bad Request'))
       }
     },
-    preValidation: requireGlobalAdmin(), // ✅ CORRECT: Runs before validation
+    preValidation: requireGlobalAdmin(), // ✅ CORRECT: Runs before validation,
   }, async (request, reply) => {
     // If we reach here, user is authorized AND input is validated
     const validatedData = request.body;
