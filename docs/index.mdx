@@ -1,94 +1,173 @@
 ---
 title: DeployStack Documentation
-description: Welcome to DeployStack documentation. Learn how to deploy MCP servers to any cloud provider with one-click deployments, secure credential management, and team collaboration features.
-icon: CircleHelp
+description: Official DeployStack documentation - The Enterprise Control Plane for MCP servers. Secure, centralized management of your organization's AI tool landscape with the DeployStack Gateway.
+sidebar: Introduction
+icon: Star
 ---
 
-import { CloudUpload, Rocket, LockKeyhole, Terminal, FileText, Container, BookOpenText, MessageCircleHeart } from 'lucide-react';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Rocket, Settings, Users, Code2, ExternalLink, Zap, Shield, Wrench, Terminal, Container, BookOpenText, FileText, MessageCircleHeart } from 'lucide-react';
 
-# DeployStack Documentation
+# DeployStack - Enterprise Control Plane for MCP
 
-DeployStack is the first **CI/CD platform specifically built for MCP servers**. Deploy Model Context Protocol servers to any cloud provider with one click, manage credentials securely, and collaborate with your team. Whether you're building MCP servers for Claude Desktop, VS Code, or other AI applications, DeployStack eliminates the deployment complexity that currently limits MCP adoption.
-
-## Get Started
-
-DeployStack simplifies MCP server deployment through three key steps: browse our curated MCP server catalog, configure your credentials securely, and deploy to your preferred cloud provider instantly. Start by understanding the core concepts and how MCP servers integrate with AI applications.
-
-### Core Concepts
+DeployStack is the **Enterprise Control Plane for the Model Context Protocol (MCP) ecosystem**. We provide a secure, centralized platform to manage your company's entire AI tool landscape, eliminating credential sprawl and enabling developers to move faster and more securely through our local DeployStack Gateway.
 
 <Cards>
-<Card icon={<Rocket className="text-purple-500" />} title="Quick-Start Guide" href="/deploystack/quick-start">
-Deploy Model Context Protocol (MCP) servers to selected cloud provider with a single click, eliminating the need for complex setup.
-</Card>
-<Card icon={<CloudUpload className="text-purple-500" />} title="MCP Server Catalog" href="https://deploystack.io/mcp">
-Browse our curated collection of ready-to-use MCP servers and deploy them instantly.
-</Card>
-<Card icon={<LockKeyhole className="text-purple-500" />} title="Security" href="/deploystack/security">
-Learn how to deploy MCP servers to selected cloud provider with secure credential management.
-</Card>
-<Card icon={<FileText className="text-purple-500" />} title="Team Management" href="/deploystack/team-collaboration">
-Manage MCP server deployments across your organization with role-based access control.
-</Card>
+  <Card 
+    icon={<Terminal />} 
+    href="/deploystack/gateway" 
+    title="DeployStack Gateway"
+  >
+    Learn about the local secure gateway that manages MCP servers and credentials
+  </Card>
+  
+  <Card 
+    icon={<ExternalLink />} 
+    href="https://deploystack.io/mcp" 
+    title="MCP Server Catalog"
+    external
+  >
+    Browse and manage MCP servers from our centralized catalog
+  </Card>
+  
+  <Card 
+    icon={<Shield />} 
+    href="/deploystack/security" 
+    title="Security & Governance"
+  >
+    Understand how DeployStack eliminates credential sprawl and provides enterprise security
+  </Card>
 </Cards>
 
-### MCP Server Categories
+## User Guides
 
-Our catalog spans essential MCP server categories that connect AI agents to real-world systems and data sources:
+**For administrators and team members** using DeployStack:
 
 <Cards>
-<Card icon={<Container className="text-purple-500" />} title="Database Connectors" href="/deploystack/categories/databases">
-Connect AI agents to PostgreSQL, MySQL, MongoDB, and other database systems
-</Card>
-<Card icon={<BookOpenText className="text-purple-500" />} title="API Integrations" href="/deploystack/categories/apis">
-Access REST APIs, GraphQL endpoints, and third-party services from AI applications
-</Card>
-<Card icon={<FileText className="text-purple-500" />} title="File Systems" href="/deploystack/categories/filesystems">
-Enable AI agents to read, write, and manage files across local and cloud storage
-</Card>
-<Card icon={<MessageCircleHeart className="text-purple-500" />} title="Productivity Tools" href="/deploystack/categories/productivity">
-Integrate with Slack, GitHub, Jira, and other tools your team uses daily
-</Card>
+  <Card 
+    icon={<Users />} 
+    href="/deploystack/teams" 
+    title="Teams & Collaboration"
+  >
+    Organize your developers and manage team-based MCP server access
+  </Card>
+  
+  <Card 
+    icon={<Users />} 
+    href="/deploystack/roles" 
+    title="User Roles and Permissions"
+  >
+    Manage user access and team collaboration with role-based security
+  </Card>
+  
+  <Card 
+    icon={<Settings />} 
+    href="/deploystack/global-settings" 
+    title="Global Settings"
+  >
+    Configure email, authentication, and system preferences
+  </Card>
 </Cards>
 
-### DeployStack Ecosystem
+## DeployStack Ecosystem
 
-DeployStack consists of several integrated components that work together to enable comprehensive MCP server deployment and management:
+DeployStack consists of several integrated components that work together to provide enterprise-grade MCP server management:
 
 <Cards>
 <Card icon={<Container className="text-purple-500" />} title="deploystack" href="https://github.com/deploystackio/deploystack">
-The main platform providing MCP server CI/CD, team collaboration, and multi-cloud deployment
+The main platform providing centralized MCP server management, team collaboration, and the DeployStack Gateway
 </Card>
 <Card icon={<BookOpenText className="text-purple-500" />} title="awesome-mcp-server" href="https://github.com/deploystackio/awesome-mcp-server">
 Community-curated catalog of production-ready MCP servers with standardized configurations
 </Card>
 <Card icon={<FileText className="text-purple-500" />} title="documentation" href="https://github.com/deploystackio/documentation">
-Comprehensive guides for MCP server development, deployment, and integration
+Comprehensive guides for MCP server management, security, and team collaboration
 </Card>
 <Card icon={<MessageCircleHeart className="text-purple-500" />} title="feedback" href="https://github.com/deploystackio/feedback">
 Public repository for feature requests, bug reports, and roadmap discussions
 </Card>
 </Cards>
 
-## MCP Server Development
+## MCP Server Requirements
 
-### Creating MCP Servers
+**For MCP server creators** who want to make their servers deployable:
 
-- Follow MCP specification standards for maximum compatibility
-- Implement proper authentication and security practices  
-- Test across different transport protocols (stdio, HTTP, SSE)
-- Document environment variables and configuration requirements
+<Cards>
+  <Card 
+    icon={<Shield />} 
+    href="/deploystack/docker-compose-requirements" 
+    title="Docker Compose Requirements"
+  >
+    Learn about supported configurations and best practices
+  </Card>
+  
+  <Card 
+    icon={<ExternalLink />} 
+    href="https://deploystack.io/submit" 
+    title="Submit Your MCP Server"
+    external
+  >
+    Add your server to our catalog for the community
+  </Card>
+</Cards>
 
-### Contributing to the Catalog
+## Developer Documentation
 
-- Submit your MCP server to [awesome-mcp-server](https://github.com/deploystackio/awesome-mcp-server)
-- Follow our contribution guidelines for standardized formatting
-- Include comprehensive documentation and usage examples
-- Ensure production-ready deployment configurations
+**For developers** extending or contributing to DeployStack:
 
-## Community and Support
+<Cards>
+  <Card 
+    icon={<Code2 />} 
+    href="/deploystack/development" 
+    title="Development Guide"
+  >
+    Complete development documentation for frontend and backend
+  </Card>
+  
+  <Card 
+    icon={<Code2 />} 
+    href="/deploystack/development/backend" 
+    title="Backend Development"
+  >
+    API, database, plugins, and testing documentation
+  </Card>
+  
+  <Card 
+    icon={<Rocket />} 
+    href="/docker-to-iac/index" 
+    title="Docker-to-IaC Module"
+  >
+    Core deployment engine and infrastructure automation
+  </Card>
+</Cards>
 
-- Join our [Discord community](https://discord.gg/42Ce3S7b3b) for real-time discussions
-- Explore the [MCP Server Catalog](https://deploystack.io/mcp) for deployment-ready servers
-- Check our [troubleshooting guide](/deploystack/troubleshooting) for common issues
+## Community & Resources
 
-Ready to eliminate MCP server deployment complexity? [Get started for free →](https://cloud.deploystack.io)
+<Cards>
+  <Card 
+    icon={<Users />} 
+    href="https://discord.gg/UjFWwByB" 
+    title="Join our Discord"
+    external
+  >
+    Get help and connect with the DeployStack community
+  </Card>
+  
+  <Card 
+    icon={<ExternalLink />} 
+    href="https://deploystack.io" 
+    title="Visit DeployStack"
+    external
+  >
+    Main website and MCP server catalog
+  </Card>
+  
+  <Card 
+    icon={<Code2 />} 
+    href="https://github.com/deploystackio/deploystack" 
+    title="GitHub Repository"
+    external
+  >
+    Contribute to the project and view source code
+  </Card>
+</Cards>

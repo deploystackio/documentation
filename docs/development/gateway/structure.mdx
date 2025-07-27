@@ -1,0 +1,135 @@
+---
+title: Gateway Project Structure
+description: Directory structure and architecture of the DeployStack Gateway CLI
+sidebar: Project Structure
+icon: FolderTree
+---
+
+# Gateway Project Structure
+
+The DeployStack Gateway is structured as a TypeScript CLI application using Commander.js with a modular architecture designed for maintainability and extensibility.
+
+## Directory Overview
+
+```bash
+services/gateway/
+├── src/                      # Source code
+│   ├── index.ts             # CLI entry point and command registration
+│   ├── commands/            # Command implementations
+│   │   ├── index.ts         # Command exports
+│   │   ├── login.ts         # Authentication with cloud.deploystack.io
+│   │   ├── logout.ts        # Clear local credentials
+│   │   ├── start.ts         # Start the gateway server
+│   │   ├── stop.ts          # Stop the gateway server
+│   │   ├── status.ts        # Show gateway status
+│   │   └── config.ts        # Manage local configuration
+│   ├── core/                # Core business logic
+│   │   ├── auth/            # Authentication handling
+│   │   │   ├── client.ts    # OAuth and API client
+│   │   │   └── storage.ts   # Secure credential storage
+│   │   ├── server/          # HTTP proxy server
+│   │   │   ├── proxy.ts     # Request routing logic
+│   │   │   └── middleware.ts # Auth and logging middleware
+│   │   ├── process/         # MCP process management
+│   │   │   ├── manager.ts   # Process lifecycle management
+│   │   │   ├── spawner.ts   # Process spawning logic
+│   │   │   └── stdio.ts     # Stdio communication handler
+│   │   └── sync/            # Configuration sync
+│   │       ├── client.ts    # Cloud API client
+│   │       └── cache.ts     # Local config cache
+│   ├── utils/               # Shared utilities
+│   │   ├── logger.ts        # Centralized logging with chalk
+│   │   ├── spinner.ts       # Progress indicators with ora
+│   │   ├── config.ts        # Configuration management
+│   │   ├── errors.ts        # Custom error types
+│   │   └── crypto.ts        # Encryption utilities
+│   └── types/               # TypeScript type definitions
+│       ├── index.ts         # Main type exports
+│       ├── mcp.ts           # MCP protocol types
+│       └── config.ts        # Configuration types
+├── bin/                     # Executable entry
+│   └── gateway.js           # Node.js shebang wrapper
+├── dist/                    # Compiled JavaScript (gitignored)
+├── tests/                   # Test suite
+│   ├── unit/               # Unit tests
+│   ├── integration/        # Integration tests
+│   └── fixtures/           # Test data
+├── scripts/                 # Development scripts
+│   ├── build.ts            # Build script
+│   └── release.ts          # Release automation
+├── .config/                # Default configurations
+│   └── defaults.json       # Default gateway settings
+├── package.json            # Dependencies and scripts
+├── tsconfig.json           # TypeScript configuration
+├── tsup.config.ts          # Build configuration
+├── .env.example            # Environment variables template
+└── README.md               # Gateway-specific documentation
+```
+
+## Key Design Decisions
+
+### Modular Architecture
+The codebase is organized into distinct modules:
+- **Commands**: User-facing CLI commands
+- **Core**: Business logic separated by domain
+- **Utils**: Reusable utilities and helpers
+
+### Process Management
+The `process/` module handles the complexity of:
+- Spawning MCP servers on-demand
+- Managing stdio communication
+- Injecting environment variables securely
+- Cleaning up idle processes
+
+### Security First
+- Credentials are never stored in plain text
+- All sensitive data is encrypted at rest
+- Environment injection happens at runtime only
+
+### Developer Experience
+- Intuitive command structure (`deploystack login`, `deploystack start`)
+- Rich CLI feedback with colors and progress indicators
+- Clear error messages with actionable solutions
+
+## Module Responsibilities
+
+### Commands Layer
+Each command file exports a function that registers itself with Commander.js:
+```typescript
+export function registerLoginCommand(program: Command) {
+  program
+    .command('login')
+    .description('Authenticate with DeployStack cloud')
+    .action(async () => {
+      // Implementation
+    });
+}
+```
+
+### Core Modules
+
+**auth/**: Handles OAuth flow and token management
+- Secure storage of access tokens
+- Automatic token refresh
+- Session management
+
+**server/**: HTTP proxy server implementation
+- Single endpoint: `localhost:9095/mcp`
+- Request routing to appropriate MCP servers
+- Middleware for authentication and logging
+
+**process/**: MCP server process lifecycle
+- On-demand spawning based on requests
+- Stdio transport implementation
+- Resource cleanup and monitoring
+
+**sync/**: Configuration synchronization
+- Periodic sync with cloud control plane
+- Local caching for offline support
+- Configuration validation
+
+### Build Output
+The TypeScript code is compiled to CommonJS for maximum compatibility:
+- Source maps for debugging
+- Minified for production
+- External dependencies preserved

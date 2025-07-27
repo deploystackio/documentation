@@ -365,40 +365,110 @@ export default MyCustomPlugin;
 
 The `databaseExtension` property allows your plugin to:
 
-1. Define tables using Drizzle ORM
-2. Initialize data (seeding, migrations, etc.)
-3. Integrate with the core database schema
+1. **Define tables dynamically**: Tables are created at runtime from your `tableDefinitions`
+2. **Initialize data**: Seed data or perform setup through `onDatabaseInit`
+3. **Maintain security boundaries**: Plugin tables are isolated from core migrations
+
+#### How Plugin Database Tables Work
+
+**Security Architecture:**
+- **Phase 1 (Trusted)**: Core migrations run first (static, secure)
+- **Phase 2 (Untrusted)**: Plugin tables created dynamically (sandboxed)
+- **Clear Separation**: Plugin tables cannot interfere with core database structure
+
+**Dynamic Table Creation:**
+- Plugin tables are **NOT** included in core migration files
+- Tables are created at runtime from your `tableDefinitions`
+- System automatically generates CREATE TABLE SQL from your definitions
+- Tables are dropped and recreated during development for clean structure
+
+**Table Definition Format:**
+```typescript
+const myPluginTableDefinitions = {
+  'my_entities': {
+    id: (b: any) => b('id').primaryKey(),
+    name: (b: any) => b('name').notNull(),
+    data: (b: any) => b('data'),
+    created_at: (b: any) => b('created_at', { mode: 'timestamp' }).notNull().defaultNow(),
+  }
+};
+```
+
+**Important Notes:**
+- Use `created_at` (snake_case) for database column names, not `createdAt` (camelCase)
+- Timestamp columns with `{ mode: 'timestamp' }` automatically get `DEFAULT (strftime('%s', 'now'))`
+- Column types are auto-detected: `id`/`count` → INTEGER, `*_at`/`*date` → INTEGER (timestamp), others → TEXT
+- Tables are prefixed with your plugin ID: `my-plugin_my_entities`
 
 ### API Routes
 
-Register API routes during the plugin's `initialize` method:
+Register API routes using the isolated `PluginRouteManager`:
 
 ```typescript
-app.get('/api/my-feature', async (request, reply) => {
-  // Handle request
-  return { feature: 'data' };
-});
+// ✅ Correct way - routes are automatically namespaced
+async registerRoutes(routeManager: PluginRouteManager, db: AnyDatabase | null) {
+  // This becomes: GET /api/plugin/my-plugin/data
+  routeManager.get('/data', async (request, reply) => {
+    return { feature: 'data' };
+  });
+}
+
+// ❌ Wrong way - no direct app access
+async initialize(app: FastifyInstance, db: AnyDatabase | null) {
+  app.get('/api/my-feature', handler); // This won't work
+}
 ```
 
 ### Access to Core Services
 
 Plugins receive access to:
 
-- **Fastify instance** (`app`) - For registering routes, hooks, and decorations
-- **Database instance** (`db`) - For database operations
-- **Configuration** - Through the plugin manager (if provided)
-- **Global Settings** - Plugins can define their own global settings
+- **Database instance** (`db`) - For database operations with your plugin tables
+- **Route Manager** (`routeManager`) - For registering isolated, namespaced routes
+- **Logger** (`logger`) - For structured logging with plugin context
+- **Schema Access** - Access to the generated database schema including your tables
+- **Global Settings** - Plugins can define and access their own global settings
 
 ## Plugin Lifecycle
 
 Plugins follow this lifecycle:
 
-1. **Loading** - Plugin is discovered and loaded
-2. **Database Registration** - Schema tables are registered
-3. **Database Initialization** - `onDatabaseInit` is called if provided
-4. **Initialization** - `initialize` method is called
-5. **Runtime** - Plugin operates as part of the application
-6. **Shutdown** - `shutdown` method is called during application termination
+1. **Discovery** - Plugin is discovered and loaded from the plugins directory
+2. **Registration** - Plugin table definitions are registered with the schema system
+3. **Core Database Setup** - Core migrations are applied (trusted, static)
+4. **Plugin Table Creation** - Plugin tables are created dynamically from definitions
+5. **Database Initialization** - `onDatabaseInit` is called for data seeding/setup
+6. **Plugin Initialization** - `initialize` method is called for non-route setup
+7. **Route Registration** - `registerRoutes` is called to register API endpoints
+8. **Runtime** - Plugin operates as part of the application
+9. **Shutdown** - `shutdown` method is called during application termination
+
+### Database Lifecycle Details
+
+The database initialization follows a strict security-first approach:
+
+```
+┌─────────────────────────────────────────┐
+│ Phase 1: Core System (Trusted)         │
+├─────────────────────────────────────────┤
+│ 1. Apply core migrations               │
+│ 2. Create core tables                  │
+│ 3. Initialize core data                │
+└─────────────────────────────────────────┘
+                    │
+                    ▼ Security Boundary
+┌─────────────────────────────────────────┐
+│ Phase 2: Plugin System (Sandboxed)     │
+├─────────────────────────────────────────┤
+│ 1. Generate CREATE TABLE SQL           │
+│ 2. Drop existing plugin tables         │
+│ 3. Create plugin tables dynamically    │
+│ 4. Call plugin onDatabaseInit          │
+│ 5. Seed plugin data                    │
+└─────────────────────────────────────────┘
+```
+
+This ensures that untrusted plugin code cannot interfere with the core database structure while still providing full database functionality.
 
 ## Testing Your Plugin
 

@@ -241,34 +241,13 @@ The global settings system:
 
 ## Plugin Database Extensions
 
-Plugins can add their own tables through the `databaseExtension` property:
+Plugins can extend the database with their own tables and settings. For detailed information about plugin database integration, including table definitions, dynamic table creation, and security boundaries, see the [Plugin System Guide](/deploystack/development/backend/plugins#plugin-integration-points).
 
-1. Define tables in the plugin's schema file
-2. Include tables in the plugin's `databaseExtension.tableDefinitions`
-3. Implement `onDatabaseInit()` for seeding or initialization
-
-Plugin tables are automatically created and work across all database types.
-
-### Plugin Global Settings
-
-Plugins can also contribute global settings that are automatically integrated during database setup:
-
-```typescript
-// Example plugin with global settings
-class MyPlugin implements Plugin {
-  globalSettingsExtension: GlobalSettingsExtension = {
-    groups: [{ id: 'my_plugin', name: 'My Plugin Settings' }],
-    settings: [
-      {
-        key: 'myPlugin.feature.enabled',
-        defaultValue: true,
-        type: 'boolean',
-        groupId: 'my_plugin'
-      }
-    ]
-  };
-}
-```
+Key plugin database features:
+- **Dynamic table creation** at runtime (separate from core migrations)
+- **Automatic table prefixing** with plugin IDs
+- **Security isolation** between core and plugin tables
+- **Global settings integration** for plugin configuration
 
 ## Development Workflow
 
