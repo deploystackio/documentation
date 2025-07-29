@@ -148,7 +148,38 @@ requireTeamPermission('permission.name', getTeamIdFn) // Custom team ID extracti
 
 // Ownership-based authorization
 requireOwnershipOrAdmin(getUserIdFromRequest) // User owns resource OR is admin
+
+// Dual authentication (Cookie + OAuth2)
+requireAuthenticationAny()                    // Accept either cookie or OAuth2 Bearer token
+requireOAuthScope('scope.name')               // Enforce OAuth2 scope requirements
 ```
+
+### Dual Authentication Support
+
+For endpoints that support both web users (cookies) and CLI users (OAuth2 Bearer tokens), use the dual authentication middleware:
+
+```typescript
+import { requireAuthenticationAny, requireOAuthScope } from '../../middleware/oauthMiddleware';
+
+fastify.get('/dual-auth-endpoint', {
+  schema: {
+    security: [
+      { cookieAuth: [] },    // Cookie authentication
+      { bearerAuth: [] }     // OAuth2 Bearer token
+    ]
+  },
+  preValidation: [
+    requireAuthenticationAny(),     // Accept either auth method
+    requireOAuthScope('your:scope') // Enforce OAuth2 scope
+  ]
+}, async (request, reply) => {
+  // Endpoint accessible via both authentication methods
+  const authType = request.tokenPayload ? 'oauth2' : 'cookie';
+  const userId = request.user!.id;
+});
+```
+
+For detailed OAuth2 implementation, see the [OAuth Implementation Guide](./oauth.mdx) and [Security Policy](./security.mdx#oauth2-server-security).
 
 ### Team-Aware Permission System
 

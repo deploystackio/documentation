@@ -1,0 +1,225 @@
+---
+title: Gateway OAuth Implementation
+description: OAuth2 client implementation for CLI authentication with DeployStack backend
+sidebar: OAuth
+icon: Shield
+---
+
+# Gateway OAuth Implementation
+
+The DeployStack Gateway implements an OAuth2 client for secure CLI authentication with the DeployStack backend. This enables users to authenticate via their browser and use the CLI with proper access tokens.
+
+## Architecture Overview
+
+The gateway acts as an OAuth2 client implementing the **Authorization Code flow with PKCE** (Proof Key for Code Exchange) for enhanced security. The implementation consists of:
+
+- **OAuth2 Client** - Handles the complete authorization flow
+- **Callback Server** - Temporary HTTP server for receiving authorization codes
+- **API Client** - Makes authenticated requests to backend APIs
+- **Credential Storage** - Secure token storage and retrieval
+
+## OAuth2 Flow Process
+
+### 1. Authorization Request
+
+When a user runs the login command, the CLI:
+
+- Generates a cryptographically secure PKCE code verifier (128 random bytes)
+- Creates a SHA256 code challenge from the verifier
+- Generates a random state parameter for CSRF protection
+- Builds the authorization URL with all required OAuth2 parameters
+- Opens the user's default browser to the authorization endpoint
+- Starts a temporary callback server on localhost port 8976
+
+The authorization URL includes:
+- `response_type=code` for authorization code flow
+- `client_id=deploystack-gateway-cli` for client identification
+- `redirect_uri=http://localhost:8976/oauth/callback` for callback handling
+- Requested scopes: `mcp:read account:read user:read teams:read offline_access`
+- PKCE parameters: `code_challenge` and `code_challenge_method=S256`
+- Random `state` parameter for security
+
+### 2. User Authorization
+
+The browser opens to the backend's consent page where the user:
+
+- Reviews the requested permissions and scopes
+- Sees security warnings about CLI access
+- Can approve or deny the authorization request
+- Is redirected back to the CLI's callback server upon decision
+
+### 3. Callback Handling
+
+The temporary callback server:
+
+- Listens only on localhost for security
+- Validates the callback path (`/oauth/callback`)
+- Extracts the authorization code and state parameters
+- Validates the state parameter matches the original request
+- Displays a success or error page to the user
+- Automatically shuts down after receiving the callback
+
+### 4. Token Exchange
+
+After receiving the authorization code, the CLI:
+
+- Exchanges the code for access and refresh tokens
+- Includes the PKCE code verifier for verification
+- Validates the token response from the backend
+- Fetches user information using the new access token
+- Stores credentials securely for future use
+
+## PKCE Security Implementation
+
+The gateway implements PKCE (Proof Key for Code Exchange) following RFC 7636:
+
+- **Code Verifier**: 128 random bytes encoded as base64url
+- **Code Challenge**: SHA256 hash of the verifier, base64url encoded
+- **Challenge Method**: Always uses `S256` (SHA256)
+- **State Validation**: Cryptographically secure random state parameter
+
+PKCE provides security benefits:
+- Prevents authorization code interception attacks
+- No client secret required (suitable for public clients)
+- Protects against malicious applications
+
+## Client Configuration
+
+The gateway is pre-registered with the backend as:
+
+- **Client ID**: `deploystack-gateway-cli`
+- **Client Type**: Public client (no secret required)
+- **Redirect URIs**: `http://localhost:8976/oauth/callback`, `http://127.0.0.1:8976/oauth/callback`
+- **Allowed Scopes**: `mcp:read`, `account:read`, `user:read`, `teams:read`, `offline_access`
+- **PKCE**: Required with SHA256 method
+- **Token Lifetime**: 1 week access tokens, 30 day refresh tokens
+
+## Command Integration
+
+### Login Command
+
+The login command orchestrates the complete OAuth2 flow:
+
+- Checks if the user is already authenticated
+- Displays "already logged in" message if credentials are valid
+- Initiates the OAuth2 flow if authentication is needed
+- Handles browser opening and callback server management
+- Stores credentials securely upon successful authentication
+- Provides clear success confirmation with user email
+
+### Authenticated Commands
+
+Commands like `whoami`, `teams`, and `start` use stored credentials:
+
+- Check authentication status before proceeding
+- Display helpful error messages if not authenticated
+- Use Bearer token authentication for API requests
+- Automatically refresh expired tokens when possible
+- Handle token expiration gracefully
+
+## Error Handling
+
+The OAuth implementation includes comprehensive error handling:
+
+### Error Types
+
+- **TIMEOUT**: OAuth callback not received within time limit
+- **ACCESS_DENIED**: User denied the authorization request
+- **BROWSER_ERROR**: Failed to open browser automatically
+- **NETWORK_ERROR**: Network connectivity issues
+- **STORAGE_ERROR**: Failed to store credentials securely
+- **TOKEN_EXPIRED**: Access token has expired
+- **INVALID_TOKEN**: Token format or signature invalid
+- **INVALID_GRANT**: Authorization code or refresh token invalid
+
+### User Guidance
+
+Each error type provides specific user guidance:
+- Timeout errors suggest retrying the command
+- Access denied errors explain the approval requirement
+- Browser errors offer manual URL opening
+- Network errors suggest connectivity checks
+- Storage errors indicate keychain permission issues
+
+## Browser Integration
+
+The CLI provides seamless browser integration:
+
+- **Automatic Opening**: Uses the system's default browser
+- **Cross-Platform**: Works on Windows, macOS, and Linux
+- **Fallback Handling**: Displays manual URL if auto-open fails
+- **User Feedback**: Clear messages about browser actions
+- **Security Warnings**: Alerts for development server usage
+
+## Token Management
+
+### Token Refresh
+
+The gateway automatically handles token refresh:
+
+- Monitors token expiration with 5-minute buffer
+- Attempts refresh before tokens expire
+- Uses refresh tokens for seamless re-authentication
+- Falls back to full re-authentication if refresh fails
+- Updates stored credentials with new tokens
+
+### Token Validation
+
+Before each API request, the gateway:
+
+- Checks token expiration locally
+- Validates token format and structure
+- Handles 401 responses with automatic refresh
+- Provides clear error messages for invalid tokens
+
+## Development vs Production
+
+The OAuth client adapts to different environments:
+
+### Development Mode
+- Uses HTTP for localhost callback server
+- Accepts self-signed certificates for development
+- Displays security warnings for non-production servers
+- Provides detailed error information for debugging
+
+### Production Mode
+- Enforces HTTPS for all communications
+- Validates SSL certificates strictly
+- Uses secure callback URLs
+- Limits error information exposure
+
+## Integration with Backend
+
+The gateway OAuth client integrates with the [backend OAuth2 server](../backend/oauth.mdx#oauth2-server-implementation):
+
+- **Client Registration**: Pre-registered with known client ID
+- **PKCE Support**: Uses SHA256 method as required by backend
+- **Scope Validation**: Requests only backend-supported scopes
+- **Token Format**: Handles backend's custom JWT-like token format
+- **Error Responses**: Processes standard OAuth2 error responses
+- **Endpoint Discovery**: Uses standard OAuth2 endpoint paths
+
+## Security Considerations
+
+The OAuth implementation follows security best practices:
+
+- **PKCE Required**: All authorization requests use PKCE
+- **State Validation**: Prevents CSRF attacks
+- **Localhost Binding**: Callback server only accepts local connections
+- **Timeout Protection**: All operations have reasonable timeouts
+- **Secure Storage**: Credentials stored using OS keychain
+- **No Secrets**: Public client design eliminates secret management
+
+For detailed security implementation including credential storage, token expiration, and local file security, see the [Gateway Security Guide](./security.mdx).
+
+## Testing OAuth Flow
+
+During development, the OAuth flow can be tested:
+
+1. Start the backend in development mode
+2. Build the gateway CLI
+3. Run the login command with development URL
+4. Complete the browser authorization flow
+5. Verify authentication with the whoami command
+
+The OAuth implementation provides a secure, user-friendly authentication experience that follows industry standards while integrating seamlessly with the DeployStack backend.

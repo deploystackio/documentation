@@ -26,6 +26,84 @@ The DeployStack Backend uses Fastify with Swagger plugins to automatically gener
 
 **Key Rule**: Always use `preValidation` for authorization checks to prevent information disclosure to unauthorized users.
 
+## 🔐 Dual Authentication Support
+
+The DeployStack Backend supports **dual authentication** for API endpoints, allowing both web users (cookie-based) and CLI users (OAuth2 Bearer tokens) to access the same endpoints seamlessly.
+
+### Authentication Methods
+
+1. **Cookie Authentication** (Web Users)
+   - Session-based authentication using HTTP cookies
+   - Automatic for web browser requests
+   - Uses `session` cookie set during login
+
+2. **OAuth2 Bearer Token Authentication** (CLI Users)
+   - RFC 6749 compliant OAuth2 implementation with PKCE
+   - Uses `Authorization: Bearer <token>` header
+   - Scope-based access control
+
+### Dual Authentication Middleware
+
+Use these middleware functions to enable dual authentication on endpoints:
+
+```typescript
+import { requireAuthenticationAny, requireOAuthScope } from '../../middleware/oauthMiddleware';
+
+fastify.get('/your-endpoint', {
+  schema: {
+    security: [
+      { cookieAuth: [] },    // Cookie authentication
+      { bearerAuth: [] }     // OAuth2 Bearer token
+    ]
+  },
+  preValidation: [
+    requireAuthenticationAny(),     // Accept either auth method
+    requireOAuthScope('your:scope') // Enforce OAuth2 scope
+  ]
+}, async (request, reply) => {
+  // Endpoint accessible via both authentication methods
+  const authType = request.tokenPayload ? 'oauth2' : 'cookie';
+  const userId = request.user!.id;
+});
+```
+
+### OAuth2 Scopes
+
+Available OAuth2 scopes for fine-grained access control:
+
+- `mcp:read` - Read MCP server installations and configurations
+- `account:read` - Read account information
+- `user:read` - Read user profile information  
+- `teams:read` - Read team memberships and information
+- `offline_access` - Maintain access when not actively using the application
+
+### OAuth2 Flow Endpoints
+
+- `GET /api/oauth2/auth` - Authorization endpoint (PKCE required)
+- `GET /api/oauth2/consent` - User consent page
+- `POST /api/oauth2/consent` - Process consent decision
+- `POST /api/oauth2/token` - Token exchange endpoint
+
+### Client Configuration
+
+- **Client ID**: `deploystack-gateway-cli`
+- **Redirect URIs**: `http://localhost:8976/oauth/callback`, `http://127.0.0.1:8976/oauth/callback`
+- **PKCE**: Required (SHA256 method)
+- **Token Lifetime**: 1 hour access tokens, 30 day refresh tokens
+
+### Usage Examples
+
+**Web Users (Cookie Authentication)**:
+```bash
+curl -b cookies.txt "http://localhost:3000/api/teams/me/default"
+```
+
+**CLI Users (OAuth2 Bearer Token)**:
+```bash
+curl -H "Authorization: Bearer <access_token>" \
+     "http://localhost:3000/api/teams/me/default"
+```
+
 ## Available Commands
 
 ### 1. Generate Complete API Specification

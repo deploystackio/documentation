@@ -1,21 +1,224 @@
 ---
 title: OAuth Implementation Guide
-description: Developer guide for implementing OAuth providers in DeployStack
+description: Developer guide for implementing OAuth providers and OAuth2 server in DeployStack
 ---
 
 # OAuth Implementation Guide
 
-This guide explains how to implement OAuth providers in DeployStack's backend. The system is designed to support multiple OAuth providers with a consistent pattern.
+This guide explains how to implement OAuth providers and the OAuth2 server in DeployStack's backend. The system supports both OAuth provider integration (GitHub, Google, etc.) and OAuth2 server functionality for API access.
 
 ## Architecture Overview
 
-DeployStack uses the following libraries for OAuth implementation:
+DeployStack implements two distinct OAuth systems:
 
+### 1. OAuth Provider Integration (Social Login)
+For user authentication via third-party providers:
 - **[Arctic](https://arctic.js.org/)** - OAuth 2.0 client library for various providers
 - **[Lucia](https://lucia-auth.com/)** - Authentication library for session management
 - **Global Settings** - Database-driven configuration for OAuth providers
 
-## Current Implementation: GitHub OAuth
+### 2. OAuth2 Server (API Access)
+For programmatic API access by CLI tools and applications:
+- **RFC 6749 compliant** OAuth2 authorization server
+- **PKCE support** (RFC 7636) for enhanced security
+- **Scope-based access control** for fine-grained permissions
+- **Dual authentication** supporting both cookies and Bearer tokens
+
+## OAuth2 Server Implementation
+
+The OAuth2 server enables CLI tools and applications to access DeployStack APIs securely using Bearer tokens.
+
+For OAuth2 security details including PKCE, token security, authorization flow security, and Bearer token authentication, see the [Security Policy](./security.mdx#oauth2-server-security).
+
+### Database Schema
+
+Three tables support OAuth2 functionality:
+
+```sql
+-- Authorization codes (short-lived, exchanged for tokens)
+CREATE TABLE oauth_authorization_codes (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  client_id TEXT NOT NULL,
+  redirect_uri TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  state TEXT NOT NULL,
+  code_challenge TEXT NOT NULL,
+  code_challenge_method TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES authUser(id)
+);
+
+-- Access tokens (1-hour lifetime)
+CREATE TABLE oauth_access_tokens (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  client_id TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  token_hash TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES authUser(id)
+);
+
+-- Refresh tokens (30-day lifetime)
+CREATE TABLE oauth_refresh_tokens (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  client_id TEXT NOT NULL,
+  token_hash TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES authUser(id)
+);
+```
+
+### OAuth2 Services
+
+#### AuthorizationService
+Handles OAuth2 authorization flow with PKCE validation:
+
+```typescript
+// services/backend/src/services/oauth/authorizationService.ts
+export class AuthorizationService {
+  static validateClient(clientId: string): boolean
+  static validateRedirectUri(redirectUri: string): boolean
+  static validateScope(scope: string): boolean
+  static async storeAuthorizationRequest(...)
+  static async getAuthorizationRequest(requestId: string)
+  static async generateAuthorizationCode(requestId: string)
+  static async verifyAuthorizationCode(code: string, codeVerifier: string, ...)
+}
+```
+
+#### TokenService
+Manages access and refresh tokens:
+
+```typescript
+// services/backend/src/services/oauth/tokenService.ts
+export class TokenService {
+  static async generateAccessToken(userId: string, scope: string, clientId: string)
+  static async generateRefreshToken(userId: string, clientId: string)
+  static async verifyAccessToken(token: string)
+  static async refreshAccessToken(refreshToken: string, clientId: string)
+  static async revokeToken(tokenId: string)
+}
+```
+
+#### OAuthCleanupService
+Automatic cleanup of expired tokens (runs every hour):
+
+```typescript
+// services/backend/src/services/oauth/cleanupService.ts
+export class OAuthCleanupService {
+  static startCleanupScheduler(): void
+  static async cleanupExpiredTokens(): Promise<void>
+}
+```
+
+### OAuth2 Endpoints
+
+#### Authorization Endpoint
+```typescript
+GET /api/oauth2/auth
+```
+Initiates OAuth2 flow with PKCE. Redirects to consent page for user authorization.
+
+**Parameters:**
+- `response_type=code` (required)
+- `client_id` (required)
+- `redirect_uri` (required)
+- `scope` (required)
+- `state` (required)
+- `code_challenge` (required)
+- `code_challenge_method=S256` (required)
+
+#### Consent Endpoints
+```typescript
+GET /api/oauth2/consent?request_id=<id>
+POST /api/oauth2/consent
+```
+Professional HTML consent page with security warnings and scope descriptions.
+
+#### Token Endpoint
+```typescript
+POST /api/oauth2/token
+```
+Exchanges authorization code for access token or refreshes tokens.
+
+**Grant Types:**
+- `authorization_code` - Exchange code for tokens
+- `refresh_token` - Refresh access token
+
+### OAuth2 Scopes
+
+Available scopes for fine-grained access control:
+
+- `mcp:read` - Read MCP server installations and configurations
+- `account:read` - Read account information
+- `user:read` - Read user profile information
+- `teams:read` - Read team memberships and information
+- `offline_access` - Maintain access when not actively using the application
+
+### Dual Authentication Middleware
+
+Enable both cookie and OAuth2 authentication on endpoints:
+
+```typescript
+import { requireAuthenticationAny, requireOAuthScope } from '../../middleware/oauthMiddleware';
+
+fastify.get('/your-endpoint', {
+  schema: {
+    security: [
+      { cookieAuth: [] },    // Cookie authentication
+      { bearerAuth: [] }     // OAuth2 Bearer token
+    ]
+  },
+  preValidation: [
+    requireAuthenticationAny(),     // Accept either auth method
+    requireOAuthScope('your:scope') // Enforce OAuth2 scope
+  ]
+}, async (request, reply) => {
+  // Endpoint accessible via both authentication methods
+  const authType = request.tokenPayload ? 'oauth2' : 'cookie';
+  const userId = request.user!.id;
+});
+```
+
+### Client Configuration
+
+**DeployStack Gateway CLI:**
+- **Client ID**: `deploystack-gateway-cli`
+- **Redirect URIs**: `http://localhost:8976/oauth/callback`, `http://127.0.0.1:8976/oauth/callback`
+- **PKCE**: Required (SHA256 method)
+- **Token Lifetime**: 1 hour access tokens, 30 day refresh tokens
+
+### OAuth2 Flow Example
+
+```bash
+# 1. Authorization Request (redirects to consent page)
+curl -b cookies.txt "http://localhost:3000/api/oauth2/auth?response_type=code&client_id=deploystack-gateway-cli&redirect_uri=http://localhost:8976/oauth/callback&scope=mcp:read%20teams:read&state=xyz&code_challenge=abc&code_challenge_method=S256"
+
+# 2. User approves on consent page, receives authorization code
+
+# 3. Token Exchange
+curl -X POST "http://localhost:3000/api/oauth2/token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "grant_type": "authorization_code",
+    "code": "auth_code_here",
+    "redirect_uri": "http://localhost:8976/oauth/callback",
+    "client_id": "deploystack-gateway-cli",
+    "code_verifier": "verifier_here"
+  }'
+
+# 4. API Access with Bearer Token
+curl -H "Authorization: Bearer <access_token>" \
+     "http://localhost:3000/api/teams/me/default"
+```
+
+## OAuth Provider Integration (Social Login)
 
 The GitHub OAuth implementation serves as a reference for adding other providers.
 

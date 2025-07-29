@@ -1,0 +1,374 @@
+---
+title: Gateway Security
+description: Security implementation and best practices for the DeployStack Gateway CLI
+sidebar: Security
+icon: Lock
+---
+
+# Gateway Security
+
+The DeployStack Gateway implements multiple layers of security to protect user credentials, ensure secure communication, and maintain system integrity. This document covers the security architecture and implementation details.
+
+## Credential Storage Security
+
+### OS Keychain Integration
+
+The gateway uses the **Zowe Secrets SDK** for cross-platform secure credential storage, providing native integration with each operating system's secure storage mechanism:
+
+**Platform-specific storage:**
+- **macOS**: Keychain Access using the Security.framework
+- **Windows**: Credential Manager using CredWrite/CredRead APIs
+- **Linux**: Secret Service API using libsecret
+
+The keychain integration stores credentials with the service name `deploystack-gateway` and uses the user's email address as the account identifier. This approach leverages the operating system's built-in security features including:
+
+- Hardware-backed encryption where available
+- User authentication requirements for access
+- Automatic credential isolation between users
+- Integration with system security policies
+
+### Encrypted File Fallback
+
+When OS keychain access is unavailable or fails, credentials are stored in encrypted files as a secure fallback:
+
+**Encryption Details:**
+- **Algorithm**: AES-256-CBC encryption
+- **Key Derivation**: Fixed key with padding (development approach)
+- **Initialization Vector**: Random 16-byte IV generated per encryption
+- **Storage Format**: `IV:encrypted_data` in hexadecimal encoding
+
+**File Security:**
+- **Location**: `~/.deploystack/credentials.enc`
+- **Permissions**: `0o600` (owner read/write only)
+- **Directory Permissions**: `0o700` (owner access only)
+
+### Account Management
+
+The gateway maintains a secure account tracking system:
+
+**Account List:**
+- **Location**: `~/.deploystack/accounts.json`
+- **Content**: Array of user email addresses (no sensitive data)
+- **Purpose**: Enables credential discovery from keychain storage
+- **Format**: JSON array with most recent accounts first
+
+**Security Considerations:**
+- Contains only email addresses, no tokens or passwords
+- Used for keychain credential lookup
+- Automatically maintained during login/logout operations
+- Cleaned up when credentials are cleared
+
+## Token Security
+
+### Access Token Format
+
+Access tokens use a custom JWT-like format designed for the DeployStack backend:
+
+**Token Structure:**
+```
+<random_token>.<base64_payload>
+```
+
+**Components:**
+- **Random Token**: 512-bit cryptographically secure random value
+- **Payload**: Base64-encoded JSON containing user info, scopes, and expiration
+- **Database Storage**: Argon2 hash of the complete token for verification
+
+**Security Features:**
+- No client-side signature verification required
+- Embedded user information reduces database lookups
+- Cryptographically secure random component
+- Server-side hash verification prevents tampering
+
+### Token Expiration
+
+**Access Tokens**: 1 week (604,800 seconds)
+- Provides reasonable balance between security and usability
+- Reduces frequent re-authentication during development
+- Long enough for typical CLI usage patterns
+- Short enough to limit exposure if compromised
+
+**Refresh Tokens**: 30 days
+- Enables seamless token renewal
+- Longer lifetime for better user experience
+- Stored securely alongside access tokens
+- Automatically used for token refresh
+
+### Token Validation
+
+The gateway implements comprehensive token validation:
+
+**Local Validation:**
+- Checks token expiration with 5-minute buffer
+- Validates token format and structure
+- Prevents unnecessary API calls with expired tokens
+
+**Server Validation:**
+- Backend verifies token hash using Argon2
+- Checks database expiration timestamps
+- Validates user permissions and scopes
+
+## Network Security
+
+### HTTPS Enforcement
+
+The gateway enforces secure communication:
+
+**Production Requirements:**
+- All API communications must use HTTPS
+- SSL certificate validation is strictly enforced
+- Self-signed certificates are rejected
+- Insecure HTTP connections are blocked
+
+**Development Flexibility:**
+- Localhost connections allow HTTP for development
+- Self-signed certificates accepted for local testing
+- Security warnings displayed for non-production servers
+- Clear distinction between development and production modes
+
+### Request Security
+
+All API requests include comprehensive security headers:
+
+**Standard Headers:**
+- **Authorization**: Bearer token authentication
+- **Content-Type**: Proper content type specification
+- **User-Agent**: Identifies the CLI client and version
+
+**Security Measures:**
+- Bearer token authentication for all authenticated requests
+- Proper content type validation
+- Request timeout protection
+- Automatic retry logic with exponential backoff
+
+### Callback Server Security
+
+The temporary OAuth callback server implements multiple security layers:
+
+**Network Security:**
+- **Binding**: Only accepts connections from localhost/127.0.0.1
+- **Port**: Fixed port 8976 for consistency
+- **Protocol**: HTTP (acceptable for localhost)
+
+**Request Validation:**
+- **Path Validation**: Only `/oauth/callback` path is handled
+- **Parameter Validation**: Required OAuth parameters are verified
+- **State Validation**: CSRF protection through state parameter
+
+**Lifecycle Management:**
+- **Auto-cleanup**: Server automatically shuts down after callback
+- **Timeout Protection**: Configurable timeout (default: 5 minutes)
+- **Resource Cleanup**: Proper cleanup of server resources
+
+## OAuth2 Security (PKCE)
+
+The gateway implements PKCE (Proof Key for Code Exchange) following RFC 7636:
+
+### Code Verifier Generation
+
+**Specifications:**
+- **Length**: 128 characters (96 random bytes base64url encoded)
+- **Entropy**: Cryptographically secure random generation
+- **Format**: Base64url encoding without padding
+- **Uniqueness**: New verifier generated for each authentication
+
+### Code Challenge Generation
+
+**Process:**
+- **Input**: Code verifier string
+- **Hashing**: SHA256 hash of the verifier
+- **Encoding**: Base64url encoding of the hash
+- **Method**: Always uses `S256` (SHA256)
+
+### State Parameter Security
+
+**Generation:**
+- **Length**: 32 random bytes base64url encoded
+- **Purpose**: CSRF protection
+- **Validation**: Strict comparison with received state
+- **Storage**: Temporarily stored during OAuth flow
+
+**PKCE Security Benefits:**
+- Prevents authorization code interception attacks
+- Eliminates need for client secrets in public clients
+- Provides cryptographic proof of authorization request origin
+- Protects against malicious applications
+
+## Error Handling Security
+
+### Secure Error Messages
+
+The gateway implements secure error handling principles:
+
+**User-Facing Messages:**
+- Generic error descriptions to avoid information disclosure
+- Helpful guidance without revealing system internals
+- No exposure of tokens, credentials, or sensitive data
+- Clear action items for users to resolve issues
+
+**Error Categories:**
+- **Authentication Errors**: Login and token-related issues
+- **Network Errors**: Connectivity and communication problems
+- **Storage Errors**: Credential storage and retrieval issues
+- **Authorization Errors**: Permission and scope-related problems
+
+### Timeout Protection
+
+All network operations include timeout protection:
+
+**Timeout Types:**
+- **OAuth Callback**: 5-minute default timeout for user authorization
+- **API Requests**: Reasonable timeouts for backend communication
+- **Token Refresh**: Quick timeout for refresh operations
+- **Browser Opening**: Timeout for automatic browser launch
+
+**Security Benefits:**
+- Prevents indefinite resource consumption
+- Limits exposure time for temporary servers
+- Provides clear failure modes
+- Enables graceful error recovery
+
+## File System Security
+
+### Directory Permissions
+
+The gateway creates secure directories for credential storage:
+
+**Directory Structure:**
+- **Base Directory**: `~/.deploystack/`
+- **Permissions**: `0o700` (owner read/write/execute only)
+- **Creation**: Automatic creation with secure permissions
+- **Platform Compatibility**: Works across Windows, macOS, and Linux
+
+### File Permissions
+
+**Credential Files:**
+- **Encrypted Credentials**: `0o600` (owner read/write only)
+- **Account List**: `0o644` (owner write, others read - no sensitive data)
+- **Temporary Files**: Secure permissions and automatic cleanup
+
+### Secure File Cleanup
+
+Credential removal includes comprehensive cleanup:
+
+**Cleanup Process:**
+- **Keychain Removal**: Credentials removed from OS keychain
+- **File Deletion**: Encrypted files securely deleted
+- **Account List**: Account entries removed from tracking
+- **Directory Cleanup**: Empty directories removed when appropriate
+
+**Security Considerations:**
+- Multiple cleanup attempts for reliability
+- Graceful handling of partial failures
+- No sensitive data left in temporary files
+- Proper error handling during cleanup
+
+## Development vs Production Security
+
+### Environment Detection
+
+The gateway automatically detects and adapts to different environments:
+
+**Development Mode Indicators:**
+- URLs containing `localhost`
+- Non-HTTPS protocols for local servers
+- Development-specific configuration options
+
+**Production Mode Requirements:**
+- HTTPS enforcement for all communications
+- Strict SSL certificate validation
+- Limited error information exposure
+- Enhanced security warnings
+
+### Security Warnings
+
+The CLI provides appropriate security warnings:
+
+**Development Warnings:**
+- Alerts when connecting to non-production servers
+- Warnings about HTTP usage in development
+- Reminders about development-only features
+
+**Production Safeguards:**
+- Blocks insecure connections
+- Validates server certificates
+- Limits debug information exposure
+
+## Security Best Practices
+
+### 1. Credential Protection
+- Never log credentials or tokens in plain text
+- Use OS keychain as primary storage mechanism
+- Encrypt fallback storage with strong encryption
+- Restrict file permissions to owner-only access
+- Implement secure credential cleanup
+
+### 2. Network Security
+- Enforce HTTPS in production environments
+- Validate SSL certificates strictly
+- Use secure headers in all requests
+- Implement proper request timeouts
+- Handle network errors gracefully
+
+### 3. OAuth2 Security
+- Always use PKCE for authorization code flow
+- Validate state parameters to prevent CSRF attacks
+- Use cryptographically secure random values
+- Implement proper token refresh logic
+- Handle authorization errors appropriately
+
+### 4. Error Handling
+- Avoid exposing sensitive data in error messages
+- Log detailed errors for debugging (server-side only)
+- Provide helpful user guidance without revealing internals
+- Implement proper timeout handling
+- Use structured error codes for programmatic handling
+
+### 5. Process Security
+- Exit cleanly after operations complete
+- Clean up temporary resources properly
+- Handle interruption signals gracefully
+- Validate all user inputs
+- Implement proper resource management
+
+For OAuth2 flow details and implementation specifics, see the [Gateway OAuth Guide](./oauth.mdx).
+
+## Security Auditing
+
+### Credential Audit
+
+**File System Checks:**
+- Verify credential directory permissions (`~/.deploystack/`)
+- Check encrypted file permissions (`credentials.enc`)
+- Validate account list format (`accounts.json`)
+
+**Keychain Verification:**
+- Check for stored credentials in OS keychain
+- Verify service name and account identifiers
+- Validate keychain access permissions
+
+### Network Security Audit
+
+**Connection Monitoring:**
+- Monitor HTTPS usage in production
+- Verify SSL certificate validation
+- Check for secure header usage
+
+**Certificate Validation:**
+- Verify SSL certificate chains
+- Check certificate expiration dates
+- Validate certificate authority trust
+
+### Security Monitoring
+
+**Authentication Events:**
+- Monitor login success and failure rates
+- Track token refresh patterns
+- Identify unusual authentication behavior
+
+**Error Analysis:**
+- Review authentication error patterns
+- Monitor network connectivity issues
+- Analyze credential storage problems
+
+The gateway's security implementation follows industry best practices and provides multiple layers of protection for user credentials and system integrity.

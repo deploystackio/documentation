@@ -20,16 +20,15 @@ Our CLI framework of choice for building the gateway's command-line interface.
 - Simple yet powerful API
 - Extensive documentation and community
 
-**Usage Example:**
-```typescript
-import { Command } from 'commander';
+### Fastify
+High-performance HTTP server framework for the proxy server implementation.
 
-const program = new Command();
-program
-  .name('deploystack')
-  .description('DeployStack Gateway CLI')
-  .version('1.0.0');
-```
+**Why Fastify?**
+- Excellent TypeScript support with built-in type definitions
+- High performance with low overhead
+- Rich plugin ecosystem for middleware
+- Built-in JSON schema validation
+- Comprehensive logging and error handling
 
 ## UI and Feedback
 
@@ -113,6 +112,7 @@ Enhanced file system module with promise support and extra methods.
 - Includes all standard fs methods
 - Adds useful methods like `copy`, `remove`, `ensureDir`
 - Promise-based API for cleaner async code
+- Essential for team-aware tool caching system
 
 **glob**  
 File pattern matching using shell-style wildcards.
@@ -159,6 +159,12 @@ Native OS keychain integration for secure credential storage.
 Additional encryption for sensitive data.
 - AES encryption for config files
 - Secure hashing for verification
+
+**crypto (Node.js built-in)**  
+Native cryptographic functionality for session management.
+- Cryptographically secure random bytes generation
+- Session ID generation with 256-bit entropy
+- Base64url encoding for URL-safe session identifiers
 
 ### Networking
 

@@ -22,22 +22,30 @@ services/gateway/
 │   │   ├── start.ts         # Start the gateway server
 │   │   ├── stop.ts          # Stop the gateway server
 │   │   ├── status.ts        # Show gateway status
+│   │   ├── mcp.ts           # MCP server management and tool discovery
 │   │   └── config.ts        # Manage local configuration
 │   ├── core/                # Core business logic
 │   │   ├── auth/            # Authentication handling
 │   │   │   ├── client.ts    # OAuth and API client
 │   │   │   └── storage.ts   # Secure credential storage
 │   │   ├── server/          # HTTP proxy server
-│   │   │   ├── proxy.ts     # Request routing logic
-│   │   │   └── middleware.ts # Auth and logging middleware
+│   │   │   ├── proxy.ts     # Request routing and dual-endpoint logic
+│   │   │   ├── session-manager.ts # SSE session lifecycle management
+│   │   │   └── sse-handler.ts # Server-Sent Events implementation
 │   │   ├── process/         # MCP process management
-│   │   │   ├── manager.ts   # Process lifecycle management
-│   │   │   ├── spawner.ts   # Process spawning logic
-│   │   │   └── stdio.ts     # Stdio communication handler
-│   │   └── sync/            # Configuration sync
-│   │       ├── client.ts    # Cloud API client
-│   │       └── cache.ts     # Local config cache
+│   │   │   ├── manager.ts   # Process lifecycle and stdio communication
+│   │   │   └── runtime-state.ts # In-memory process state tracking
+│   │   ├── mcp/             # MCP configuration management
+│   │   │   ├── config-service.ts # Team config sync and processing
+│   │   │   ├── config-processor.ts # Installation method processing
+│   │   │   ├── tool-discovery.ts # MCP server tool discovery
+│   │   │   ├── tool-cache.ts # Team-aware tool caching system
+│   │   │   └── team-context-manager.ts # Team switching with process lifecycle
+│   │   └── config/          # Configuration utilities
+│   │       └── defaults.ts  # Default gateway settings
 │   ├── utils/               # Shared utilities
+│   │   ├── tool-discovery-manager.ts # Centralized tool discovery and caching
+│   │   ├── state-comparator.ts # Compare expected vs actual running processes
 │   │   ├── logger.ts        # Centralized logging with chalk
 │   │   ├── spinner.ts       # Progress indicators with ora
 │   │   ├── config.ts        # Configuration management
@@ -76,10 +84,11 @@ The codebase is organized into distinct modules:
 
 ### Process Management
 The `process/` module handles the complexity of:
-- Spawning MCP servers on-demand
-- Managing stdio communication
-- Injecting environment variables securely
-- Cleaning up idle processes
+- Managing persistent background MCP server processes
+- Runtime state tracking and team isolation
+- Managing stdio communication with running processes
+- Injecting environment variables securely at startup
+- Graceful process lifecycle management following MCP protocol
 
 ### Security First
 - Credentials are never stored in plain text
@@ -87,9 +96,10 @@ The `process/` module handles the complexity of:
 - Environment injection happens at runtime only
 
 ### Developer Experience
-- Intuitive command structure (`deploystack login`, `deploystack start`)
+- Intuitive command structure (`deploystack login`, `deploystack start`, `deploystack mcp`)
 - Rich CLI feedback with colors and progress indicators
 - Clear error messages with actionable solutions
+- MCP server management and tool discovery capabilities
 
 ## Module Responsibilities
 
@@ -113,20 +123,35 @@ export function registerLoginCommand(program: Command) {
 - Automatic token refresh
 - Session management
 
-**server/**: HTTP proxy server implementation
-- Single endpoint: `localhost:9095/mcp`
-- Request routing to appropriate MCP servers
-- Middleware for authentication and logging
+**server/**: HTTP proxy server with dual transport support
+- **proxy.ts**: Dual-endpoint routing (GET /sse for SSE connections, POST /message for session-based JSON-RPC)
+- **session-manager.ts**: Cryptographically secure session lifecycle management
+- **sse-handler.ts**: Server-Sent Events implementation for VS Code compatibility
 
 **process/**: MCP server process lifecycle
-- On-demand spawning based on requests
-- Stdio transport implementation
-- Resource cleanup and monitoring
+- Persistent background process management
+- Runtime state tracking with team isolation
+- Stdio transport implementation for continuous communication
+- Graceful lifecycle management following MCP protocol
+- Enterprise management layer (MCP servers as toggleable tools)
 
-**sync/**: Configuration synchronization
-- Periodic sync with cloud control plane
-- Local caching for offline support
-- Configuration validation
+**mcp/**: Configuration management and processing
+- Team configuration synchronization with cloud control plane
+- Raw API data storage and processed config generation
+- Secure credential injection and environment variable management
+- MCP server tool discovery and capability exploration
+- Team-aware tool caching system as detailed in [Caching System](./caching-system)
+- Installation method processing for correct server spawning
+
+**utils/**: Shared utilities and centralized services
+- **tool-discovery-manager.ts**: Centralized tool discovery eliminating code duplication across commands
+- Logging, configuration, and encryption utilities
+- Progress indicators and error handling
+
+**config/**: Configuration utilities and defaults
+- Default gateway settings and validation
+- Configuration file management
+- Environment-specific overrides
 
 ### Build Output
 The TypeScript code is compiled to CommonJS for maximum compatibility:

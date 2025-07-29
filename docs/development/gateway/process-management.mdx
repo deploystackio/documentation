@@ -1,0 +1,202 @@
+---
+title: Gateway Process Management
+description: How the DeployStack Gateway manages MCP server processes with persistent background processes, secure credential injection, and enterprise governance
+sidebar: Process Management
+icon: Cpu
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Zap, Shield, Monitor, RefreshCw, AlertTriangle, Users } from 'lucide-react';
+
+# Gateway Process Management
+
+The DeployStack Gateway implements sophisticated process management to handle MCP server lifecycles with enterprise-grade security, performance, and governance. Each MCP server runs as a persistent background process with secure credential injection and continuous availability.
+
+## Architecture Overview
+
+The Gateway's process management system operates on a **persistent background process** model, similar to Claude Desktop, where all configured MCP server processes are started when the gateway launches and run continuously until shutdown. This approach provides instant tool availability and eliminates the latency associated with process spawning during development workflows.
+
+## Core Concepts
+
+<Cards>
+  <Card 
+    icon={<Zap />} 
+    title="Persistent Background Processes"
+  >
+    All configured MCP servers start with the gateway and run continuously, providing instant tool availability
+  </Card>
+  
+  <Card 
+    icon={<Shield />} 
+    title="Secure Credential Injection"
+  >
+    API tokens and credentials are injected directly into process environments without developer exposure
+  </Card>
+  
+  <Card 
+    icon={<Monitor />} 
+    title="Runtime State Management"
+  >
+    Comprehensive tracking of running processes with health monitoring and team isolation
+  </Card>
+  
+  <Card 
+    icon={<RefreshCw />} 
+    title="Graceful Lifecycle Management"
+  >
+    Proper MCP shutdown sequence following protocol specifications for clean termination
+  </Card>
+  
+  <Card 
+    icon={<AlertTriangle />} 
+    title="State Comparison & Recovery"
+  >
+    Compares expected vs actual running processes with automatic recovery mechanisms
+  </Card>
+  
+  <Card 
+    icon={<Users />} 
+    title="Team Context Switching"
+  >
+    Seamless switching between teams with complete process lifecycle management
+  </Card>
+</Cards>
+
+## Process Lifecycle
+
+### Gateway Startup Phase
+When the Gateway starts (`deploystack start`), all configured MCP servers for the selected team are launched simultaneously:
+
+- **Team Configuration Loading**: Downloads and validates team MCP server configurations
+- **Bulk Process Spawning**: Starts all configured MCP servers as background processes
+- **Runtime Detection**: Automatic detection of Node.js, Python, Go, or custom runtime requirements
+- **Environment Preparation**: Secure injection of team-specific credentials and configuration
+- **MCP Protocol Handshake**: Establishes JSON-RPC communication with 30-second timeout for package downloads
+- **Runtime State Registration**: Adds all successfully started processes to the runtime state manager
+
+### Continuous Operation Phase
+During normal operation, all MCP servers run continuously in the background:
+
+- **Persistent Availability**: All tools are immediately available without process spawning delays
+- **Request Routing**: Direct routing of tool calls to already-running MCP server processes
+- **Health Monitoring**: Continuous monitoring of process status, uptime, and responsiveness
+- **State Comparison**: Regular comparison of expected vs actual running processes
+- **Error Logging**: Proper distinction between informational stderr output and actual errors
+
+### Team Context Switching
+When switching teams, the Gateway performs complete process lifecycle management:
+
+- **Graceful Shutdown**: Stops all MCP servers for the current team following MCP protocol
+- **Configuration Refresh**: Downloads new team's MCP server configurations
+- **Process Restart**: Starts all MCP servers for the new team
+- **State Synchronization**: Updates runtime state to reflect the new team context
+
+### Gateway Shutdown Phase
+When the Gateway stops (`deploystack stop` or Ctrl+C), processes are terminated gracefully:
+
+- **MCP Protocol Compliance**: Follows proper MCP shutdown sequence (close stdin → wait → SIGTERM → wait → SIGKILL)
+- **Parallel Shutdown**: All processes are stopped concurrently for faster shutdown
+- **Resource Cleanup**: Ensures all file descriptors and system resources are properly released
+- **State Cleanup**: Clears runtime state and removes process tracking information
+
+## Security Model
+
+### Credential Isolation
+The Gateway implements a **zero-exposure credential model** where:
+
+- Credentials are never written to disk in plain text
+- Environment variables are injected directly into spawned processes
+- No credential access from the developer's shell environment
+- Automatic credential rotation when team configurations change
+
+### Process Isolation
+Each MCP server runs in complete isolation with:
+
+- **Separate Process Space**: No shared memory or resources between MCP servers
+- **Independent Environments**: Each process has its own environment variable set
+- **Resource Boundaries**: CPU and memory limits to prevent resource exhaustion
+- **Network Isolation**: Controlled network access based on server requirements
+
+## Enterprise Governance
+
+### Tool-Level Management
+The Gateway transforms traditional MCP servers into enterprise-manageable tools by presenting each server as:
+
+- **Enable/Disable Controls**: Administrators can control which MCP servers are available
+- **Status Monitoring**: Real-time visibility into process health and performance
+- **Usage Analytics**: Tracking of tool usage patterns and resource consumption
+- **Access Policies**: Team-based access control enforcement
+
+### Operational Controls
+Enterprise administrators gain operational control through:
+
+- **Centralized Configuration**: All MCP server configurations managed through the cloud control plane
+- **Policy Enforcement**: Automatic enforcement of team-based access policies
+- **Audit Logging**: Comprehensive logging of all process management activities
+- **Resource Management**: Monitoring and control of system resource usage
+
+## Performance Optimization
+
+### Resource Efficiency
+The Gateway optimizes resource usage through the persistent background process model:
+
+- **Continuous Operation**: All processes run continuously, eliminating spawn/cleanup overhead
+- **Shared Process Pool**: Multiple tool requests reuse the same persistent MCP server processes
+- **Memory Stability**: Consistent memory usage patterns with no spawn/cleanup cycles
+- **CPU Optimization**: Direct request routing to running processes minimizes CPU overhead
+
+### Response Time Optimization
+Instant response times are achieved through:
+
+- **Zero Latency**: Tools are immediately available from already-running processes
+- **Parallel Processing**: Concurrent handling of multiple tool requests across persistent processes
+- **Persistent Connections**: Maintained stdio connections eliminate connection establishment overhead
+- **Cache-as-Manifest**: Cached tool information serves as configuration manifest for instant startup
+
+## Error Handling and Recovery
+
+### Failure Detection
+The Gateway monitors for various failure scenarios:
+
+- **Process Crashes**: Automatic detection of terminated or crashed processes
+- **Communication Failures**: Identification of broken stdio communication channels
+- **Timeout Conditions**: Detection of unresponsive processes
+- **Resource Exhaustion**: Monitoring for memory or CPU limit violations
+
+### Recovery Strategies
+When failures are detected, the Gateway implements:
+
+- **Automatic Restart**: Immediate restart of crashed processes with exponential backoff
+- **Fallback Mechanisms**: Graceful degradation when processes are unavailable
+- **Error Reporting**: Detailed error reporting to developers and administrators
+- **Circuit Breaker**: Temporary disabling of problematic processes to prevent cascading failures
+
+## Integration Points
+
+The process management system integrates with other Gateway components:
+
+- **[MCP Configuration Management](./mcp)**: Uses team configurations to determine spawn parameters
+- **[Caching System](./caching-system)**: Coordinates with tool discovery and caching mechanisms
+- **[Project Structure](./structure)**: Implements the architecture defined in the core modules
+- **HTTP Proxy Server**: Provides process information for request routing decisions
+
+## Monitoring and Observability
+
+### Process Metrics
+The Gateway tracks comprehensive metrics including:
+
+- **Process Count**: Number of active MCP server processes
+- **Resource Usage**: CPU, memory, and file descriptor consumption
+- **Request Throughput**: Number of requests processed per process
+- **Error Rates**: Frequency and types of process errors
+- **Response Times**: Latency metrics for tool requests
+
+### Health Indicators
+Key health indicators monitored include:
+
+- **Process Responsiveness**: Time to respond to health check requests
+- **Memory Growth**: Detection of memory leaks or excessive memory usage
+- **Error Patterns**: Identification of recurring error conditions
+- **Resource Limits**: Proximity to configured resource boundaries
+
+This process management system ensures that the DeployStack Gateway can reliably handle enterprise workloads while maintaining the security, performance, and governance requirements of modern development teams.
