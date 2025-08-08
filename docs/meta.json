@@ -1,5 +1,25 @@
 {
+  "title": "DeployStack",
+  "description": "Documentation for DeployStack",
+  "icon": "DeployStackLogo",
+  "root": true,  
   "pages": [
-    "self-hosted"
+    "quick-start.mdx",
+    "---General---",
+    "teams.mdx",
+    "roles.mdx",
+    "onboard-new-team-members.mdx",
+    "global-settings.mdx",
+    "security.mdx",
+    "---MCP Server---",
+    "mcp-catalog.mdx",
+    "mcp-installation.mdx",
+    "mcp-categories.mdx",
+    "---Administration---",
+    "auth.mdx",
+    "github-application.mdx",
+    "github-oauth-setup.mdx",
+    "troubleshooting.mdx",
+    "local-setup.mdx"
   ]
 }

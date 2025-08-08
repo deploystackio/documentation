@@ -1,0 +1,9 @@
+{
+  "title": "Gateway Development",
+  "description": "Documentation for DeployStack Gateway Development",
+  "icon": "Plug",
+  "root": true,
+  "pages": [
+    "..."
+  ]
+}
