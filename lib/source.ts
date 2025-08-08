@@ -16,7 +16,6 @@ export const source = loader({
   // The source of the documents, converted to Fumadocs format.
   source: docs.toFumadocsSource(),
   
-  
   // Icon handler to support both lucide-react icons and custom icons
   icon(icon) {
     if (!icon) {
@@ -47,12 +46,4 @@ export const source = loader({
       return node;
     },
   },
-
-  // Optional: You can define global MDX components here if not done elsewhere
-  // globalMdxComponents: getMDXComponents(),
 });
-
-// You might also want to export page tree and other utilities if needed directly
-// export const pageTree = source.pageTree;
-// export const getPage = source.getPage;
-// export const generateParams = source.generateParams;

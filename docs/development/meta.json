@@ -1,5 +1,13 @@
 {
+  "title": "Development",
+  "description": "Development documentation for DeployStack",
+  "icon": "Code",
+  "root": true,
   "pages": [
-    "frontend/index.mdx"  
+    "index",
+    "---Sections---",
+    "frontend",
+    "backend",
+    "gateway"
   ]
 }
