@@ -56,6 +56,7 @@ npm run lint:links   # Link validation
 5. **Links**: Use absolute paths for all references:
    - Documentation: `/docs/docker-to-iac/`
    - Images: `/docs/assets/images/example.png`
+6. **Brand Colors**: Use the primary color (`text-primary`, `bg-primary`) for consistency - avoid introducing other accent colors
 
 ### Navigation Structure
 
