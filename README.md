@@ -1,6 +1,6 @@
 # DeployStack Documentation
 
-This repository contains the official documentation site for the [DeployStack](https://deploystack.io/docs/) ecosystem, built with [fumadocs](https://fumadocs.vercel.app/). Visit [deploystack.io](https://deploystack.io) to learn more about our platform.
+This repository contains the official documentation site for [DeployStack](https://deploystack.io/docs/), The Complete MCP Management Platform, built with [fumadocs](https://fumadocs.vercel.app/). Visit [deploystack.io](https://deploystack.io) to learn more about our platform.
 
 ## Technology Stack
 
@@ -15,9 +15,14 @@ This repository contains the official documentation site for the [DeployStack](h
 ```text
 .
 ├── docs/                  # Documentation content (MDX files)
-│   ├── deploystack/       # DeployStack documentation
-│   ├── docker-to-iac/     # Docker-to-IaC documentation
-│   └── assets/            # Images and static assets
+│   ├── development/       # Development documentation
+│   │   ├── backend/       # Backend development guides
+│   │   ├── frontend/      # Frontend development guides
+│   │   └── gateway/       # Gateway architecture & implementation
+│   ├── self-hosted/       # Self-hosting guides
+│   ├── deploystack/       # Core DeployStack documentation
+│   ├── assets/            # Images and static assets
+│   └── ...                # MCP guides and configuration docs
 ├── app/                   # Next.js app directory (fumadocs framework)
 ├── lib/                   # Documentation utilities & components
 └── source.config.ts       # Fumadocs configuration
@@ -54,7 +59,7 @@ npm run lint:links   # Link validation
 3. **Navigation**: Use `meta.json` files in each directory to control navigation structure
 4. **Assets**: Place images in `docs/assets/images/` with appropriate subdirectories
 5. **Links**: Use absolute paths for all references:
-   - Documentation: `/docs/docker-to-iac/`
+   - Documentation: `/docs/development/gateway/`
    - Images: `/docs/assets/images/example.png`
 6. **Brand Colors**: Use the primary color (`text-primary`, `bg-primary`) for consistency - avoid introducing other accent colors
 
