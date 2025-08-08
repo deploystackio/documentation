@@ -1,7 +1,5 @@
 {
   "pages": [
-    "deploystack", 
-    "docker-to-iac",
-    "docker-deployment"
+    "self-hosted"
   ]
 }
