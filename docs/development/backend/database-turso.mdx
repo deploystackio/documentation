@@ -19,6 +19,10 @@ DeployStack integrates with Turso using the official `@libsql/client` driver thr
 - **Scalability**: Automatic scaling based on usage patterns
 - **libSQL Protocol**: Enhanced SQLite with additional networking capabilities
 
+<Callout type="info">
+  **Migration Compatibility**: Turso requires SQL statements to be executed individually rather than in batches. DeployStack automatically handles this requirement by intelligently splitting migration files into individual statements during execution. You don't need to modify your migrations or write them differently - we handle the complexity for you.
+</Callout>
+
 ## Setup and Configuration
 
 ### Prerequisites
@@ -132,6 +136,8 @@ npm run db:generate
 npm run db:up
 ```
 
+**Note**: While migrations use standard SQLite syntax with multiple statements and breakpoint markers, DeployStack automatically processes these for Turso compatibility. Each CREATE TABLE, CREATE INDEX, and other SQL statements are executed individually behind the scenes, ensuring smooth deployment without any manual intervention.
+
 ### Database Operations
 
 All standard Drizzle operations work with Turso:
@@ -169,8 +175,9 @@ Turso connections are managed automatically by the libSQL client:
 ### Query Optimization
 
 - **Prepared Statements**: Use prepared statements for repeated queries
-- **Batch Operations**: Group multiple operations when possible
+- **Batch Operations**: Group multiple operations when possible (note: migrations are automatically split for compatibility)
 - **Indexing**: Add appropriate indexes for frequently queried columns
+- **Migration Performance**: Initial migrations execute individually for compatibility, but runtime queries maintain full performance
 
 ```typescript
 // Example: Batch operations
@@ -247,11 +254,20 @@ Error: Authentication failed
 
 **Migration Errors**
 ```
+Error: SQL_MANY_STATEMENTS: SQL string contains more than one statement
+```
+- **Status**: This error is automatically handled by DeployStack as of version 1.0+
+- **Cause**: Turso's libSQL client requires individual statement execution
+- **Solution**: DeployStack automatically splits and executes statements individually
+- If you encounter this error, ensure you're running the latest version of DeployStack
+
+```
 Error: Migration failed to apply
 ```
 - Check migration SQL syntax is valid SQLite
 - Verify no conflicting schema changes
 - Review migration order and dependencies
+- Ensure your Turso database has sufficient resources
 
 ### Debug Logging
 
@@ -291,6 +307,35 @@ turso db show your-database
 # Monitor query performance
 turso db shell your-database --command "EXPLAIN QUERY PLAN SELECT * FROM authUser"
 ```
+
+## Technical Implementation Details
+
+### How DeployStack Handles Turso Migrations
+
+Unlike SQLite which can execute multiple SQL statements in a single call, Turso's libSQL client requires each statement to be executed individually. DeployStack solves this transparently:
+
+1. **Automatic Statement Splitting**: Migration files are intelligently parsed to separate:
+   - Statements divided by `--> statement-breakpoint` markers
+   - Multiple statements on the same line (like consecutive CREATE INDEX commands)
+   - Complex migrations with mixed DDL operations
+
+2. **Sequential Execution**: Each statement is executed in order with proper error handling
+3. **Transaction Safety**: Failed statements properly roll back to maintain database consistency
+4. **Performance Impact**: Migration execution is slightly slower than SQLite (milliseconds per statement), but this only affects initial setup and schema changes, not runtime performance
+
+### Migration File Compatibility
+
+Your existing Drizzle migration files work without modification:
+
+```sql
+-- This standard Drizzle migration works perfectly
+CREATE TABLE users (...);
+--> statement-breakpoint
+CREATE INDEX idx_users_email ON users(email);--> statement-breakpoint
+CREATE UNIQUE INDEX idx_users_username ON users(username);
+```
+
+DeployStack automatically handles the parsing and execution, so you write migrations exactly as you would for SQLite.
 
 ## Advanced Features
 
@@ -383,6 +428,20 @@ Since Turso is SQLite-compatible, migration is straightforward:
 2. **Convert to SQLite format**: Ensure compatibility
 3. **Import to Turso**: Load data into Turso database
 4. **Update configuration**: Switch database type to Turso
+
+## Known Limitations and Solutions
+
+### Statement Execution
+
+**Limitation**: Turso cannot execute multiple SQL statements in a single database call.
+
+**DeployStack Solution**: Automatic statement splitting and sequential execution. This is completely transparent - you never need to think about it.
+
+### Migration Speed
+
+**Limitation**: Migrations apply slightly slower than with local SQLite due to individual statement execution and network latency.
+
+**DeployStack Solution**: Migrations are a one-time operation during setup or updates. Runtime performance is unaffected. For large migrations, DeployStack provides progress logging to track execution.
 
 ## Cost Optimization
 

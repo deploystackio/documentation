@@ -32,7 +32,7 @@ During development, the backend loads environment variables from `.env` files us
 PORT=3000
 NODE_ENV=development
 DEPLOYSTACK_FRONTEND_URL=http://localhost:5173
-COOKIE_SECRET=your-secure-cookie-secret-here
+DEPLOYSTACK_ENCRYPTION_SECRET=your-secure-cookie-secret-here
 ```
 
 ### Production Environment Variables
@@ -44,7 +44,7 @@ In production Docker containers, variables are injected at runtime via Docker's 
 docker run -e PORT=3000 \
            -e NODE_ENV=production \
            -e DEPLOYSTACK_FRONTEND_URL="https://app.deploystack.com" \
-           -e COOKIE_SECRET="your-production-cookie-secret" \
+           -e DEPLOYSTACK_ENCRYPTION_SECRET="your-production-secret" \
            deploystack/backend:latest
 ```
 
@@ -65,16 +65,10 @@ HOST=localhost
 DEPLOYSTACK_FRONTEND_URL=http://localhost:5173
 
 # Security
-COOKIE_SECRET=a-very-secret-and-strong-secret-for-cookies
 DEPLOYSTACK_ENCRYPTION_SECRET=your-encryption-secret-here
 
 # Logging
 LOG_LEVEL=debug
-
-# OAuth Configuration (optional for development)
-GITHUB_CLIENT_ID=your-github-client-id
-GITHUB_CLIENT_SECRET=your-github-client-secret
-GITHUB_REDIRECT_URI=http://localhost:3000/api/auth/github/callback
 
 ```
 
@@ -152,8 +146,7 @@ docker run -d -p 3000:3000 \
   -e NODE_ENV=production \
   -e PORT=3000 \
   -e DEPLOYSTACK_FRONTEND_URL="https://app.deploystack.com" \
-  -e COOKIE_SECRET="your-production-secret" \
-  -e DEPLOYSTACK_ENCRYPTION_SECRET="your-encryption-secret" \
+  -e DEPLOYSTACK_ENCRYPTION_SECRET="your-production-secret" \
   deploystack/backend:latest
 ```
 
@@ -170,11 +163,8 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - DEPLOYSTACK_FRONTEND_URL=https://app.deploystack.com
-      - COOKIE_SECRET=your-production-cookie-secret
       - DEPLOYSTACK_ENCRYPTION_SECRET=your-encryption-secret
-      - GITHUB_CLIENT_ID=your-github-client-id
-      - GITHUB_CLIENT_SECRET=your-github-client-secret
-      - GITHUB_REDIRECT_URI=https://api.deploystack.com/api/auth/github/callback
+
     volumes:
       - ./data:/app/data  # For SQLite database persistence
 ```
@@ -215,7 +205,7 @@ function getRequiredEnv(key: string): string {
   return value
 }
 
-const cookieSecret = getRequiredEnv('COOKIE_SECRET')
+const encryptionSecret = getRequiredEnv('DEPLOYSTACK_ENCRYPTION_SECRET')
 ```
 
 ### Server Configuration Example
@@ -233,7 +223,7 @@ export const createServer = async () => {
 
   // Cookie configuration
   await server.register(fastifyCookie, {
-    secret: process.env.COOKIE_SECRET || 'fallback-secret',
+    secret: process.env.DEPLOYSTACK_ENCRYPTION_SECRET || 'fallback-secret',
     parseOptions: {}
   })
 
@@ -375,8 +365,7 @@ PORT=3000
 NODE_ENV=development
 DEPLOYSTACK_FRONTEND_URL=http://localhost:5173
 DEPLOYSTACK_ENCRYPTION_SECRET=secret
-GITHUB_CLIENT_ID=client-id
-GITHUB_CLIENT_SECRET=client-secret
+
 
 ❌ Bad
 port=3000                    # Wrong case
@@ -397,8 +386,6 @@ DEPLOYSTACK_FRONTEND_URL=http://localhost:5173
 DEPLOYSTACK_ENCRYPTION_SECRET=secret
 
 # Third-party Services (use service name prefix)
-GITHUB_CLIENT_ID=client-id
-GITHUB_CLIENT_SECRET=client-secret
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 
@@ -442,26 +429,6 @@ docker exec -it container-name env | grep DEPLOYSTACK
 # Or check specific variables
 docker exec -it container-name printenv PORT
 docker exec -it container-name printenv NODE_ENV
-```
-
-### Startup Banner
-
-The backend displays a startup banner with key environment information:
-
-```typescript
-// src/utils/banner.ts
-export const displayStartupBanner = (port: number): void => {
-  const environment = process.env.NODE_ENV || 'development'
-  
-  logger.info(`
-  ╔══════════════════════════════════════════════════════════════════════════════╗
-  ║                            🚀 DeployStack Backend                            ║
-  ║                                                                              ║
-  ║         Running on port ${port}                                              ║
-  ║         Environment: ${environment}                                          ║
-  ╚══════════════════════════════════════════════════════════════════════════════╝
-  `)
-}
 ```
 
 ## Related Documentation

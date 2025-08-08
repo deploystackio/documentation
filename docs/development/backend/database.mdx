@@ -31,6 +31,7 @@ Configure your chosen database type by setting the appropriate environment varia
 #### SQLite Configuration
 ```bash
 # Optional - defaults to persistent_data/database/deploystack.db
+# Path is relative to services/backend/ directory
 SQLITE_DB_PATH=persistent_data/database/deploystack.db
 ```
 
@@ -58,11 +59,14 @@ Check the current status of the database configuration and initialization:
 
 ### Initial Database Setup
 
-Perform the initial database setup by selecting your database type:
+The initial database setup is performed through the frontend setup wizard at `/setup`, which provides a user-friendly interface. The wizard internally calls the backend API:
 
-- **Endpoint:** `POST /api/db/setup`
+- **Frontend URL:** `https://<your-frontend-url>/setup`
+- **Backend Endpoint (called by frontend):** `POST /api/db/setup`
 - **Method:** `POST`
 - **Request Body:** JSON object specifying the database type
+
+**Note for Developers**: While you can call the API endpoint directly for testing, end-users should always use the frontend setup wizard for proper initialization.
 
 #### Setup Examples
 
@@ -105,9 +109,9 @@ The setup endpoint returns a JSON response indicating success and restart requir
 ### Database Selection File
 
 The chosen database type is stored in:
-- `services/backend/persistent_data/db.selection.json`
+- `services/backend/persistent_data/db.selection.json` (relative to the backend service directory)
 
-This file is automatically created and managed by the setup API. Manual editing is not recommended.
+This file is automatically created and managed by the setup API when users complete the frontend setup wizard at `https://<your-frontend-url>/setup`. Manual editing is not recommended.
 
 Example content:
 ```json
@@ -117,6 +121,8 @@ Example content:
   "version": "1.0"
 }
 ```
+
+**Important**: This file is created during the initial setup process through the frontend wizard, which internally calls the `/api/db/setup` endpoint.
 
 ## Architecture
 
@@ -212,6 +218,9 @@ Follow these steps to add or modify database tables:
 - **Automatic Tracking**: Migrations tracked in `__drizzle_migrations` table
 - **Incremental Application**: Only new migrations are applied
 - **Transaction Safety**: Migrations applied in transactions for consistency
+- **Execution Timing**: Migrations are applied automatically on server startup, but only after the database has been initialized through the setup process
+
+**Important**: Migrations cannot run until the database exists. The initial setup (via frontend wizard at `/setup`) must be completed first to create the database, then migrations will apply on subsequent server startups.
 
 ### Migration Compatibility
 
@@ -252,18 +261,27 @@ Key plugin database features:
 ## Development Workflow
 
 1. **Environment Setup**: Configure environment variables for your chosen database
-2. **Database Selection**: Use `/api/db/setup` to select and initialize database
+2. **Initial Setup**: Complete the frontend setup wizard at `/setup` (for first-time setup)
+   - This creates `persistent_data/db.selection.json`
+   - Initializes the database based on your selection
+   - For development, you can also directly call `POST /api/db/setup`
 3. **Schema Changes**: Modify `src/db/schema.sqlite.ts`
 4. **Generate Migrations**: Run `npm run db:generate`
 5. **Apply Changes**: Restart server or run `npm run db:up`
 6. **Update Code**: Use the modified schema in your application
 
+**Backup Strategy**: Always backup the entire `services/backend/persistent_data/` directory as it contains:
+- The SQLite database file (if using SQLite)
+- The database selection configuration
+- Any other persistent application data
+
 ## Database-Specific Considerations
 
 ### SQLite
-- **File Location**: `persistent_data/database/deploystack.db`
+- **File Location**: `services/backend/persistent_data/database/deploystack.db` (full path from project root)
 - **Performance**: Excellent for development and small to medium deployments
-- **Backup**: Simple file-based backup
+- **Backup**: Simple file-based backup - backup the entire `persistent_data/` directory
+- **Selection File**: Database type stored in `persistent_data/db.selection.json`
 
 ### Turso
 - **Global Replication**: Multi-region database replication
@@ -294,8 +312,12 @@ Key plugin database features:
 
 ### SQLite
 ```bash
-# Using SQLite CLI
+# Using SQLite CLI (from project root)
 sqlite3 services/backend/persistent_data/database/deploystack.db
+
+# Or from backend directory
+cd services/backend
+sqlite3 persistent_data/database/deploystack.db
 
 # Using DB Browser for SQLite (GUI)
 # Download from: https://sqlitebrowser.org/

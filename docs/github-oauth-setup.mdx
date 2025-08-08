@@ -1,0 +1,164 @@
+---
+title: GitHub OAuth Setup
+description: Configure GitHub OAuth for user authentication and single sign-on in DeployStack.
+sidebar: GitHub OAuth
+---
+
+# GitHub OAuth Setup
+
+DeployStack provides GitHub OAuth authentication that enables users to sign in with their GitHub accounts. This OAuth integration provides a seamless login experience while maintaining security and team boundaries.
+
+## Overview
+
+The GitHub OAuth system offers:
+
+- **Single Sign-On**: Users can sign in with their GitHub accounts
+- **Automatic User Creation**: New users are automatically provisioned on first login
+- **Account Linking**: Existing email-based accounts can be linked to GitHub accounts
+- **Team Creation**: Default teams are automatically created for new GitHub users
+
+- **Secure Authentication**: Industry-standard OAuth 2.0 flow with state validation
+
+## GitHub OAuth Configuration
+
+### Setting Up GitHub OAuth
+
+To enable GitHub OAuth authentication, you need to configure GitHub OAuth in your global settings:
+
+#### 1. Create GitHub OAuth App
+
+1. **Go to GitHub**: Navigate to GitHub.com → Settings → Developer settings → OAuth Apps
+2. **Create New App**: Click "New OAuth App"
+3. **Configure Application**:
+   - **Application Name**: `DeployStack - [Your Instance]`
+   - **Homepage URL**: `https://your-deploystack-domain.com`
+   - **Authorization Callback URL**: `https://your-api-domain.com/api/auth/github/callback`  
+     ⚠️ **Important**: Use your API domain (e.g., `backend.deploystack.io`), NOT your frontend domain
+   - **Application Description**: Optional description of your DeployStack instance
+
+#### 2. Configure in DeployStack
+
+1. **Access Global Settings**: Go to Admin → Global Settings → GitHub OAuth Configuration
+2. **Enter Credentials**:
+   - **Client ID**: From your GitHub OAuth app
+   - **Client Secret**: From your GitHub OAuth app
+   - **Callback URL**: Should match your GitHub app (e.g., `https://your-api-domain.com/api/auth/github/callback`)
+   - **Scope**: Default is `user:email` (required for email access)
+   - **Enable GitHub OAuth**: Toggle to activate
+3. **Configure Page URL**: Go to Admin → Global Settings → Global Settings
+   - **Base URL for the application frontend**: Set to your frontend URL (e.g., `https://cloud.deploystack.io`)
+   - This URL is used for redirects after successful authentication
+4. **Save Configuration**: Apply the settings
+
+#### 3. Test Integration
+
+1. **Test Login**: Log out and try the "Sign in with GitHub" button on the login page
+2. **Verify Redirect**: Ensure you're redirected to GitHub for authorization
+3. **Check Callback**: After authorizing, you should be redirected back to your DeployStack frontend
+4. **Validate Session**: Confirm you're logged in with your GitHub account
+
+### GitHub App vs OAuth App
+
+DeployStack supports both GitHub OAuth Apps and GitHub Apps:
+
+#### GitHub OAuth App (For User Authentication)
+- **Purpose**: User authentication and login
+- **Simpler Setup**: Easier to configure and manage
+- **User-Based Access**: Uses individual user permissions
+- **Email Access**: Can retrieve user email for account creation
+- **Account Linking**: Links GitHub accounts to existing users
+
+#### GitHub App (For Repository Access)
+- **Purpose**: Repository data access for MCP server creation
+- **Enhanced Security**: App-level permissions and authentication
+- **Higher Rate Limits**: Better rate limiting for high-volume usage
+- **Private Repositories**: Can access private repositories when installed
+- **Installation-Based**: Installed per organization/repository
+- **Note**: Configured separately in GitHub App settings (see GitHub Application documentation)
+
+## How GitHub OAuth Works
+
+### Authentication Flow
+
+1. **User Initiates Login**: User clicks "Sign in with GitHub" on the login page
+2. **Redirect to GitHub**: User is redirected to GitHub's authorization page
+3. **User Authorizes**: User grants permissions to the DeployStack OAuth app
+4. **Callback to API**: GitHub redirects to `https://your-api-domain.com/api/auth/github/callback` with an authorization code
+5. **Token Exchange**: Backend exchanges the code for an access token
+6. **User Lookup/Creation**: Backend fetches user info from GitHub and creates or links the account
+7. **Session Creation**: A session is created and a cookie is set
+8. **Frontend Redirect**: User is redirected to the frontend URL configured in `global.page_url`
+
+### User Provisioning
+
+#### New Users
+When a user signs in with GitHub for the first time:
+- A new user account is automatically created
+- Username is set to their GitHub username
+- Email is retrieved from GitHub (primary verified email preferred)
+- First and last names are extracted from GitHub profile (if available)
+- User is assigned the `global_user` role (not admin)
+- A default team is created with the username
+- Email is marked as verified
+
+#### Existing Users
+If a user with the same email already exists:
+- The existing account is linked to the GitHub account
+- GitHub ID is added to the user record
+- User can now sign in with either method (email or GitHub)
+
+#### First User Restriction
+- The first user in the system MUST be created via email registration
+- This ensures the first user becomes the global administrator
+- GitHub OAuth cannot be used to create the initial admin account
+
+### Security Considerations
+
+- **State Parameter**: Used for CSRF protection
+- **Secure Cookies**: Session cookies use httpOnly and secure flags
+- **Token Storage**: GitHub tokens are not stored permanently
+- **Email Verification**: GitHub emails are considered pre-verified
+- **Role Assignment**: GitHub users receive standard user role, not admin
+
+
+## Security Considerations
+
+### OAuth Scope and Permissions
+
+#### What GitHub OAuth Accesses
+The GitHub OAuth integration ONLY requests the `user:email` scope, which provides:
+- **GitHub Username**: The user's GitHub login name
+- **Email Address**: The user's primary verified email from GitHub
+- **Display Name**: The user's full name from their GitHub profile (if provided)
+- **GitHub User ID**: A unique identifier for account linking
+
+#### What GitHub OAuth Does NOT Access
+- **No Repository Access**: OAuth login does not access any repositories
+- **No Code Access**: Cannot read, write, or view any source code
+- **No Organization Data**: Does not access organization information
+- **No Private Data**: Only basic public profile information is retrieved
+
+### Data Handling
+
+#### Information Stored
+When a user logs in via GitHub, DeployStack stores:
+- **Username**: From GitHub profile
+- **Email**: Primary verified email from GitHub
+- **First/Last Name**: Parsed from GitHub display name (if available)
+- **GitHub ID**: For account linking purposes
+- **Authentication Type**: Marked as "github" authentication
+
+#### Security Measures
+- **Temporary Tokens**: GitHub access tokens are used only during login and not stored
+- **State Parameter**: CSRF protection via state parameter validation
+- **Secure Cookies**: Session cookies use httpOnly and secure flags
+- **Encrypted Storage**: Any sensitive data is encrypted in the database
+- **Minimal Scope**: Only requests the minimum required `user:email` scope
+
+## Related Documentation
+
+- [GitHub Application](/docs/github-application) - For repository data access and MCP server creation
+- [User Management](/docs/user-management) - Managing users and permissions
+- [Global Settings](/docs/global-settings) - Complete global settings reference
+
+GitHub OAuth provides a seamless authentication experience for your users while maintaining security and proper access control within DeployStack.

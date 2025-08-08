@@ -17,13 +17,35 @@ Configure your self-hosted DeployStack instance with essential settings to custo
   Platform setup is performed through the web interface after your DeployStack instance is running. All settings are optional but recommended for production deployments.
 </Callout>
 
+## Initial Setup Process
+
+<Callout type="info">
+  **For Developers**: The initial setup consists of two parts:
+  1. **Database Setup**: Completed via the frontend wizard at `/setup` which calls `POST /api/db/setup`
+  2. **Platform Configuration**: Done through the Settings interface after database initialization
+</Callout>
+
 ## Accessing Platform Settings
 
 <Steps>
   <Step>
+    **Complete Initial Setup**
+    
+    If this is a fresh installation, first visit `https://<your-frontend-url>/setup` to complete the database initialization wizard. This creates:
+    
+    **For Docker deployments:**
+    - Database configuration stored in the Docker volume `deploystack_backend_persistent`
+    - Access the setup wizard at `http://localhost:8080/setup` (or your configured frontend URL)
+    
+    **For local development:**
+    - `services/backend/persistent_data/db.selection.json` (database type configuration)
+    - `services/backend/persistent_data/database/deploystack.db` (if using SQLite)
+  </Step>
+  
+  <Step>
     **Log in as Administrator**
     
-    Access your DeployStack instance and log in with an administrator account.
+    After database setup, access your DeployStack instance and log in with an administrator account.
   </Step>
   
   <Step>
@@ -189,9 +211,11 @@ Follow this recommended setup workflow for new DeployStack instances:
 
 <Steps>
   <Step>
-    **Initial Access**
+    **Initial Database Setup**
     
-    - Complete the initial setup wizard
+    - Navigate to `https://<your-frontend-url>/setup` (Docker: `http://localhost:8080/setup` by default)
+    - Complete the database setup wizard (SQLite or Turso)
+    - This initializes the database and saves configuration
     - Create your admin account
     - Log in to the platform
   </Step>
@@ -254,9 +278,13 @@ Follow this recommended setup workflow for new DeployStack instances:
 **Problem**: Settings page not accessible or returns errors
 
 **Solutions**:
+- Ensure the initial database setup at `/setup` has been completed
+- **For Docker**: Check that the `deploystack_backend_persistent` volume exists and contains data
+- **For local development**: Check for `services/backend/persistent_data/db.selection.json` file existence
 - Ensure you're logged in as an administrator
 - Check that your user has the `global_admin` role
 - Verify the backend service is running properly
+- Check that database migrations have been applied (happens automatically after setup)
 
 #### Email Not Working
 
@@ -310,11 +338,64 @@ Configure different settings for different environments:
 
 ### Backup Configuration
 
-Your platform settings are stored in the database. Ensure you:
+<Tabs items={['Docker Deployment', 'Local Development']}>
+  <Tab value="Docker Deployment">
+    **Docker Volume Backup:**
+    
+    Your data is stored in the Docker volume `deploystack_backend_persistent`. To backup:
+    
+    ```bash
+    # Create a backup of the Docker volume
+    docker run --rm -v deploystack_backend_persistent:/data \
+      -v $(pwd):/backup alpine \
+      tar czf /backup/deploystack-backup-$(date +%Y%m%d).tar.gz /data
+    ```
+    
+    **Restore from backup:**
+    ```bash
+    # Restore the Docker volume from backup
+    docker run --rm -v deploystack_backend_persistent:/data \
+      -v $(pwd):/backup alpine \
+      tar xzf /backup/deploystack-backup-20250108.tar.gz -C /
+    ```
+    
+    The volume contains:
+    - `database/deploystack.db` - SQLite database (if using SQLite)
+    - `db.selection.json` - Database type configuration
+    - Any other persistent application data
+  </Tab>
+  
+  <Tab value="Local Development">
+    **File System Backup:**
+    
+    Your data is stored in `services/backend/persistent_data/`. To backup:
+    
+    ```bash
+    # Create a backup archive
+    tar czf deploystack-backup-$(date +%Y%m%d).tar.gz \
+      services/backend/persistent_data/
+    ```
+    
+    **Restore from backup:**
+    ```bash
+    # Restore from backup archive
+    tar xzf deploystack-backup-20250108.tar.gz
+    ```
+    
+    The directory contains:
+    - `database/deploystack.db` - SQLite database (if using SQLite)
+    - `db.selection.json` - Database type configuration
+    - Any other persistent application data
+  </Tab>
+</Tabs>
 
-- **Backup the database** regularly (included in persistent volume)
+<Callout type="warn">
+  **Important**: Always backup the complete data directory/volume, not just the database file, as it contains critical configuration like database type selection.
+</Callout>
+
 - **Document custom settings** for disaster recovery
 - **Test restore procedures** in non-production environments
+- **Schedule regular backups** using cron or your preferred scheduling tool
 
 ---
 

@@ -110,8 +110,12 @@ services/backend/
 │   ├── auth/                # Authentication utilities
 │   └── server.ts            # Main server configuration
 ├── plugins/                 # Extensible plugin directory
-├── persistent_data/         # Data persistence
+├── persistent_data/         # All persistent application data (backup this entire directory)
+│   ├── database/            # SQLite database files
+│   │   └── deploystack.db   # Main database (if using SQLite)
+│   └── db.selection.json    # Database type configuration
 └── drizzle/                 # Database migrations
+│   └── migrations_sqlite/   # SQL migration files
 ```
 
 ## Key Features
@@ -136,9 +140,13 @@ services/backend/
 ## Development Workflow
 
 1. **Setup**: Install dependencies and start development server
-2. **Database**: Use API endpoints to initialize database
+2. **Database Initialization**: 
+   - For first-time setup: Visit `/setup` in the frontend
+   - For development: Call `POST /api/db/setup` directly
+   - Creates `persistent_data/db.selection.json` and initializes database
 3. **Development**: Add routes, modify schemas, create plugins
 4. **Testing**: Run comprehensive test suite
 5. **Documentation**: Generate API specs for integration
+6. **Backup**: Always backup entire `persistent_data/` directory for data persistence
 
 For detailed implementation guides, security considerations, and best practices, explore the specific documentation sections above.
