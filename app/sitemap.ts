@@ -3,28 +3,17 @@ import { source } from '@/lib/source';
 
 export const dynamic = 'force-static';
 
-function getPages(tree: any): any[] {
-  const pages: any[] = [];
-
-  function traverse(nodes: any[]) {
-    for (const node of nodes) {
-      if (node.type === 'page') {
-        pages.push(node);
-      } else if ('children' in node) {
-        traverse(node.children);
-      }
-    }
-  }
-
-  traverse(tree.children);
-  return pages;
-}
-
 export default function sitemap(): MetadataRoute.Sitemap {
-  const pages = getPages(source.pageTree).map((page) => ({
+  // Get all pages from source.getPages() which combines all sources
+  const allPages = source.getPages();
+  
+  // Map pages to sitemap entries
+  const sitemapEntries = allPages.map((page) => ({
     url: new URL(page.url, 'https://docs.deploystack.io').toString(),
-    lastModified: page.lastModified,
+    lastModified: page.data.lastModified ? new Date(page.data.lastModified) : undefined,
+    changeFrequency: 'weekly' as const,
+    priority: page.url === '/' ? 1.0 : page.url.startsWith('/development') || page.url.startsWith('/self-hosted') ? 0.7 : 0.8,
   }));
 
-  return pages;
+  return sitemapEntries;
 }
