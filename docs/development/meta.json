@@ -2,7 +2,6 @@
   "title": "Development",
   "description": "Development documentation for DeployStack",
   "icon": "Code",
-  "root": true,
   "pages": [
     "index",
     "---Sections---",
