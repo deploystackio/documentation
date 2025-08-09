@@ -1,0 +1,232 @@
+---
+title: Authentication Methods
+description: Available authentication methods in DeployStack, including email registration and GitHub OAuth, with configuration instructions for administrators.
+---
+
+# Authentication Methods
+
+DeployStack supports multiple authentication methods to provide flexibility for different user preferences and organizational requirements. This document outlines the available authentication options and how to configure them.
+
+## Available Authentication Methods
+
+### Email Registration & Login
+
+Email-based authentication is the primary authentication method in DeployStack. Users can register with their email address and password, and subsequently log in using these credentials.
+
+**Features:**
+- Secure password hashing using Argon2
+- Email verification (when email sending is enabled)
+- Password reset functionality
+- Profile management
+
+**User Experience:**
+1. Users register with email, password, and optional personal information
+2. Email verification may be required (depending on configuration)
+3. Users can log in using email or username
+4. Password reset available via email (when email sending is enabled)
+
+### GitHub OAuth
+
+GitHub OAuth provides a convenient way for users to authenticate using their existing GitHub accounts. This method is particularly useful for development teams and organizations already using GitHub.
+
+**Features:**
+- Single sign-on with GitHub
+- Automatic email verification (GitHub emails are considered verified)
+- Profile information imported from GitHub
+- Secure OAuth 2.0 flow
+
+**User Experience:**
+1. Users click "Login with GitHub" button
+2. Redirected to GitHub for authorization
+3. Upon approval, automatically logged into DeployStack
+4. Profile information (name, email) imported from GitHub
+
+## Authentication Configuration
+
+### Global Authentication Settings
+
+Administrators can control authentication behavior through global settings:
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Enable Login** | Master switch for all authentication methods | `true` |
+| **Enable Email Registration** | Allow new users to register via email | `true` |
+| **GitHub OAuth Enabled** | Enable GitHub OAuth authentication | `false` |
+
+### Email Authentication Configuration
+
+Email authentication is always available but requires SMTP configuration for full functionality:
+
+**Required for Full Functionality:**
+- SMTP server configuration (for email verification and password reset)
+- Email sending enabled in global settings
+
+**Configuration Steps:**
+1. Navigate to **Global Settings** → **SMTP Mail Settings**
+2. Configure SMTP server details:
+   - Host (e.g., `smtp.gmail.com`)
+   - Port (e.g., `587`)
+   - Username and Password
+   - Security settings
+3. Enable email sending in **Global Settings** → **Global Configuration**
+
+### GitHub OAuth Configuration
+
+GitHub OAuth requires setup both in GitHub and DeployStack:
+
+**GitHub Setup:**
+1. Go to GitHub → Settings → Developer settings → OAuth Apps
+2. Create a new OAuth App with:
+   - **Application name**: Your DeployStack instance name
+   - **Homepage URL**: Your DeployStack frontend URL
+   - **Authorization callback URL**: `https://your-domain.com/api/auth/github/callback`
+3. Note the **Client ID** and **Client Secret**
+
+**DeployStack Configuration:**
+1. Navigate to **Global Settings** → **GitHub OAuth Configuration**
+2. Configure the following settings:
+   - **Client ID**: From your GitHub OAuth App
+   - **Client Secret**: From your GitHub OAuth App (encrypted)
+   - **Enabled**: Set to `true` to activate GitHub OAuth
+   - **Callback URL**: Must match the URL configured in GitHub
+   - **Scope**: OAuth permissions (default: `user:email`)
+
+**Configuration Example:**
+```
+Client ID: abc123def456
+Client Secret: [encrypted]
+Enabled: true
+Callback URL: https://your-deploystack.com/api/auth/github/callback
+Scope: user:email
+```
+
+## User Roles and First User
+
+### First User (Global Administrator)
+
+The first user registered in DeployStack automatically becomes the **Global Administrator** with full system access. This ensures there's always at least one administrator who can manage the system.
+
+**Important Notes:**
+- The first user **must** be created via email registration
+- GitHub OAuth cannot be used to create the first user
+- This prevents accidental creation of admin accounts via OAuth
+
+### Subsequent Users
+
+All users registered after the first user receive the **Global User** role by default, regardless of authentication method used.
+
+**Role Assignment:**
+- **Email Registration**: `global_user` role
+- **GitHub OAuth**: `global_user` role
+- **Role Changes**: Only global administrators can modify user roles
+
+## Security Considerations
+
+### Email Authentication Security
+
+- Passwords are hashed using Argon2 with secure parameters
+- Email verification prevents unauthorized account creation
+- Password reset tokens are time-limited and single-use
+- Session management handled by Lucia v3
+
+### GitHub OAuth Security
+
+- OAuth 2.0 standard with state parameter for CSRF protection
+- GitHub emails are considered verified
+- Secure token exchange and validation
+- No GitHub credentials stored in DeployStack
+
+### Account Linking
+
+When a user with an existing email account uses GitHub OAuth with the same email address:
+- The GitHub account is automatically linked to the existing account
+- User can subsequently use either authentication method
+- No duplicate accounts are created
+
+## Troubleshooting
+
+### Email Authentication Issues
+
+**Email verification not working:**
+- Check SMTP configuration in Global Settings
+- Verify email sending is enabled
+- Check server logs for email delivery errors
+
+**Password reset not working:**
+- Ensure SMTP is configured and email sending is enabled
+- Verify the reset link hasn't expired (tokens are time-limited)
+
+### GitHub OAuth Issues
+
+**"GitHub OAuth is not enabled" error:**
+- Check that GitHub OAuth is enabled in Global Settings
+- Verify Client ID and Client Secret are configured
+- Ensure callback URL matches GitHub OAuth App configuration
+
+**"GitHub email not available" error:**
+- User's GitHub email must be public and verified
+- Check GitHub account email settings
+- Ensure OAuth scope includes `user:email`
+
+**First user creation blocked:**
+- This is expected behavior - first user must use email registration
+- Use email registration to create the initial administrator account
+
+### General Authentication Issues
+
+**Login disabled:**
+- Check that "Enable Login" is set to `true` in Global Settings
+- Verify database is properly configured and accessible
+
+**Registration disabled:**
+- Check that "Enable Email Registration" is set to `true` for email signup
+- Verify GitHub OAuth is enabled and configured for GitHub login
+
+## API Endpoints
+
+For developers and integrations, DeployStack provides REST API endpoints for authentication:
+
+### Email Authentication
+- `POST /api/auth/email/register` - User registration
+- `POST /api/auth/email/login` - User login
+- `POST /api/auth/email/forgot-password` - Password reset request
+- `POST /api/auth/email/reset-password` - Password reset confirmation
+
+### GitHub OAuth
+- `GET /api/auth/github/login` - Initiate GitHub OAuth flow
+- `GET /api/auth/github/callback` - OAuth callback handler
+- `GET /api/auth/github/status` - Check if GitHub OAuth is enabled
+
+### General Authentication
+- `POST /api/auth/logout` - User logout
+- `GET /api/users/me` - Get current user profile
+- `PUT /api/auth/profile/update` - Update user profile
+
+## Best Practices
+
+### For Administrators
+
+1. **Always configure the first user via email** to ensure proper admin access
+2. **Set up SMTP early** to enable email verification and password reset
+3. **Use strong OAuth secrets** and keep them secure
+4. **Regularly review user accounts** and roles
+5. **Monitor authentication logs** for security issues
+
+### For Users
+
+1. **Use strong passwords** for email authentication
+2. **Verify your email address** when using email registration
+3. **Keep GitHub account secure** when using OAuth
+4. **Use the same email address** across authentication methods for account linking
+
+### For Organizations
+
+1. **Choose authentication methods** that align with your security policies
+2. **Consider GitHub OAuth** for development teams already using GitHub
+3. **Implement proper access controls** through user roles
+4. **Document authentication procedures** for your team
+5. **Plan for account recovery** scenarios
+
+---
+
+For technical implementation details, see the [Backend Authentication Documentation](/development/backend/api) and [Global Settings Management](/global-settings).

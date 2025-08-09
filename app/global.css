@@ -1,5 +1,37 @@
-/* Import Fumadocs UI complete styles */
-@import 'fumadocs-ui/css/style.css';
+/* Import Tailwind CSS v4 and Fumadocs UI presets */
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+/* Include Fumadocs UI source for Tailwind v4 */
+@source '../node_modules/fumadocs-ui/dist/**/*.js';
+
+/* Define primary color in Tailwind v4 @theme directive */
+@theme {
+  /* Primary color - Teal theme matching DeployStack brand */
+  --color-primary: hsl(177, 79%, 28%); /* Teal-700 */
+  --color-primary-foreground: hsl(0, 0%, 100%); /* White text on primary */
+  
+  /* Additional variants */
+  --color-primary-hover: hsl(176, 79%, 23%); /* Darker teal for hover states */
+  --color-primary-light: hsl(174, 72%, 56%); /* Lighter teal variant */
+  --color-primary-dark: hsl(176, 100%, 16%); /* Darker teal variant */
+}
+
+/* Dark mode color overrides */
+:root {
+  /* Light mode is default, defined in @theme above */
+}
+
+.dark {
+  /* Dark mode primary colors */
+  --color-primary: hsl(174, 72%, 56%); /* Lighter teal for dark mode */
+  --color-primary-foreground: hsl(176, 100%, 6%); /* Dark text on primary in dark mode */
+  
+  --color-primary-hover: hsl(173, 68%, 64%); /* Lighter on hover in dark mode */
+  --color-primary-light: hsl(172, 66%, 70%); /* Even lighter variant */
+  --color-primary-dark: hsl(177, 79%, 28%); /* Original teal for contrast */
+}
 
 /* Custom navbar styling to match main site */
 /* Navbar height override removed since navbar is now inside content area */
@@ -12,8 +44,8 @@
 
 /* Style the login button to match main site */
 [data-fumadocs-nav] a[href*="login"] {
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
   border-radius: 9999px;
   padding: 0.5rem 1rem;
   font-weight: 500;
@@ -21,12 +53,12 @@
 }
 
 [data-fumadocs-nav] a[href*="login"]:hover {
-  background: hsl(var(--primary) / 0.9);
+  background: var(--color-primary-hover);
 }
 
 /* Ensure Documentation link is highlighted when active */
 [data-fumadocs-nav] a[href="/docs"][data-active="true"] {
-  color: hsl(var(--primary));
+  color: var(--color-primary);
   font-weight: 600;
 }
 

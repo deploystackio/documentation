@@ -7,52 +7,128 @@ import { loader } from 'fumadocs-core/source';
 import { icons } from 'lucide-react';
 import { createElement } from 'react';
 import { DeployStackLogo } from './components/DeployStackLogo';
+import { createMDXSource } from 'fumadocs-mdx';
+import type { PageTree } from 'fumadocs-core/server';
 
-export const source = loader({
-  // Base URL for the documentation pages.
-  // Since we've moved docs to the root level, baseUrl should be '/'
-  // This means docs/index.mdx will be at / and other docs at their direct paths
-  baseUrl: '/',
-  // The source of the documents, converted to Fumadocs format.
-  source: docs.toFumadocsSource(),
-  
-  
-  // Icon handler to support both lucide-react icons and custom icons
-  icon(icon) {
-    if (!icon) {
-      return; // No icon specified
-    }
+// Helper function for icon handling
+function createIconHandler() {
+  return (icon?: string) => {
+    if (!icon) return;
     
-    // Handle custom icons
     if (icon === 'DeployStackLogo') {
       return createElement(DeployStackLogo);
     }
     
-    // Handle lucide-react icons
     if (icon in icons) {
       return createElement(icons[icon as keyof typeof icons]);
     }
     
-    // If icon not found, return undefined
     return undefined;
-  },
+  };
+}
 
-  // Customize page tree to support custom sidebar titles
-  pageTree: {
-    attachFile(node, file) {
-      // If the file has a custom sidebar title, use it instead of the title
-      if (file?.data && 'sidebar' in file.data && file.data.sidebar) {
-        node.name = file.data.sidebar as string;
-      }
-      return node;
-    },
-  },
+// Filter docs into separate sections
+const allDocs = docs.docs;
+const allMeta = docs.meta;
 
-  // Optional: You can define global MDX components here if not done elsewhere
-  // globalMdxComponents: getMDXComponents(),
+// Main docs (root level - exclude development and self-hosted)
+const mainDocs = allDocs.filter((doc: any) => {
+  const path = doc._file.path;
+  return !path.startsWith('development/') && !path.startsWith('self-hosted/');
 });
 
-// You might also want to export page tree and other utilities if needed directly
-// export const pageTree = source.pageTree;
-// export const getPage = source.getPage;
-// export const generateParams = source.generateParams;
+const mainMeta = allMeta.filter((meta: any) => {
+  const path = meta._file.path;
+  return !path.startsWith('development/') && !path.startsWith('self-hosted/');
+});
+
+// Development docs - keep the full path
+const developmentDocs = allDocs.filter((doc: any) => 
+  doc._file.path.startsWith('development/')
+);
+
+const developmentMeta = allMeta.filter((meta: any) => 
+  meta._file.path.startsWith('development/')
+);
+
+// Self-hosted docs - keep the full path
+const selfHostedDocs = allDocs.filter((doc: any) => 
+  doc._file.path.startsWith('self-hosted/')
+);
+
+const selfHostedMeta = allMeta.filter((meta: any) => 
+  meta._file.path.startsWith('self-hosted/')
+);
+
+// Create separate sources for each section
+export const mainSource = loader({
+  baseUrl: '/',
+  source: createMDXSource(mainDocs, mainMeta),
+  icon: createIconHandler(),
+});
+
+// For development and self-hosted, we keep the full path structure
+export const developmentSource = loader({
+  baseUrl: '/',  // Changed from '/development' to '/'
+  source: createMDXSource(developmentDocs, developmentMeta),
+  icon: createIconHandler(),
+});
+
+export const selfHostedSource = loader({
+  baseUrl: '/',  // Changed from '/self-hosted' to '/'
+  source: createMDXSource(selfHostedDocs, selfHostedMeta),
+  icon: createIconHandler(),
+});
+
+// Unified source for backward compatibility and dynamic usage
+export const source = {
+  getPage(slug?: string[], locale?: string) {
+    if (!slug || slug.length === 0) return mainSource.getPage(slug, locale);
+    
+    const firstSegment = slug[0];
+    
+    // For development section, use the full slug path
+    if (firstSegment === 'development') {
+      return developmentSource.getPage(slug, locale);
+    }
+    
+    // For self-hosted section, use the full slug path
+    if (firstSegment === 'self-hosted') {
+      return selfHostedSource.getPage(slug, locale);
+    }
+    
+    // For main docs, use as-is
+    return mainSource.getPage(slug, locale);
+  },
+  
+  getPages(locale?: string) {
+    return [
+      ...mainSource.getPages(locale),
+      ...developmentSource.getPages(locale),
+      ...selfHostedSource.getPages(locale),
+    ];
+  },
+  
+  generateParams() {
+    // Get params from all sources
+    const mainParams = mainSource.generateParams();
+    const devParams = developmentSource.generateParams();
+    const selfParams = selfHostedSource.generateParams();
+    
+    return [
+      ...mainParams,
+      ...devParams,
+      ...selfParams,
+    ];
+  },
+  
+  // Get appropriate page tree based on current path
+  getPageTree(path?: string) {
+    if (path?.startsWith('/development')) return developmentSource.pageTree;
+    if (path?.startsWith('/self-hosted')) return selfHostedSource.pageTree;
+    return mainSource.pageTree;
+  },
+  
+  // Default page tree for compatibility
+  pageTree: mainSource.pageTree,
+};

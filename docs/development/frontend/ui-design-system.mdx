@@ -1,0 +1,312 @@
+---
+title: UI Design System
+description: Comprehensive guide to UI components, styling patterns, and design standards for the DeployStack frontend.
+sidebar: UI & Design
+---
+
+# UI Design System
+
+This document establishes the official UI design patterns and component standards for the DeployStack frontend. All new components and pages must follow these guidelines to ensure consistency and maintainability.
+
+## Design Principles
+
+- **Consistency**: Use established patterns and components
+- **Accessibility**: Follow WCAG guidelines and semantic HTML
+- **Responsiveness**: Design for all screen sizes
+- **Performance**: Optimize for fast loading and smooth interactions
+- **Maintainability**: Write clean, reusable component code
+
+## Data Tables
+
+For data table implementation, see the dedicated [Table Design System](/development/frontend/ui-design-system-table) guide.
+
+For pagination implementation, see the [Pagination Implementation Guide](/development/frontend/ui-design-system-pagination).
+
+## Badge Design Patterns
+
+Badges are used for status indicators, categories, and metadata.
+
+### Status Badges
+```html
+<Badge variant="default">Active</Badge>
+<Badge variant="secondary">Inactive</Badge>
+<Badge variant="destructive">Error</Badge>
+<Badge variant="outline">Pending</Badge>
+```
+
+### Category/Tag Badges
+```html
+<Badge variant="secondary" class="font-mono text-xs">
+  {{ category.icon }}
+</Badge>
+```
+
+### Numeric Badges
+```html
+<Badge variant="outline">
+  {{ item.sort_order }}
+</Badge>
+```
+
+## Form Design Patterns
+
+### Modal Forms
+Use `AlertDialog` for forms in modals:
+
+```html
+<AlertDialog :open="isOpen" @update:open="(value) => isOpen = value">
+  <AlertDialogContent class="sm:max-w-[425px]">
+    <AlertDialogHeader>
+      <AlertDialogTitle>{{ modalTitle }}</AlertDialogTitle>
+      <AlertDialogDescription>
+        {{ modalDescription }}
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+
+    <form @submit.prevent="handleSubmit" class="space-y-4">
+      <!-- Form fields -->
+      <div class="space-y-2">
+        <Label for="field-name">{{ t('form.field.label') }}</Label>
+        <Input
+          id="field-name"
+          v-model="formData.name"
+          :placeholder="t('form.field.placeholder')"
+          :class="{ 'border-destructive': errors.name }"
+          required
+        />
+        <div v-if="errors.name" class="text-sm text-destructive">
+          {{ errors.name }}
+        </div>
+      </div>
+
+      <AlertDialogFooter>
+        <Button type="button" variant="outline" @click="handleCancel">
+          {{ t('form.cancel') }}
+        </Button>
+        <Button type="submit" :disabled="!isFormValid || isSubmitting">
+          {{ isSubmitting ? t('form.saving') : t('form.save') }}
+        </Button>
+      </AlertDialogFooter>
+    </form>
+  </AlertDialogContent>
+</AlertDialog>
+```
+
+### Form Field Pattern
+```html
+<div class="space-y-2">
+  <Label for="field-id">{{ t('form.field.label') }}</Label>
+  <Input
+    id="field-id"
+    v-model="formData.field"
+    :placeholder="t('form.field.placeholder')"
+    :class="{ 'border-destructive': errors.field }"
+    @input="handleFieldChange"
+  />
+  <div v-if="errors.field" class="text-sm text-destructive">
+    {{ errors.field }}
+  </div>
+</div>
+```
+
+## Button Patterns
+
+### Primary Actions
+```html
+<Button @click="handlePrimaryAction">
+  <Plus class="h-4 w-4 mr-2" />
+  {{ t('actions.add') }}
+</Button>
+```
+
+### Secondary Actions
+```html
+<Button variant="outline" @click="handleSecondaryAction">
+  {{ t('actions.cancel') }}
+</Button>
+```
+
+### Destructive Actions
+```html
+<Button 
+  variant="destructive" 
+  @click="handleDelete"
+  class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+>
+  <Trash2 class="h-4 w-4 mr-2" />
+  {{ t('actions.delete') }}
+</Button>
+```
+
+### Icon-Only Buttons
+```html
+<Button variant="ghost" class="h-8 w-8 p-0">
+  <span class="sr-only">{{ t('actions.menu') }}</span>
+  <MoreHorizontal class="h-4 w-4" />
+</Button>
+```
+
+## Layout Patterns
+
+### Page Header
+```html
+<div class="flex items-center justify-between">
+  <div>
+    <h1 class="text-2xl font-bold">{{ pageTitle }}</h1>
+    <p class="text-muted-foreground">{{ pageDescription }}</p>
+  </div>
+  <Button @click="handlePrimaryAction" class="flex items-center gap-2">
+    <Plus class="h-4 w-4" />
+    {{ t('actions.add') }}
+  </Button>
+</div>
+```
+
+### Content Sections
+```html
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <!-- Header content -->
+  </div>
+
+  <!-- Success/Error Messages -->
+  <Alert v-if="successMessage" class="border-green-200 bg-green-50 text-green-800">
+    <CheckCircle class="h-4 w-4" />
+    <AlertDescription>{{ successMessage }}</AlertDescription>
+  </Alert>
+
+  <!-- Main Content -->
+  <div class="space-y-4">
+    <!-- Content -->
+  </div>
+</div>
+```
+
+## Icon Usage
+
+### Standard Icon Sizes
+- **Small icons**: `h-4 w-4` (16px) - for buttons, table actions
+- **Medium icons**: `h-5 w-5` (20px) - for form fields, navigation
+- **Large icons**: `h-6 w-6` (24px) - for page headers, prominent actions
+
+### Icon with Text
+```html
+<Button>
+  <Settings class="h-4 w-4 mr-2" />
+  {{ t('actions.settings') }}
+</Button>
+```
+
+### Status Icons
+```html
+<CheckCircle class="h-4 w-4 text-green-600" />
+<AlertCircle class="h-4 w-4 text-yellow-600" />
+<XCircle class="h-4 w-4 text-red-600" />
+```
+
+## Responsive Design
+
+### Mobile-First Approach
+```html
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  <!-- Responsive grid -->
+</div>
+```
+
+### Hide/Show on Different Screens
+```html
+<div class="hidden md:block">Desktop only</div>
+<div class="block md:hidden">Mobile only</div>
+```
+
+## Accessibility Guidelines
+
+### Screen Reader Support
+```html
+<Button>
+  <span class="sr-only">{{ t('actions.openMenu') }}</span>
+  <MoreHorizontal class="h-4 w-4" />
+</Button>
+```
+
+### Proper Labels
+```html
+<Label for="input-id">{{ t('form.label') }}</Label>
+<Input id="input-id" v-model="value" />
+```
+
+### Focus Management
+```html
+<Button 
+  @click="handleAction"
+  :disabled="isLoading"
+  class="focus:ring-2 focus:ring-ring focus:ring-offset-2"
+>
+  {{ t('actions.submit') }}
+</Button>
+```
+
+## Migration Guide
+
+### Updating Existing Tables
+
+If you have an existing table using raw HTML elements, follow these steps:
+
+1. **Replace HTML elements** with shadcn-vue components:
+   - `<table>` → `<Table>`
+   - `<thead>` → `<TableHeader>`
+   - `<tbody>` → `<TableBody>`
+   - `<tr>` → `<TableRow>`
+   - `<th>` → `<TableHead>`
+   - `<td>` → `<TableCell>`
+
+2. **Update imports**:
+   ```html
+   import {
+     Table,
+     TableBody,
+     TableCell,
+     TableHead,
+     TableHeader,
+     TableRow,
+   } from '@/components/ui/table'
+   ```
+
+3. **Add proper empty state handling**
+4. **Update action menus** to use AlertDialog for destructive actions
+5. **Ensure proper badge usage** for status indicators
+
+### Example Migration
+
+**Before (deprecated):**
+```html
+<table class="w-full">
+  <thead>
+    <tr class="border-b">
+      <th class="h-12 px-4 text-left">Name</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="border-b">
+      <td class="p-4">{{ item.name }}</td>
+    </tr>
+  </tbody>
+</table>
+```
+
+**After (preferred):**
+```html
+<Table>
+  <TableHeader>
+    <TableRow>
+      <TableHead>Name</TableHead>
+    </TableRow>
+  </TableHeader>
+  <TableBody>
+    <TableRow>
+      <TableCell class="font-medium">{{ item.name }}</TableCell>
+    </TableRow>
+  </TableBody>
+</Table>
+```
