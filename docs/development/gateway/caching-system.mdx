@@ -96,7 +96,7 @@ Tool discovery is automatically triggered during:
 The discovery workflow follows these steps:
 
 1. **Server Enumeration**: Identify all MCP servers configured for the team
-2. **Process Communication**: Connect to already-running MCP server processes as described in [Process Management](./process-management)
+2. **Process Communication**: Connect to already-running MCP server processes as described in [Gateway Process Management](/development/gateway/process-management)
 3. **Tool Interrogation**: Query each running server for its available tools using MCP protocol
 4. **Schema Extraction**: Extract complete tool schemas including parameters and descriptions
 5. **Namespacing**: Apply server-specific namespacing to prevent tool name conflicts
@@ -175,9 +175,9 @@ The caching system ensures data privacy by:
 
 The caching system integrates seamlessly with other Gateway components:
 
-- **[MCP Configuration Management](./mcp)**: Uses team configurations to determine which servers to discover
-- **[Process Management](./process-management)**: Coordinates with process spawning for tool discovery
-- **[Project Structure](./structure)**: Implements the centralized architecture through the utils layer
+- **[MCP Configuration Management](/development/gateway/mcp)**: Uses team configurations to determine which servers to discover
+- **[Gateway Process Management](/development/gateway/process-management)**: Coordinates with process spawning for tool discovery
+- **[Gateway Project Structure](/development/gateway/structure)**: Implements the centralized architecture through the utils layer
 - **HTTP Proxy Server**: Provides cached tool information for immediate client responses
 
 ## Cache Management Operations

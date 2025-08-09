@@ -165,11 +165,11 @@ The Gateway works with MCP server configurations in this format:
 3. **Persistent Process Startup**: Starts all configured MCP servers as background processes when gateway launches
 4. **HTTP Server**: Starts local HTTP server with SSE endpoints immediately available (default: `localhost:9095/sse`)
 5. **Request Handling**: Receives MCP requests from development tools and routes to already-running processes
-6. **Process Management**: Maintains persistent background processes as described in [Process Management](./process-management)
+6. **Process Management**: Maintains persistent background processes as described in [Gateway Process Management](/development/gateway/process-management).
 7. **Credential Injection**: Securely injects environment variables into running processes at startup
 8. **Tool Routing**: Routes namespaced tool calls to persistent MCP servers via stdio transport
 
-For detailed information about the caching system, see [Caching System](./caching-system).
+For detailed information about the caching system, see [Gateway Caching System](/development/gateway/caching-system).
 
 ## Language Support
 
@@ -227,5 +227,3 @@ The Gateway is actively under development. Key areas for contribution:
 - **Phase 3**: Support for remote MCP servers (HTTP transport)
 - **Phase 4**: Advanced monitoring and analytics
 - **Future**: Plugin system for custom MCP server types
-
-For detailed contribution guidelines, see [CONTRIBUTING.md](../../../CONTRIBUTING.md).

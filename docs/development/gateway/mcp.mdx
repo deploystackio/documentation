@@ -130,7 +130,7 @@ Beyond configuration management, the Gateway implements an advanced tool discove
 - **Fast Startup**: Gateway starts instantly using cached tool information
 - **Fallback Support**: Cached tools remain available even when servers are temporarily unavailable
 
-For comprehensive details about the tool discovery and caching system, see [Caching System](./caching-system).
+For comprehensive details about the tool discovery and caching system, see [Gateway Caching System](/development/gateway/caching-system).
 
 ## Developer Commands
 
@@ -149,9 +149,9 @@ For comprehensive details about the tool discovery and caching system, see [Cach
 
 The stored MCP configurations are consumed by:
 
-- **Process Manager** - Spawns MCP server processes using stored configs as described in [Process Management](./process-management)
+- **Process Manager** - Spawns MCP server processes using stored configs as described in [Process Management](/development/gateway/process-management)
 - **HTTP Proxy** - Routes requests to appropriate MCP servers using cached tool information
 - **Environment Injection** - Securely provides credentials to spawned processes
-- **Tool Discovery System** - Uses configurations to discover and cache available tools as detailed in [Caching System](./caching-system)
+- **Tool Discovery System** - Uses configurations to discover and cache available tools as detailed in [Gateway Caching System](/development/gateway/caching-system)
 
 This system ensures that the Gateway has immediate access to team-specific MCP server configurations while maintaining security and team isolation throughout the development workflow.

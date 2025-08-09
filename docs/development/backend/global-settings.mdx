@@ -930,7 +930,7 @@ Key points for plugin-contributed settings:
 - **Declaration**: Plugins declare global settings via a `globalSettingsExtension` property in their main class.
 - **Initialization**: The `PluginManager` processes these definitions at startup, creating new groups and settings if they don't already exist.
 - **Precedence**: Core global settings always take precedence. If a plugin tries to define a setting with a key that already exists (either from core or another plugin), the plugin's definition for that specific key is ignored.
-- **Documentation**: For details on how plugins can define global settings, refer to the [PLUGINS.MD](PLUGINS.MD) document.
+- **Documentation**: For details on how plugins can define global settings, refer to the [Backend Plugins Docs](/development/backend/plugins) document.
 
 ## Helper Methods API Reference
 
