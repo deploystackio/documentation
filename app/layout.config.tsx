@@ -14,11 +14,6 @@ export const homeOptions: BaseLayoutProps = {
   ...baseConfig,
   links: [
     {
-      text: 'MCP Server',
-      url: 'https://deploystack.io/mcp',
-      external: true,
-    },
-    {
       text: 'Changelog',
       url: 'https://deploystack.io/changelog',
       external: true,

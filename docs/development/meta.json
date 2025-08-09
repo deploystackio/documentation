@@ -1,0 +1,12 @@
+{
+  "title": "Development",
+  "description": "Development documentation for DeployStack",
+  "icon": "Code",
+  "pages": [
+    "index",
+    "---Sections---",
+    "frontend",
+    "backend",
+    "gateway"
+  ]
+}

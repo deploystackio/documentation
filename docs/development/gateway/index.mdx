@@ -1,0 +1,229 @@
+---
+title: Gateway Development
+description: Developer documentation for the DeployStack Gateway - the local secure proxy that manages MCP servers and credentials for enterprise teams.
+sidebar: Gateway
+icon: Terminal
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Terminal, Code2, Settings, Shield, Zap, Users, Rocket } from 'lucide-react';
+
+# DeployStack Gateway Development
+
+The DeployStack Gateway is the local secure proxy that connects developers to their team's MCP servers through a centralized control plane. It acts as a smart process manager and credential vault, running MCP server processes as persistent background services while enforcing access policies from the cloud.
+
+## Architecture Overview
+
+The Gateway implements a sophisticated Control Plane / Data Plane architecture with dual transport support:
+
+- **Control Plane**: Authenticates with `cloud.deploystack.io` to download team configurations and access policies
+- **Data Plane**: Manages local MCP server processes with both stdio and SSE transport protocols
+- **Security Layer**: Injects credentials securely into process environments without exposing them to developers
+- **Session Management**: Handles secure SSE connections with cryptographic session IDs for VS Code compatibility
+
+## Core Features
+
+<Cards>
+  <Card 
+    icon={<Terminal />} 
+    title="Dual Transport Support"
+  >
+    Supports both stdio transport for CLI tools and SSE transport for VS Code compatibility
+  </Card>
+  
+  <Card 
+    icon={<Shield />} 
+    title="Secure Credential Injection"
+  >
+    Injects API tokens and credentials directly into process environments without developer exposure
+  </Card>
+  
+  <Card 
+    icon={<Zap />} 
+    title="Individual Tool Exposure"
+  >
+    Exposes individual MCP tools with namespacing (e.g., brightdata-search_engine) for direct use in development environments
+  </Card>
+  
+  <Card 
+    icon={<Users />} 
+    title="Session Management"
+  >
+    Cryptographically secure session handling with automatic cleanup for persistent connections
+  </Card>
+  
+  <Card 
+    icon={<Settings />} 
+    title="Unified Proxy"
+  >
+    Single HTTP endpoint supporting multiple client types with intelligent request routing
+  </Card>
+  
+  <Card 
+    icon={<Code2 />} 
+    title="Team-Based Access"
+  >
+    Enforces team-based access control policies downloaded from the cloud control plane
+  </Card>
+  
+  <Card 
+    icon={<Rocket />} 
+    title="Tool Caching System"
+  >
+    Team-aware caching enables instant gateway startup and automatic tool discovery on team switching
+  </Card>
+</Cards>
+
+## Development Setup
+
+### Prerequisites
+
+- Node.js (v18 or higher)
+- npm (v8 or higher)
+- TypeScript development environment
+- A DeployStack account at [cloud.deploystack.io](https://cloud.deploystack.io)
+
+### Local Development
+
+```bash
+# Navigate to the gateway service
+cd services/gateway
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production build
+npm start
+```
+
+## Key Components
+
+### Authentication Module
+Handles secure authentication with the DeployStack cloud control plane and manages access tokens.
+
+### Configuration Sync
+Downloads and synchronizes team MCP server configurations, including process spawn commands and environment variables.
+
+### Process Manager
+Manages the lifecycle of MCP server processes, including:
+- On-demand process spawning
+- Stdio communication handling
+- Process cleanup and resource management
+- Environment variable injection
+
+### HTTP Proxy Server
+Exposes dual endpoints for different client types:
+- **GET /sse**: SSE connection establishment for VS Code
+- **POST /message**: Session-based JSON-RPC for SSE clients
+
+### Session Manager
+Handles secure SSE connections with:
+- Cryptographically secure session ID generation
+- Session lifecycle management and cleanup
+- Connection state tracking and validation
+- Automatic timeout and resource management
+
+### Enterprise Management Layer
+Transforms MCP servers into enterprise governance tools:
+- Each MCP server appears as a toggleable tool
+- Enable/disable/status actions for operational control
+- Rich metadata from secure catalog integration
+- Team-based access policy enforcement
+
+### Security Layer
+Ensures credentials are handled securely:
+- Encrypted storage of downloaded configurations
+- Secure environment variable injection
+- No credential exposure to developer environment
+- Session-based authentication for persistent connections
+
+## Configuration Format
+
+The Gateway works with MCP server configurations in this format:
+
+```json
+{
+  "name": "brightdata",
+  "command": "npx",
+  "args": ["@brightdata/mcp"],
+  "env": {
+    "API_TOKEN": "secure-token-from-vault"
+  }
+}
+```
+
+## Development Workflow
+
+1. **Authentication**: Gateway authenticates with cloud control plane
+2. **Config Download**: Downloads team's MCP server configurations
+3. **Persistent Process Startup**: Starts all configured MCP servers as background processes when gateway launches
+4. **HTTP Server**: Starts local HTTP server with SSE endpoints immediately available (default: `localhost:9095/sse`)
+5. **Request Handling**: Receives MCP requests from development tools and routes to already-running processes
+6. **Process Management**: Maintains persistent background processes as described in [Gateway Process Management](/development/gateway/process-management).
+7. **Credential Injection**: Securely injects environment variables into running processes at startup
+8. **Tool Routing**: Routes namespaced tool calls to persistent MCP servers via stdio transport
+
+For detailed information about the caching system, see [Gateway Caching System](/development/gateway/caching-system).
+
+## Language Support
+
+The Gateway is language-agnostic and supports MCP servers written in:
+
+- **Node.js**: `npx`, `node` commands
+- **Python**: `python`, `pip`, `pipenv` commands  
+- **Go**: Compiled binary execution
+- **Rust**: Compiled binary execution
+- **Any Language**: Via appropriate runtime commands
+
+## Security Considerations
+
+### Credential Management
+- Credentials are never written to disk in plain text
+- Environment variables are injected directly into spawned processes
+- No credential exposure to the developer's shell environment
+
+### Process Isolation
+- Each MCP server runs in its own isolated process
+- Process cleanup ensures no resource leaks
+- Automatic process termination after idle periods
+
+### Network Security
+- Local HTTP server only binds to localhost
+- No external network exposure by default
+- Secure communication with cloud control plane
+
+## Testing
+
+```bash
+# Run unit tests
+npm test
+
+# Run integration tests
+npm run test:integration
+
+# Run with coverage
+npm run test:coverage
+```
+
+## Contributing
+
+The Gateway is actively under development. Key areas for contribution:
+
+- **Process Management**: Improving spawn/cleanup logic
+- **Security**: Enhancing credential handling
+- **Performance**: Optimizing stdio communication
+- **Platform Support**: Adding Windows/Linux compatibility
+- **Error Handling**: Robust error recovery
+
+## Roadmap
+
+- **Phase 2**: Enhanced process lifecycle management
+- **Phase 3**: Support for remote MCP servers (HTTP transport)
+- **Phase 4**: Advanced monitoring and analytics
+- **Future**: Plugin system for custom MCP server types

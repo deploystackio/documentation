@@ -1,0 +1,219 @@
+---
+title: Gateway Caching System
+description: Team-aware tool caching architecture that enables fast gateway startup and automatic tool discovery across MCP servers
+sidebar: Caching System
+icon: Database
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Zap, Users, RefreshCw, Shield, Clock, HardDrive } from 'lucide-react';
+
+# Gateway Caching System
+
+The DeployStack Gateway implements a sophisticated team-aware caching system that dramatically improves performance by pre-discovering and caching tools from MCP servers. This enables instant gateway startup and seamless tool availability for development teams.
+
+## Architecture Overview
+
+The caching system operates on a **cache-as-manifest philosophy** where tools are proactively discovered and stored locally, serving as both a performance optimization and a configuration manifest that defines what should be running versus what is actually running in the persistent background process model.
+
+## Core Concepts
+
+<Cards>
+  <Card 
+    icon={<Zap />} 
+    title="Fast Gateway Startup"
+  >
+    Cached tools enable instant gateway startup without waiting for MCP server discovery
+  </Card>
+  
+  <Card 
+    icon={<Users />} 
+    title="Team-Aware Isolation"
+  >
+    Each team's tools are cached separately with complete isolation and security boundaries
+  </Card>
+  
+  <Card 
+    icon={<RefreshCw />} 
+    title="Automatic Discovery"
+  >
+    Tools are automatically discovered and cached when switching teams or refreshing configurations
+  </Card>
+  
+  <Card 
+    icon={<Shield />} 
+    title="Secure Storage"
+  >
+    Cache files are stored securely with team-specific access controls and encryption
+  </Card>
+  
+  <Card 
+    icon={<Clock />} 
+    title="Intelligent Invalidation"
+  >
+    Cache is automatically invalidated based on configuration changes and time-based policies
+  </Card>
+  
+  <Card 
+    icon={<HardDrive />} 
+    title="Fallback Mechanisms"
+  >
+    Graceful fallback to cached data when live discovery fails or servers are unavailable
+  </Card>
+</Cards>
+
+## Cache Architecture
+
+### Storage Structure
+The caching system uses a hierarchical file-based storage approach:
+
+- **Base Directory**: `~/.deploystack/cache/`
+- **Team Isolation**: `teams/{teamId}/`
+- **Cache Files**: `tools-cache.json` per team
+
+This structure ensures complete isolation between teams while providing fast local access to cached tool information.
+
+### Cache Content
+Each team's cache contains:
+
+- **Tool Definitions**: Complete tool schemas with input parameters and descriptions
+- **Server Metadata**: Information about which MCP server provides each tool
+- **Namespaced Names**: Tools are namespaced as `serverName-toolName` for conflict resolution
+- **Discovery Timestamps**: When each tool was last discovered and validated
+- **Configuration Hashes**: Checksums to detect when server configurations change
+
+## Tool Discovery Workflow
+
+### Automatic Discovery Triggers
+Tool discovery is automatically triggered during:
+
+- **Team Switching**: When developers switch to a different team context
+- **Configuration Refresh**: When MCP server configurations are updated from the cloud
+- **Manual Refresh**: When developers explicitly request tool discovery
+- **Cache Invalidation**: When cached data becomes stale or invalid
+
+### Discovery Process
+The discovery workflow follows these steps:
+
+1. **Server Enumeration**: Identify all MCP servers configured for the team
+2. **Process Communication**: Connect to already-running MCP server processes as described in [Gateway Process Management](/development/gateway/process-management)
+3. **Tool Interrogation**: Query each running server for its available tools using MCP protocol
+4. **Schema Extraction**: Extract complete tool schemas including parameters and descriptions
+5. **Namespacing**: Apply server-specific namespacing to prevent tool name conflicts
+6. **Cache Storage**: Store discovered tools in the team-specific cache file
+
+**Note**: In the persistent background process model, tool discovery communicates with already-running MCP servers rather than spawning processes specifically for discovery.
+
+### Centralized Management
+All tool discovery operations are managed through a centralized `ToolDiscoveryManager` that:
+
+- **Eliminates Code Duplication**: Single source of truth for all discovery logic
+- **Provides Consistent Behavior**: Uniform discovery behavior across all Gateway components
+- **Handles Error Recovery**: Robust error handling with fallback mechanisms
+- **Manages Progress Feedback**: Consistent user feedback during discovery operations
+
+## Cache Invalidation Strategy
+
+### Time-Based Invalidation
+Cache entries are automatically invalidated based on:
+
+- **Maximum Age**: Default 24-hour time-to-live for cached tool information
+- **Configuration Changes**: Immediate invalidation when server configurations change
+- **Team Context Changes**: Cache clearing when switching between teams
+
+### Configuration-Based Invalidation
+The system detects configuration changes through:
+
+- **Server Configuration Hashing**: Checksums of server spawn commands and environment variables
+- **Team Membership Changes**: Detection of team member additions or removals
+- **Permission Updates**: Changes to team-based access policies
+
+### Manual Invalidation
+Developers and administrators can manually invalidate cache through:
+
+- **CLI Commands**: Explicit cache clearing and refresh commands
+- **Team Switching**: Automatic cache refresh when switching team contexts
+- **Configuration Updates**: Cache refresh when updating MCP server configurations
+
+## Performance Optimization
+
+### Cache-First Strategy
+The Gateway prioritizes cached data for optimal performance:
+
+- **Instant Tool Exposure**: Cached tools are immediately available to MCP clients
+- **Background Refresh**: Cache updates happen asynchronously without blocking operations
+- **Predictive Loading**: Frequently-used tools are kept warm in cache
+- **Lazy Discovery**: New servers are discovered on-demand when first accessed
+
+### Fallback Mechanisms
+When live discovery fails, the system provides graceful degradation:
+
+- **Cached Tool Fallback**: Use previously cached tools when servers are unavailable
+- **Partial Discovery**: Continue with available tools even if some servers fail
+- **Error State Caching**: Cache error states to avoid repeated failed discovery attempts
+- **Recovery Strategies**: Automatic retry with exponential backoff for failed discoveries
+
+## Team Isolation and Security
+
+### Access Control
+Each team's cache is completely isolated through:
+
+- **Directory Separation**: Team-specific cache directories prevent cross-team access
+- **File Permissions**: Operating system-level permissions restrict cache file access
+- **Encryption**: Sensitive cache data is encrypted using team-specific keys
+- **Audit Logging**: All cache operations are logged for security and compliance
+
+### Data Privacy
+The caching system ensures data privacy by:
+
+- **Local Storage Only**: Cache files are stored locally and never transmitted
+- **Credential Exclusion**: No sensitive credentials are stored in cache files
+- **Metadata Only**: Only tool schemas and metadata are cached, not actual data
+- **Automatic Cleanup**: Cache files are automatically cleaned up when teams are removed
+
+## Integration Points
+
+The caching system integrates seamlessly with other Gateway components:
+
+- **[MCP Configuration Management](/development/gateway/mcp)**: Uses team configurations to determine which servers to discover
+- **[Gateway Process Management](/development/gateway/process-management)**: Coordinates with process spawning for tool discovery
+- **[Gateway Project Structure](/development/gateway/structure)**: Implements the centralized architecture through the utils layer
+- **HTTP Proxy Server**: Provides cached tool information for immediate client responses
+
+## Cache Management Operations
+
+### Developer Commands
+The Gateway provides several commands for cache management:
+
+- **Status Checking**: View current cache status and tool counts
+- **Manual Refresh**: Force refresh of cached tools from all servers
+- **Cache Clearing**: Remove cached data for troubleshooting
+- **Discovery Testing**: Validate tool discovery for specific servers
+
+### Administrative Operations
+Enterprise administrators can manage caching through:
+
+- **Team-Wide Refresh**: Refresh cache for all team members
+- **Policy Enforcement**: Apply caching policies across teams
+- **Usage Analytics**: Monitor cache hit rates and discovery patterns
+- **Troubleshooting**: Diagnose cache-related issues and performance problems
+
+## Monitoring and Observability
+
+### Cache Metrics
+The system tracks comprehensive caching metrics:
+
+- **Cache Hit Rates**: Percentage of requests served from cache vs. live discovery
+- **Discovery Success Rates**: Success/failure rates for tool discovery operations
+- **Cache Size**: Storage usage and tool counts per team
+- **Refresh Frequency**: How often cache is refreshed and invalidated
+
+### Performance Indicators
+Key performance indicators include:
+
+- **Gateway Startup Time**: Time from start to tool availability
+- **Tool Discovery Duration**: Time required to discover tools from each server
+- **Cache Effectiveness**: Reduction in discovery time due to caching
+- **Error Recovery Time**: Time to recover from failed discovery operations
+
+This caching system ensures that the DeployStack Gateway provides instant tool availability while maintaining the security, isolation, and performance requirements of enterprise development teams.

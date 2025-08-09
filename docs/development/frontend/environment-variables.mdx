@@ -1,0 +1,386 @@
+---
+title: Environment Variables
+description: Complete guide to configuring and using environment variables in the DeployStack frontend application for both development and production environments.
+sidebar: Environment Variables
+---
+
+# Frontend Environment Variables
+
+The DeployStack frontend uses a sophisticated environment variable system that seamlessly works across development and production environments. This system supports both Vite's build-time variables and Docker runtime variables for maximum flexibility.
+
+## Overview
+
+The frontend environment system consists of two layers:
+
+1. **Development Environment**: Uses Vite's built-in environment variable support with `.env` files
+2. **Production Environment**: Uses Docker runtime variables that are injected at container startup
+
+This dual approach ensures that:
+- Developers can work with standard `.env` files during development
+- Production deployments can inject variables at runtime without rebuilding the application
+- The same codebase works seamlessly in both environments
+
+## Environment Variable Types
+
+### Vite Environment Variables (Development)
+
+During development, Vite processes environment variables that start with `VITE_` prefix:
+
+```bash
+# .env
+VITE_DEPLOYSTACK_BACKEND_URL=http://localhost:3000
+VITE_APP_TITLE=DeployStack
+```
+
+### Runtime Environment Variables (Production)
+
+In production Docker containers, variables are injected at runtime via the `env-config.sh` script:
+
+```bash
+# Docker run example
+docker run -e VITE_DEPLOYSTACK_BACKEND_URL="https://api.deploystack.io" \
+           -e VITE_APP_TITLE="DeployStack Production" \
+           deploystack/frontend:latest
+```
+
+## Current Environment Variables
+
+### Core Application Variables
+
+| Variable | Description | Default Value | Required |
+|----------|-------------|---------------|----------|
+| `VITE_DEPLOYSTACK_BACKEND_URL` | Backend API base URL | `http://localhost:3000` | Yes |
+| `VITE_APP_TITLE` | Application title displayed in UI | `DeployStack` | Yes |
+
+## Development Setup
+
+### Environment Files
+
+Create environment files in the `services/frontend` directory:
+
+#### `.env` (Base Configuration)
+```bash
+# Base environment variables
+VITE_DEPLOYSTACK_BACKEND_URL=http://localhost:3000
+VITE_APP_TITLE=DeployStack
+```
+
+#### `.env.local` (Local Overrides)
+```bash
+# Local development environment variables
+# This file is gitignored and used for local customization
+VITE_DEPLOYSTACK_BACKEND_URL=http://localhost:3000
+VITE_APP_TITLE=DeployStack (Development)
+```
+
+### Environment File Priority
+
+Vite loads environment files in this order (higher priority overrides lower):
+
+1. `.env.local` (highest priority, gitignored)
+2. `.env.development.local`
+3. `.env.development`
+4. `.env` (lowest priority)
+
+### Development Example
+
+```bash
+# Navigate to frontend directory
+cd services/frontend
+
+# Create your local environment file
+cp .env .env.local
+
+# Edit .env.local with your local settings
+echo "VITE_APP_TITLE=DeployStack (My Local Dev)" >> .env.local
+
+# Start development server
+npm run dev
+```
+
+## Production Deployment
+
+### Docker Environment Variables
+
+The production Docker container uses the `env-config.sh` script to generate runtime environment variables:
+
+```bash
+# Production deployment
+docker run -d -p 8080:80 \
+  -e VITE_DEPLOYSTACK_BACKEND_URL="https://api.deploystack.io" \
+  -e VITE_APP_TITLE="DeployStack Production" \
+  deploystack/frontend:latest
+```
+
+### Docker Compose Example
+
+```yaml
+version: '3.8'
+services:
+  frontend:
+    image: deploystack/frontend:latest
+    ports:
+      - "8080:80"
+    environment:
+      - VITE_DEPLOYSTACK_BACKEND_URL=https://api.deploystack.io
+      - VITE_APP_TITLE=DeployStack Production
+```
+
+## Using Environment Variables in Code
+
+### Accessing Variables
+
+Use the utility functions from `@/utils/env` for consistent access:
+
+```typescript
+import { getEnv, getAllEnv } from '@/utils/env'
+
+// Get a specific environment variable
+const backendUrl = getEnv('VITE_DEPLOYSTACK_BACKEND_URL')
+const appTitle = getEnv('VITE_APP_TITLE')
+
+// Get all environment variables (useful for debugging)
+const allEnvVars = getAllEnv()
+console.log('All environment variables:', allEnvVars)
+```
+
+### Component Usage Example
+
+```vue
+<script setup lang="ts">
+import { getEnv } from '@/utils/env'
+
+// Access environment variables
+const backendUrl = getEnv('VITE_DEPLOYSTACK_BACKEND_URL')
+const appTitle = getEnv('VITE_APP_TITLE')
+
+// Use in API calls
+const apiClient = new ApiClient(backendUrl)
+</script>
+
+<template>
+  <div>
+    <h1>{{ appTitle }}</h1>
+    <p>Connected to: {{ backendUrl }}</p>
+  </div>
+</template>
+```
+
+### Service Layer Example
+
+```typescript
+// services/apiService.ts
+import { getEnv } from '@/utils/env'
+
+export class ApiService {
+  private static baseUrl = getEnv('VITE_DEPLOYSTACK_BACKEND_URL')
+
+  static async get(endpoint: string) {
+    const response = await fetch(`${this.baseUrl}${endpoint}`)
+    return response.json()
+  }
+
+  static async post(endpoint: string, data: any) {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    })
+    return response.json()
+  }
+}
+```
+
+## Adding New Environment Variables
+
+### Step 1: Update TypeScript Definitions
+
+Add the new variable to `env.d.ts`:
+
+```typescript
+interface ImportMetaEnv {
+  readonly VITE_DEPLOYSTACK_BACKEND_URL: string
+  readonly VITE_APP_TITLE: string
+  readonly VITE_NEW_VARIABLE: string // Add your new variable
+}
+```
+
+### Step 2: Add to Environment Files
+
+Add to your `.env` file:
+
+```bash
+# .env
+VITE_DEPLOYSTACK_BACKEND_URL=http://localhost:3000
+VITE_APP_TITLE=DeployStack
+VITE_NEW_VARIABLE=default_value
+```
+
+### Step 3: Update Docker Configuration (if needed)
+
+For non-VITE_ prefixed variables, update `env-config.sh`:
+
+```bash
+# Add specific non-VITE_ variables you want to expose
+for var in CUSTOM_VAR OTHER_VAR NEW_CUSTOM_VAR; do
+  if [ ! -z "$(eval echo \$$var)" ]; then
+    echo "  \"$var\": \"$(eval echo \$$var | sed 's/"/\\"/g')\"," >> /usr/share/nginx/html/runtime-env.js
+  fi
+done
+```
+
+### Step 4: Use in Code
+
+```typescript
+import { getEnv } from '@/utils/env'
+
+const newValue = getEnv('VITE_NEW_VARIABLE')
+```
+
+## Environment Variable Naming Conventions
+
+### Development (Vite) Variables
+
+- **Must** start with `VITE_` prefix to be accessible in the browser
+- Use `SCREAMING_SNAKE_CASE` format
+- Be descriptive and specific
+
+```bash
+✅ Good
+VITE_DEPLOYSTACK_BACKEND_URL=http://localhost:3000
+VITE_APP_TITLE=DeployStack
+VITE_ENABLE_DEBUG_MODE=true
+
+❌ Bad
+API_URL=http://localhost:3000          # Missing VITE_ prefix
+vite_app_title=DeployStack            # Wrong case
+VITE_URL=http://localhost:3000        # Not descriptive
+```
+
+### Production Runtime Variables
+
+- Can include both `VITE_` prefixed and custom variables
+- `VITE_` variables are automatically processed
+- Custom variables need to be explicitly added to `env-config.sh`
+
+## Best Practices
+
+### Security
+
+1. **Never expose sensitive data** in environment variables accessible to the browser
+2. **Use backend proxy** for sensitive API keys and secrets
+3. **Validate environment variables** before using them
+
+```typescript
+// Good: Validate environment variables
+const backendUrl = getEnv('VITE_DEPLOYSTACK_BACKEND_URL')
+if (!backendUrl) {
+  throw new Error('VITE_DEPLOYSTACK_BACKEND_URL is required')
+}
+```
+
+### Performance
+
+1. **Cache environment variables** instead of calling `getEnv()` repeatedly
+2. **Use computed properties** in Vue components for reactive environment values
+
+```vue
+<script setup lang="ts">
+import { computed } from 'vue'
+import { getEnv } from '@/utils/env'
+
+// Cache the value
+const appTitle = computed(() => getEnv('VITE_APP_TITLE'))
+</script>
+```
+
+### Development
+
+1. **Use `.env.local`** for personal development settings
+2. **Document all environment variables** in this guide
+3. **Provide sensible defaults** in `.env` file
+4. **Test both development and production** environment setups
+
+## Troubleshooting
+
+### Common Issues
+
+#### Variable Not Accessible in Browser
+
+**Problem**: Environment variable is undefined in the browser
+
+**Solution**: Ensure the variable name starts with `VITE_`
+
+```bash
+# ❌ Won't work
+API_URL=http://localhost:3000
+
+# ✅ Will work
+VITE_API_URL=http://localhost:3000
+```
+
+#### Variable Not Updated in Production
+
+**Problem**: Environment variable changes don't reflect in production
+
+**Solutions**:
+1. Restart the Docker container
+2. Check if the variable is properly passed to the container
+3. Verify `env-config.sh` processes the variable correctly
+
+#### TypeScript Errors
+
+**Problem**: TypeScript complains about unknown environment variables
+
+**Solution**: Update `env.d.ts` with the new variable definition
+
+```typescript
+interface ImportMetaEnv {
+  readonly VITE_DEPLOYSTACK_BACKEND_URL: string
+  readonly VITE_APP_TITLE: string
+  readonly VITE_YOUR_NEW_VARIABLE: string // Add this
+}
+```
+
+#### Development vs Production Differences
+
+**Problem**: Different behavior between development and production
+
+**Solutions**:
+1. Use the same variable names in both environments
+2. Test with Docker locally: `docker build -t test . && docker run -e VITE_VAR=value test`
+3. Use `getAllEnv()` to debug variable values
+
+### Validation Utility
+
+Create a validation utility for critical environment variables:
+
+```typescript
+// utils/envValidation.ts
+import { getEnv } from './env'
+
+export function validateEnvironment() {
+  const required = [
+    'VITE_DEPLOYSTACK_BACKEND_URL',
+    'VITE_APP_TITLE'
+  ]
+
+  const missing = required.filter(key => !getEnv(key))
+  
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`)
+  }
+}
+
+// Use in main.ts
+import { validateEnvironment } from '@/utils/envValidation'
+
+validateEnvironment()
+```
+
+## Related Documentation
+
+- [Frontend Development Guide](/development/frontend) - Main frontend development guide
+- [Deploy DeployStack](/self-hosted/docker-compose) - Deploy DeployStack with Docker Compose

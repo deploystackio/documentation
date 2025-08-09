@@ -1,0 +1,175 @@
+---
+title: Development Guide
+description: Complete development documentation for DeployStack - covering frontend, backend, and contribution guidelines for the MCP server deployment platform.
+icon: FileCode
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Code2, Server, GitBranch, Users, Shield } from 'lucide-react';
+
+# DeployStack Development
+
+Welcome to the DeployStack development documentation! DeployStack is a comprehensive enterprise platform for deploying and managing Model Context Protocol (MCP) servers, featuring a cloud control plane, local gateway proxy, and modern web interface for team-based MCP server orchestration.
+
+## Architecture Overview
+
+DeployStack implements a sophisticated Control Plane / Data Plane architecture for enterprise MCP server management:
+
+- **Frontend**: Vue 3 + TypeScript web application providing the management interface for MCP server deployments
+- **Backend**: Fastify-based cloud control plane handling authentication, team management, and configuration distribution
+- **Gateway**: Local secure proxy that runs on developer machines, managing MCP server processes and credential injection
+- **Shared**: Common utilities and TypeScript types used across all services
+- **Dual Transport**: Supports both stdio (CLI tools) and SSE (VS Code) protocols for maximum compatibility
+
+## Development Areas
+
+<Cards>
+  <Card 
+    icon={<Code2 />} 
+    href="/development/frontend" 
+    title="Frontend Development"
+  >
+    Vue 3 web application with TypeScript, Vite, and shadcn-vue components. Direct fetch API patterns, SFC components, and internationalization.
+  </Card>
+  
+  <Card 
+    icon={<Server />} 
+    href="/development/backend" 
+    title="Backend Development"
+  >
+    Fastify cloud control plane with Drizzle ORM, plugin architecture, role-based access control, and OpenAPI documentation generation.
+  </Card>
+  
+  <Card 
+    icon={<Shield />} 
+    href="/development/gateway" 
+    title="Gateway Development"
+  >
+    Local secure proxy managing MCP server processes, credential injection, dual transport protocols (stdio/SSE), and team-based access control.
+  </Card>
+</Cards>
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18 or higher
+- npm 8 or higher
+- Git for version control
+- DeployStack account at [cloud.deploystack.io](https://cloud.deploystack.io) (for gateway development)
+
+### Quick Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/deploystackio/deploystack.git
+cd deploystack
+
+# Install dependencies for all services
+cd services/frontend && npm install
+cd ../backend && npm install
+cd ../gateway && npm install
+
+# Start development servers (in separate terminals)
+# Terminal 1 - Backend
+cd services/backend && npm run dev  # http://localhost:3000
+
+# Terminal 2 - Frontend
+cd services/frontend && npm run dev  # http://localhost:5173
+
+# Terminal 3 - Gateway (optional, for local MCP testing)
+cd services/gateway && npm run dev   # http://localhost:9095
+```
+
+## Development Workflow
+
+1. **Choose Your Service**: Select frontend, backend, or gateway based on your contribution area
+2. **Set Up Environment**: Follow the specific setup guides for your chosen service
+3. **Understand Architecture**: Review how services interact (Frontend ↔ Backend ↔ Gateway)
+4. **Make Changes**: Implement features following established patterns (Vue SFC for frontend, plugins for backend, process management for gateway)
+5. **Test**: Run comprehensive test suites for your service
+6. **Submit**: Create pull requests following our contribution guidelines
+
+## Project Structure
+
+```bash
+deploystack/
+├── services/
+│   ├── frontend/           # Vue 3 frontend application
+│   │   ├── src/
+│   │   ├── public/
+│   │   └── package.json
+│   ├── backend/            # Fastify backend API
+│   │   ├── src/
+│   │   ├── plugins/
+│   │   └── package.json
+│   ├── gateway/            # API Gateway service
+│   │   ├── src/
+│   │   ├── config/
+│   │   └── package.json
+│   └── shared/             # Shared utilities and types
+│       └── package.json
+├── docs/                   # Documentation
+└── docker-compose.yml     # Development environment
+```
+
+## Key Technologies
+
+### Frontend Stack
+- **Vue 3** with Composition API and Single File Components (SFC)
+- **TypeScript** for type safety throughout the application
+- **Vite** for fast HMR and optimized builds
+- **TailwindCSS** with shadcn-vue component library
+- **Direct fetch()** API calls (no axios or API client libraries)
+- **Vue I18n** for multi-language support
+
+### Backend Stack
+- **Fastify** for high-performance cloud control plane
+- **TypeScript** with full type safety
+- **Drizzle ORM** supporting SQLite and PostgreSQL
+- **Zod** validation with automatic OpenAPI generation
+- **Plugin System** with isolated routes (`/api/plugin/<id>/`)
+- **Role-Based Access Control** with session management
+
+### Gateway Stack
+- **Node.js** process management runtime
+- **Dual Transport** stdio for CLI tools, SSE for VS Code
+- **Secure Credential Injection** without developer exposure
+- **Process Manager** for persistent MCP server processes
+- **Session Management** with cryptographic security
+- **Team-Based Caching** for instant startup and tool discovery
+
+## Development Philosophy
+
+### Enterprise MCP Management
+DeployStack provides enterprise-grade MCP server orchestration through:
+
+- **Control Plane Architecture**: Cloud-based configuration management with local gateway execution
+- **Security-First Design**: Credential injection without exposure, team-based access control
+- **Universal Compatibility**: Supports MCP servers in any language (Node.js, Python, Go, Rust)
+- **Developer Experience**: Seamless integration with VS Code, CLI tools, and development workflows
+- **Process Persistence**: MCP servers run as managed background services with automatic lifecycle management
+
+### Code Quality
+- **Type Safety**: TypeScript throughout the stack
+- **Testing**: Comprehensive test coverage
+- **Documentation**: Clear, up-to-date documentation
+- **Security**: Built-in security best practices
+
+## Contributing
+
+We welcome contributions to DeployStack! Key areas include:
+
+- **Frontend**: Vue components, UI/UX improvements, new management features
+- **Backend**: API endpoints, plugin development, database optimizations
+- **Gateway**: Process management, transport protocols, credential handling
+- **Documentation**: Guides, examples, API documentation
+- **MCP Servers**: Support for new MCP server types and configurations
+- **Security**: Enhanced credential management, access control improvements
+
+## Community
+
+- **GitHub**: [deploystackio/deploystack](https://github.com/deploystackio/deploystack)
+- **Issues**: Report bugs and request features
+
+For detailed development guides, choose your area of interest from the cards above. Each section contains comprehensive documentation for getting started, best practices, and advanced topics.

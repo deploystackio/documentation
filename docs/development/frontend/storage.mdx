@@ -1,0 +1,468 @@
+---
+title: Frontend Storage System
+description: Complete guide to using the enhanced event bus storage system for persistent data management in the DeployStack frontend.
+sidebar: Storage
+---
+
+# Frontend Storage System
+
+The storage system is built into the [global event bus](/development/frontend/event-bus) and provides persistent data management across route changes and browser sessions. This system uses localStorage with a type-safe API and automatically emits events when data changes.
+
+> **📖 For event bus fundamentals, see [Global Event Bus](/development/frontend/event-bus)**
+
+## Overview
+
+The storage system solves common frontend challenges such as:
+- **Persistent State**: Maintain application state across route changes and page refreshes
+- **Type Safety**: Full TypeScript support with generic methods
+- **Easy Integration**: Simple API that works with the existing event bus
+- **Automatic Cleanup**: Consistent storage key management with prefixing
+- **Event Integration**: Storage changes emit events for reactive updates
+
+## Architecture
+
+### Storage Configuration
+
+The storage system is built into the event bus and uses a centralized configuration:
+
+```typescript
+// Storage configuration in useEventBus.ts
+const STORAGE_CONFIG = {
+  prefix: 'deploystack_',
+  keys: {
+    SELECTED_TEAM_ID: 'selected_team_id',
+    // Add new keys here as needed
+  }
+}
+```
+
+### Type Safety
+
+All storage operations are type-safe using TypeScript generics:
+
+```typescript
+// Generic storage methods
+setState<T>(key: string, value: T): void
+getState<T>(key: string, defaultValue?: T): T | null
+clearState(key: string): void
+hasState(key: string): boolean
+```
+
+## Usage
+
+### Basic Storage Operations
+
+#### Storing Data
+
+```typescript
+import { useEventBus } from '@/composables/useEventBus'
+
+const eventBus = useEventBus()
+
+// Store a string
+eventBus.setState('selected_team_id', 'team-123')
+
+// Store an object
+eventBus.setState('user_preferences', {
+  theme: 'dark',
+  language: 'en',
+  notifications: true
+})
+
+// Store an array
+eventBus.setState('recent_searches', ['query1', 'query2', 'query3'])
+
+// Store a boolean
+eventBus.setState('sidebar_collapsed', true)
+```
+
+#### Retrieving Data
+
+```typescript
+// Get data with type safety
+const teamId = eventBus.getState<string>('selected_team_id')
+
+// Get data with default value
+const theme = eventBus.getState<string>('selected_theme', 'light')
+
+// Get complex objects
+interface UserPreferences {
+  theme: string
+  language: string
+  notifications: boolean
+}
+
+const preferences = eventBus.getState<UserPreferences>('user_preferences')
+```
+
+#### Checking and Clearing Data
+
+```typescript
+// Check if data exists
+if (eventBus.hasState('selected_team_id')) {
+  console.log('Team selection exists')
+}
+
+// Clear specific data
+eventBus.clearState('selected_team_id')
+
+// Get all stored data
+const allData = eventBus.getAllState()
+console.log('All stored data:', allData)
+
+// Clear all stored data
+eventBus.clearAllState()
+```
+
+## Adding New Storage Values
+
+### Step 1: Add to Configuration (Optional)
+
+For better organization, add your new storage key to the configuration:
+
+```typescript
+// In /composables/useEventBus.ts
+const STORAGE_CONFIG = {
+  prefix: 'deploystack_',
+  keys: {
+    SELECTED_TEAM_ID: 'selected_team_id',
+    SELECTED_THEME: 'selected_theme',           // NEW
+    USER_DASHBOARD_LAYOUT: 'dashboard_layout',  // NEW
+    RECENT_SEARCHES: 'recent_searches',         // NEW
+  }
+}
+```
+
+### Step 2: Use in Components
+
+```typescript
+// In any Vue component
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useEventBus } from '@/composables/useEventBus'
+
+const eventBus = useEventBus()
+const selectedTheme = ref<string>('light')
+
+// Initialize from storage
+onMounted(() => {
+  const storedTheme = eventBus.getState<string>('selected_theme', 'light')
+  selectedTheme.value = storedTheme
+})
+
+// Update theme and store it
+const changeTheme = (newTheme: string) => {
+  selectedTheme.value = newTheme
+  eventBus.setState('selected_theme', newTheme)
+}
+</script>
+```
+
+### Step 3: Listen for Storage Changes (Optional)
+
+```typescript
+// Listen for storage change events
+eventBus.on('storage-changed', (data) => {
+  console.log(`Storage changed: ${data.key}`, {
+    oldValue: data.oldValue,
+    newValue: data.newValue
+  })
+})
+```
+
+## Real-World Examples
+
+### Example 1: Theme Persistence
+
+```typescript
+// ThemeManager.vue
+<script setup lang="ts">
+import { ref, onMounted, watch } from 'vue'
+import { useEventBus } from '@/composables/useEventBus'
+
+const eventBus = useEventBus()
+const currentTheme = ref<'light' | 'dark'>('light')
+
+// Initialize theme from storage
+onMounted(() => {
+  const storedTheme = eventBus.getState<'light' | 'dark'>('selected_theme', 'light')
+  currentTheme.value = storedTheme
+  applyTheme(storedTheme)
+})
+
+// Watch for theme changes and persist them
+watch(currentTheme, (newTheme) => {
+  eventBus.setState('selected_theme', newTheme)
+  applyTheme(newTheme)
+})
+
+const toggleTheme = () => {
+  currentTheme.value = currentTheme.value === 'light' ? 'dark' : 'light'
+}
+
+const applyTheme = (theme: string) => {
+  document.documentElement.setAttribute('data-theme', theme)
+}
+</script>
+```
+
+### Example 2: Dashboard Layout Persistence
+
+```typescript
+// DashboardLayout.vue
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useEventBus } from '@/composables/useEventBus'
+
+interface DashboardLayout {
+  sidebarWidth: number
+  panelOrder: string[]
+  hiddenPanels: string[]
+}
+
+const eventBus = useEventBus()
+const layout = ref<DashboardLayout>({
+  sidebarWidth: 250,
+  panelOrder: ['metrics', 'logs', 'alerts'],
+  hiddenPanels: []
+})
+
+// Initialize layout from storage
+onMounted(() => {
+  const storedLayout = eventBus.getState<DashboardLayout>('dashboard_layout')
+  if (storedLayout) {
+    layout.value = { ...layout.value, ...storedLayout }
+  }
+})
+
+// Save layout changes
+const updateLayout = (changes: Partial<DashboardLayout>) => {
+  layout.value = { ...layout.value, ...changes }
+  eventBus.setState('dashboard_layout', layout.value)
+}
+
+// Example usage
+const resizeSidebar = (width: number) => {
+  updateLayout({ sidebarWidth: width })
+}
+
+const reorderPanels = (newOrder: string[]) => {
+  updateLayout({ panelOrder: newOrder })
+}
+</script>
+```
+
+### Example 3: Search History
+
+```typescript
+// SearchComponent.vue
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useEventBus } from '@/composables/useEventBus'
+
+const eventBus = useEventBus()
+const searchQuery = ref('')
+const searchHistory = ref<string[]>([])
+
+// Initialize search history
+onMounted(() => {
+  const storedHistory = eventBus.getState<string[]>('recent_searches', [])
+  searchHistory.value = storedHistory
+})
+
+// Add search to history
+const addToHistory = (query: string) => {
+  if (!query.trim()) return
+  
+  // Remove duplicates and add to beginning
+  const newHistory = [query, ...searchHistory.value.filter(item => item !== query)]
+  
+  // Keep only last 10 searches
+  searchHistory.value = newHistory.slice(0, 10)
+  
+  // Persist to storage
+  eventBus.setState('recent_searches', searchHistory.value)
+}
+
+// Clear search history
+const clearHistory = () => {
+  searchHistory.value = []
+  eventBus.clearState('recent_searches')
+}
+
+const performSearch = () => {
+  if (searchQuery.value.trim()) {
+    addToHistory(searchQuery.value.trim())
+    // Perform actual search...
+  }
+}
+</script>
+```
+
+## Best Practices
+
+### 1. Use Descriptive Keys
+
+```typescript
+// Good
+eventBus.setState('selected_team_id', teamId)
+eventBus.setState('user_dashboard_layout', layout)
+eventBus.setState('notification_preferences', prefs)
+
+// Avoid
+eventBus.setState('data', someData)
+eventBus.setState('temp', tempValue)
+eventBus.setState('x', value)
+```
+
+### 2. Provide Default Values
+
+```typescript
+// Good - provides fallback
+const theme = eventBus.getState<string>('selected_theme', 'light')
+const layout = eventBus.getState<LayoutConfig>('dashboard_layout', defaultLayout)
+
+// Less robust - might return null
+const theme = eventBus.getState<string>('selected_theme')
+```
+
+### 3. Use Type Safety
+
+```typescript
+// Good - type-safe
+interface UserPreferences {
+  theme: 'light' | 'dark'
+  language: string
+  notifications: boolean
+}
+
+const prefs = eventBus.getState<UserPreferences>('user_preferences')
+
+// Less safe - no type checking
+const prefs = eventBus.getState('user_preferences')
+```
+
+### 4. Handle Storage Errors Gracefully
+
+```typescript
+// The storage system handles errors internally, but you can add extra validation
+const getStoredTeamId = (): string | null => {
+  try {
+    const teamId = eventBus.getState<string>('selected_team_id')
+    
+    // Additional validation
+    if (teamId && teamId.length > 0) {
+      return teamId
+    }
+    
+    return null
+  } catch (error) {
+    console.warn('Failed to get stored team ID:', error)
+    return null
+  }
+}
+```
+
+### 5. Clean Up When Appropriate
+
+```typescript
+// Clear storage when user logs out
+const logout = () => {
+  // Clear user-specific data
+  eventBus.clearState('selected_team_id')
+  eventBus.clearState('user_preferences')
+  eventBus.clearState('dashboard_layout')
+  
+  // Or clear everything
+  eventBus.clearAllState()
+  
+  // Proceed with logout...
+}
+```
+
+## Storage Events
+
+The storage system emits events when data changes, allowing for reactive updates:
+
+```typescript
+// Listen for any storage changes
+eventBus.on('storage-changed', (data) => {
+  console.log(`Storage key "${data.key}" changed:`, {
+    from: data.oldValue,
+    to: data.newValue
+  })
+})
+
+// React to specific storage changes
+eventBus.on('storage-changed', (data) => {
+  if (data.key === 'selected_theme') {
+    applyTheme(data.newValue)
+  }
+})
+```
+
+## Technical Details
+
+### Storage Implementation
+
+- **Prefix**: All keys are prefixed with `deploystack_` to avoid conflicts
+- **Serialization**: Data is stored as JSON strings using safe parsing
+- **Error Handling**: All storage operations include try-catch blocks
+- **Type Safety**: Generic methods provide compile-time type checking
+- **Event Integration**: Storage changes emit `storage-changed` events
+
+### Browser Compatibility
+
+The storage system uses `localStorage`, which is supported in all modern browsers. The system gracefully handles storage errors (e.g., when localStorage is disabled or full).
+
+### Performance Considerations
+
+- **Synchronous Operations**: localStorage operations are synchronous but fast
+- **JSON Serialization**: Large objects may impact performance during serialization
+- **Storage Limits**: localStorage typically has a 5-10MB limit per domain
+- **Event Frequency**: Storage change events are emitted for every setState/clearState call
+
+## Migration Guide
+
+### From Component State to Storage
+
+**Before:**
+```typescript
+// Component-level state
+const selectedTeam = ref<Team | null>(null)
+
+onMounted(() => {
+  // Initialize from API or default
+  selectedTeam.value = await getDefaultTeam()
+})
+```
+
+**After:**
+```typescript
+// Storage-backed state
+const selectedTeam = ref<Team | null>(null)
+
+onMounted(() => {
+  // Initialize from storage with fallback
+  const storedTeamId = eventBus.getState<string>('selected_team_id')
+  if (storedTeamId) {
+    selectedTeam.value = await getTeamById(storedTeamId)
+  } else {
+    const defaultTeam = await getDefaultTeam()
+    selectedTeam.value = defaultTeam
+    eventBus.setState('selected_team_id', defaultTeam.id)
+  }
+})
+
+// Update storage when state changes
+const selectTeam = (team: Team) => {
+  selectedTeam.value = team
+  eventBus.setState('selected_team_id', team.id)
+}
+```
+
+## Related Documentation
+
+- **[Global Event Bus](/development/frontend/event-bus)** - Core event system that powers storage
+
+The enhanced event bus storage system provides a powerful, type-safe way to manage persistent state in the DeployStack frontend, making it easy to maintain user preferences and application state across sessions.

@@ -1,0 +1,620 @@
+---
+title: Global Settings Frontend Integration
+description: Complete guide to the flexible global settings component system for creating custom setting interfaces with connection testing and validation.
+sidebar: Global Settings
+---
+
+# Global Settings Frontend Integration
+
+The DeployStack frontend provides a flexible component system for global settings that allows developers to create custom interfaces for specific setting groups. This system enables rich functionality like connection testing, custom validation, and specialized UI components while maintaining consistency with the overall design system.
+
+## Architecture Overview
+
+The global settings system uses a **component registry pattern** that allows custom Vue components to be registered for specific setting groups. When a user navigates to a settings group, the system checks if a custom component is registered and uses it instead of the default form renderer.
+
+```
+Global Settings Flow
+├── User navigates to /admin/settings/{groupId}
+├── System checks component registry
+├── Custom component found?
+│   ├── Yes → Render custom component
+│   └── No → Render standard form
+└── Component handles form state, validation, and API calls
+```
+
+## Key Components
+
+### 1. Component Registry (`useSettingsComponentRegistry`)
+
+The registry manages the mapping between setting group IDs and their custom components.
+
+```typescript
+// Register a component for a specific group
+registerSettingsComponent('github-app', {
+  component: GitHubAppSettings,
+  description: 'GitHub App configuration with connection testing',
+  author: 'DeployStack Team',
+  version: '1.0.0'
+})
+
+// Check if a component is registered
+const hasCustom = hasCustomComponent('github-app')
+
+// Get the registered component
+const componentDef = getSettingsComponent('github-app')
+```
+
+### 2. Settings Form Composable (`useSettingsForm`)
+
+Provides common form functionality for settings components.
+
+```typescript
+const {
+  formValues,        // Reactive form values
+  isSaving,         // Save state
+  hasChanges,       // Dirty state tracking
+  saveForm,         // Save function
+  updateField,      // Update individual fields
+  getFieldError     // Get validation errors
+} = useSettingsForm(settings)
+```
+
+### 3. Connection Test Composable (`useConnectionTest`)
+
+Handles connection testing functionality for external services.
+
+```typescript
+const {
+  isTestingConnection,    // Test state
+  lastTestResult,        // Last test result
+  testConnection,        // Generic test function
+  testGitHubAppConnection, // Specific test functions
+  getStatusMessage       // Helper for UI
+} = useConnectionTest()
+```
+
+## Creating Custom Setting Components
+
+### Step 1: Create the Component
+
+Create a new Vue component in `src/components/settings/`:
+
+```vue
+<!-- src/components/settings/MyServiceSettings.vue -->
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useSettingsForm } from '@/composables/useSettingsForm'
+import { useConnectionTest } from '@/composables/useConnectionTest'
+import type { SettingsComponentProps, SettingsComponentEvents } from '@/composables/useSettingsComponentRegistry'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { TestTube, CheckCircle, XCircle } from 'lucide-vue-next'
+
+const props = defineProps<SettingsComponentProps>()
+const emit = defineEmits<SettingsComponentEvents>()
+
+const { t } = useI18n()
+
+// Use form composable
+const {
+  formValues,
+  isSaving,
+  hasChanges,
+  saveForm,
+  updateField,
+  getFieldError
+} = useSettingsForm(props.settings)
+
+// Use connection test composable
+const {
+  isTestingConnection,
+  lastTestResult,
+  testConnection,
+  getStatusMessage,
+  getAlertVariant
+} = useConnectionTest()
+
+// Custom validation logic
+const canTestConnection = computed(() => {
+  return !!(
+    formValues.value['myservice.api_key'] &&
+    formValues.value['myservice.endpoint']
+  )
+})
+
+// Handle form submission
+async function handleSave() {
+  const success = await saveForm()
+  if (success) {
+    emit('settings-updated', props.settings)
+  }
+}
+
+// Handle connection test
+async function handleTestConnection() {
+  if (!canTestConnection.value) return
+
+  const credentials = {
+    api_key: String(formValues.value['myservice.api_key']),
+    endpoint: String(formValues.value['myservice.endpoint'])
+  }
+
+  const result = await testConnection('myservice', credentials)
+  emit('connection-tested', result)
+}
+
+// Get setting by key helper
+function getSetting(key: string) {
+  return props.settings.find(s => s.key === key)
+}
+</script>
+
+<template>
+  <div class="space-y-6">
+    <!-- Header Card -->
+    <Card>
+      <CardHeader>
+        <CardTitle class="text-xl">{{ props.group.name }}</CardTitle>
+        <CardDescription>{{ props.group.description }}</CardDescription>
+      </CardHeader>
+    </Card>
+
+    <!-- Configuration Form -->
+    <Card>
+      <CardHeader>
+        <CardTitle class="text-lg">Configuration</CardTitle>
+        <CardDescription>
+          Configure your service connection settings below.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form @submit.prevent="handleSave" class="space-y-6">
+          <!-- API Key Field -->
+          <div class="space-y-2">
+            <Label for="api-key">
+              {{ getSetting('myservice.api_key')?.description || 'API Key' }}
+            </Label>
+            <Input
+              id="api-key"
+              type="password"
+              :model-value="String(formValues['myservice.api_key'] || '')"
+              @update:model-value="(value) => updateField('myservice.api_key', value)"
+              placeholder="Enter your API key"
+              :class="{ 'border-destructive': getFieldError('myservice.api_key') }"
+            />
+            <p v-if="getFieldError('myservice.api_key')" class="text-sm text-destructive">
+              {{ getFieldError('myservice.api_key') }}
+            </p>
+          </div>
+
+          <!-- Endpoint Field -->
+          <div class="space-y-2">
+            <Label for="endpoint">
+              {{ getSetting('myservice.endpoint')?.description || 'Service Endpoint' }}
+            </Label>
+            <Input
+              id="endpoint"
+              :model-value="String(formValues['myservice.endpoint'] || '')"
+              @update:model-value="(value) => updateField('myservice.endpoint', value)"
+              placeholder="https://api.myservice.com"
+              :class="{ 'border-destructive': getFieldError('myservice.endpoint') }"
+            />
+            <p v-if="getFieldError('myservice.endpoint')" class="text-sm text-destructive">
+              {{ getFieldError('myservice.endpoint') }}
+            </p>
+          </div>
+
+          <!-- Connection Test Section -->
+          <div class="border-t pt-4 space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4 class="font-medium flex items-center space-x-2">
+                  <TestTube class="h-4 w-4" />
+                  <span>Test Connection</span>
+                </h4>
+                <p class="text-sm text-muted-foreground">
+                  Verify your service configuration.
+                </p>
+              </div>
+              <Button 
+                type="button"
+                @click="handleTestConnection" 
+                :disabled="!canTestConnection || isTestingConnection"
+                variant="outline"
+                size="sm"
+              >
+                <TestTube class="h-4 w-4 mr-2" />
+                {{ isTestingConnection ? 'Testing...' : 'Test Connection' }}
+              </Button>
+            </div>
+
+            <!-- Connection Status -->
+            <Alert v-if="lastTestResult" :variant="getAlertVariant(lastTestResult)">
+              <component 
+                :is="lastTestResult.success ? CheckCircle : XCircle" 
+                class="h-4 w-4" 
+              />
+              <AlertTitle>
+                {{ lastTestResult.success ? 'Connection Successful' : 'Connection Failed' }}
+              </AlertTitle>
+              <AlertDescription>
+                {{ getStatusMessage(lastTestResult) }}
+              </AlertDescription>
+            </Alert>
+          </div>
+
+          <!-- Save Button -->
+          <Button 
+            type="submit" 
+            :disabled="!hasChanges || isSaving"
+            class="w-full"
+          >
+            {{ isSaving ? 'Saving...' : 'Save Changes' }}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  </div>
+</template>
+```
+
+### Step 2: Register the Component
+
+Add your component to the registration file:
+
+```typescript
+// src/components/settings/index.ts
+import { registerSettingsComponent } from '@/composables/useSettingsComponentRegistry'
+import GitHubAppSettings from './GitHubAppSettings.vue'
+import MyServiceSettings from './MyServiceSettings.vue' // Add your component
+
+export function registerSettingsComponents() {
+  // Existing registrations
+  registerSettingsComponent('github-app', {
+    component: GitHubAppSettings,
+    description: 'GitHub App configuration with connection testing',
+    author: 'DeployStack Team',
+    version: '1.0.0'
+  })
+
+  // Register your new component
+  registerSettingsComponent('myservice', {
+    component: MyServiceSettings,
+    description: 'My Service configuration with connection testing',
+    author: 'Your Name',
+    version: '1.0.0'
+  })
+}
+```
+
+### Step 3: Component Props and Events
+
+Your component must implement the required props and events:
+
+```typescript
+// Required Props
+interface SettingsComponentProps {
+  group: GlobalSettingGroup    // The settings group metadata
+  settings: Setting[]          // Array of settings for this group
+}
+
+// Required Events
+interface SettingsComponentEvents {
+  'settings-updated': [settings: Setting[]]  // Emitted when settings are saved
+  'validation-error': [errors: Record<string, string>]  // Emitted on validation errors
+  'connection-tested': [result: { success: boolean; message: string }]  // Emitted after connection tests
+}
+```
+
+## Advanced Patterns
+
+### Custom Validation
+
+Add custom validation logic to your components:
+
+```typescript
+// In your component
+const {
+  formValues,
+  saveForm,
+  // ... other form methods
+} = useSettingsForm(props.settings, {
+  onValidate: (values) => {
+    const errors: ValidationError[] = []
+    
+    // Custom validation logic
+    if (!values['myservice.api_key']) {
+      errors.push({
+        field: 'myservice.api_key',
+        message: 'API key is required'
+      })
+    }
+    
+    if (values['myservice.endpoint'] && !isValidUrl(values['myservice.endpoint'])) {
+      errors.push({
+        field: 'myservice.endpoint',
+        message: 'Please enter a valid URL'
+      })
+    }
+    
+    return errors
+  }
+})
+
+function isValidUrl(url: string): boolean {
+  try {
+    new URL(url)
+    return true
+  } catch {
+    return false
+  }
+}
+```
+
+### Custom Connection Testing
+
+Implement service-specific connection testing:
+
+```typescript
+// In your component
+async function testMyServiceConnection() {
+  const credentials = {
+    api_key: String(formValues.value['myservice.api_key']),
+    endpoint: String(formValues.value['myservice.endpoint']),
+    timeout: 10000
+  }
+
+  try {
+    const result = await testConnection('myservice', credentials, {
+      endpoint: '/api/settings/test-connection/myservice',
+      timeout: 15000,
+      retries: 2
+    })
+    
+    // Handle successful test
+    if (result.success) {
+      // Show additional success information
+      console.log('Service details:', result.details)
+    }
+    
+    return result
+  } catch (error) {
+    console.error('Connection test failed:', error)
+    throw error
+  }
+}
+```
+
+### Multi-Step Configuration
+
+Create complex multi-step configuration flows:
+
+```vue
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+
+const currentStep = ref(1)
+const totalSteps = 3
+
+const isStepValid = computed(() => {
+  switch (currentStep.value) {
+    case 1:
+      return !!(formValues.value['service.api_key'])
+    case 2:
+      return !!(formValues.value['service.endpoint'])
+    case 3:
+      return lastTestResult.value?.success
+    default:
+      return false
+  }
+})
+
+function nextStep() {
+  if (isStepValid.value && currentStep.value < totalSteps) {
+    currentStep.value++
+  }
+}
+
+function previousStep() {
+  if (currentStep.value > 1) {
+    currentStep.value--
+  }
+}
+</script>
+
+<template>
+  <div class="space-y-6">
+    <!-- Step Indicator -->
+    <div class="flex items-center justify-between">
+      <div class="flex space-x-2">
+        <div 
+          v-for="step in totalSteps" 
+          :key="step"
+          :class="[
+            'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
+            step <= currentStep ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+          ]"
+        >
+          {{ step }}
+        </div>
+      </div>
+      <span class="text-sm text-muted-foreground">
+        Step {{ currentStep }} of {{ totalSteps }}
+      </span>
+    </div>
+
+    <!-- Step Content -->
+    <Card>
+      <CardContent class="pt-6">
+        <!-- Step 1: API Configuration -->
+        <div v-if="currentStep === 1" class="space-y-4">
+          <h3 class="text-lg font-medium">API Configuration</h3>
+          <!-- API fields -->
+        </div>
+
+        <!-- Step 2: Endpoint Configuration -->
+        <div v-if="currentStep === 2" class="space-y-4">
+          <h3 class="text-lg font-medium">Endpoint Configuration</h3>
+          <!-- Endpoint fields -->
+        </div>
+
+        <!-- Step 3: Test & Verify -->
+        <div v-if="currentStep === 3" class="space-y-4">
+          <h3 class="text-lg font-medium">Test & Verify</h3>
+          <!-- Connection test -->
+        </div>
+
+        <!-- Navigation -->
+        <div class="flex justify-between mt-6">
+          <Button 
+            @click="previousStep" 
+            :disabled="currentStep === 1"
+            variant="outline"
+          >
+            Previous
+          </Button>
+          <Button 
+            v-if="currentStep < totalSteps"
+            @click="nextStep" 
+            :disabled="!isStepValid"
+          >
+            Next
+          </Button>
+          <Button 
+            v-else
+            @click="handleSave" 
+            :disabled="!isStepValid || isSaving"
+          >
+            {{ isSaving ? 'Saving...' : 'Complete Setup' }}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  </div>
+</template>
+```
+
+## Integration with Existing Systems
+
+### Design System
+Follow the established [UI Design System](/development/frontend/ui-design-system) patterns. Use shadcn-vue components and maintain consistency with the overall design.
+
+### Internationalization
+Add i18n support following the [Internationalization Guide](/development/frontend/internationalization). Create dedicated translation files for your settings components.
+
+### Event Bus
+Use the [Global Event Bus](/development/frontend/event-bus) for cross-component communication when settings are updated.
+
+## Testing Custom Components
+
+### Unit Testing
+
+```typescript
+// tests/components/settings/MyServiceSettings.test.ts
+import { describe, it, expect, vi } from 'vitest'
+import { mount } from '@vue/test-utils'
+import MyServiceSettings from '@/components/settings/MyServiceSettings.vue'
+
+describe('MyServiceSettings', () => {
+  const mockSettings = [
+    {
+      key: 'myservice.api_key',
+      value: '',
+      type: 'string',
+      description: 'API Key',
+      is_encrypted: true
+    }
+  ]
+
+  const mockGroup = {
+    id: 'myservice',
+    name: 'My Service',
+    description: 'Service configuration'
+  }
+
+  it('renders form fields correctly', () => {
+    const wrapper = mount(MyServiceSettings, {
+      props: {
+        group: mockGroup,
+        settings: mockSettings
+      }
+    })
+
+    expect(wrapper.find('input[type="password"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('API Key')
+  })
+
+  it('emits settings-updated on save', async () => {
+    const wrapper = mount(MyServiceSettings, {
+      props: {
+        group: mockGroup,
+        settings: mockSettings
+      }
+    })
+
+    // Simulate form submission
+    await wrapper.find('form').trigger('submit')
+
+    expect(wrapper.emitted('settings-updated')).toBeTruthy()
+  })
+
+  it('disables test button when fields are empty', () => {
+    const wrapper = mount(MyServiceSettings, {
+      props: {
+        group: mockGroup,
+        settings: mockSettings
+      }
+    })
+
+    const testButton = wrapper.find('[data-testid="test-connection"]')
+    expect(testButton.attributes('disabled')).toBeDefined()
+  })
+})
+```
+
+### Integration Testing
+
+```typescript
+// tests/integration/settings.test.ts
+import { describe, it, expect } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { createRouter, createWebHistory } from 'vue-router'
+import GlobalSettings from '@/views/admin/GlobalSettings.vue'
+
+describe('Global Settings Integration', () => {
+  it('loads custom component for registered group', async () => {
+    // Register test component
+    registerSettingsComponent('test-service', {
+      component: TestServiceSettings
+    })
+
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: '/admin/settings/:groupId', component: GlobalSettings }
+      ]
+    })
+
+    await router.push('/admin/settings/test-service')
+
+    const wrapper = mount(GlobalSettings, {
+      global: {
+        plugins: [router]
+      }
+    })
+
+    // Should render custom component
+    expect(wrapper.findComponent(TestServiceSettings).exists()).toBe(true)
+  })
+})
+```

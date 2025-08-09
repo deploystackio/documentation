@@ -1,7 +1,24 @@
 {
+  "title": "DeployStack",
+  "description": "Documentation for DeployStack",
+  "icon": "DeployStackLogo",
   "pages": [
-    "deploystack", 
-    "docker-to-iac",
-    "docker-deployment"
+    "quick-start",
+    "---General---",
+    "teams",
+    "roles",
+    "onboard-new-team-members",
+    "global-settings",
+    "security",
+    "---MCP Server---",
+    "mcp-catalog",
+    "mcp-installation",
+    "mcp-categories",
+    "---Administration---",
+    "auth",
+    "github-application",
+    "github-oauth-setup",
+    "troubleshooting",
+    "local-setup"
   ]
 }

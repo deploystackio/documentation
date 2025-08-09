@@ -3,7 +3,7 @@ import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { DocsPage, DocsBody } from 'fumadocs-ui/page';
 import { notFound } from 'next/navigation';
-import { source } from '@/lib/source';
+import { source, mainSource, developmentSource, selfHostedSource } from '@/lib/source';
 import { generatePageMetadata, getCanonicalUrl } from '@/lib/seo-utils';
 import { getFinalPageTitle } from '@/lib/h1-extractor';
 import { readFile } from 'fs/promises';
@@ -41,12 +41,25 @@ export default async function Page({
     );
   }
 
+  // Determine which section we're in and get the appropriate page tree
+  const firstSegment = slug[0];
+  let pageTree = mainSource.pageTree;
+  let navTitle = 'DeployStack Docs';
+  
+  if (firstSegment === 'development') {
+    pageTree = developmentSource.pageTree;
+    navTitle = 'Development Docs';
+  } else if (firstSegment === 'self-hosted') {
+    pageTree = selfHostedSource.pageTree;
+    navTitle = 'Self-Hosted Docs';
+  }
+
   return (
     <DocsLayout
       {...docsOptions}
-      tree={source.pageTree}
+      tree={pageTree}
       nav={{
-        title: 'DeployStack Docs',
+        title: navTitle,
         url: '/',
       }}
       sidebar={{
@@ -63,18 +76,8 @@ export default async function Page({
 }
 
 export async function generateStaticParams() {
-  const params = source.generateParams();
-
-  const result = [
-    ...params,
-    ...docs.docs
-      .filter((page: any) => page._file.flattenedPath)
-      .map((page: any) => ({
-        slug: page._file.flattenedPath.split('/'),
-      })),
-  ];
-
-  return result;
+  // Simply use the unified source generateParams
+  return source.generateParams();
 }
 
 export async function generateMetadata({

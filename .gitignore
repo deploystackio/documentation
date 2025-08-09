@@ -75,4 +75,6 @@ coverage/
 ._*.json
 ._*.ts
 ._*.tsx
+._*.css
+._*.cjs
 out/
