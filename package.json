@@ -7,6 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "npx serve@latest out",
+    "postbuild": "cp serve.json out/serve.json",
     "lint:md": "npx markdownlint-cli2 '**/*.md' '#node_modules' '#.github'",
     "lint:links": "node check-links.js",
     "semantic-release": "semantic-release",

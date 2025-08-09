@@ -77,4 +77,8 @@ coverage/
 ._*.tsx
 ._*.css
 ._*.cjs
+._*.mjs
+._*.js
+._*.html
+._*.scss
 out/
