@@ -9,7 +9,6 @@ import { getFinalPageTitle } from '@/lib/h1-extractor';
 import { readFile } from 'fs/promises';
 import { getMDXComponents } from '@/mdx-components';
 import { homeOptions, docsOptions } from '../layout.config';
-import { docs } from '@/.source/index';
 
 export default async function Page({
   params,

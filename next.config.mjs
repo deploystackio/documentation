@@ -6,7 +6,8 @@ const withMDX = createMDX();
 const config = {
   reactStrictMode: true,
   output: 'export', // Enable static HTML export
-  trailingSlash: true, // Required for static export
+  trailingSlash: false, // Changed to false to avoid trailing slashes
+  skipTrailingSlashRedirect: true, // Prevent automatic trailing slash redirects
   // basePath: '/docs', // Set base path for the application
   // assetPrefix: '/docs', // Ensure assets are also prefixed with /docs
   images: {
