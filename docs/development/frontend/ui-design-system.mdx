@@ -77,6 +77,48 @@ DeployStack implements intelligent link styling with automatic teal coloring for
 4. **Button Links**: Include styling classes (`bg-*`, `rounded-*`) to maintain button appearance
 5. **Focus States**: Ensure all interactive elements have visible focus indicators using the teal color scheme
 
+## Layout Design Patterns
+
+### Content Wrapper Pattern
+
+DeployStack follows a **mandatory content wrapper pattern** for all tabbed content and detail pages. This pattern ensures visual consistency and proper content hierarchy throughout the application.
+
+#### Design Requirements
+
+The content wrapper pattern is **required** for:
+- Team management pages
+- MCP server installation pages  
+- Settings and configuration pages
+- Any page using tabbed content with `DsTabs`
+- Detail views that need elevated content presentation
+
+#### Implementation
+
+Use the `ContentWrapper` component for all qualifying pages:
+
+```vue
+<ContentWrapper>
+  <YourTabContent />
+</ContentWrapper>
+```
+
+The wrapper provides:
+- Gray background container (`bg-muted/50`)
+- Responsive max-width constraints
+- White card elevation with proper spacing
+- Consistent vertical rhythm
+
+For complete implementation details, see the component source code at `services/frontend/src/components/ContentWrapper.vue`.
+
+#### Visual Hierarchy
+
+This pattern creates a three-tier visual hierarchy:
+1. **Page background** - Default dashboard background
+2. **Content container** - Gray muted background wrapper  
+3. **Content card** - White elevated card with content
+
+This hierarchy is a **design system requirement** and must be followed consistently across all applicable pages.
+
 ## Data Tables
 
 For data table implementation, see the dedicated [Table Design System](/development/frontend/ui-design-system-table) guide.
