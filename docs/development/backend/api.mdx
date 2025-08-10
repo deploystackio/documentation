@@ -49,22 +49,24 @@ Use these middleware functions to enable dual authentication on endpoints:
 ```typescript
 import { requireAuthenticationAny, requireOAuthScope } from '../../middleware/oauthMiddleware';
 
-fastify.get('/your-endpoint', {
-  schema: {
-    security: [
-      { cookieAuth: [] },    // Cookie authentication
-      { bearerAuth: [] }     // OAuth2 Bearer token
-    ]
-  },
-  preValidation: [
-    requireAuthenticationAny(),     // Accept either auth method
-    requireOAuthScope('your:scope') // Enforce OAuth2 scope
-  ]
-}, async (request, reply) => {
-  // Endpoint accessible via both authentication methods
-  const authType = request.tokenPayload ? 'oauth2' : 'cookie';
-  const userId = request.user!.id;
-});
+export default async function yourRoute(server: FastifyInstance) {
+  server.get('/your-endpoint', {
+    preValidation: [
+      requireAuthenticationAny(),     // Accept either auth method
+      requireOAuthScope('your:scope') // Enforce OAuth2 scope
+    ],
+    schema: {
+      security: [
+        { cookieAuth: [] },    // Cookie authentication
+        { bearerAuth: [] }     // OAuth2 Bearer token
+      ]
+    }
+  }, async (request, reply) => {
+    // Endpoint accessible via both authentication methods
+    const authType = request.tokenPayload ? 'oauth2' : 'cookie';
+    const userId = request.user!.id;
+  });
+}
 ```
 
 ### OAuth2 Scopes
@@ -244,34 +246,88 @@ services/backend/src/routes/mcp/
 
 ### Route File Template
 
-Each route file should follow this pattern:
+Each route file should follow this **mandatory pattern**:
 
 ```typescript
 import { type FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { createSchema } from 'zod-openapi'
 
-// Define your schemas
-const responseSchema = z.object({
-  // Your response structure
+// Define your Zod schemas
+const RequestSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Valid email required')
+});
+
+const ResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string()
+});
+
+const ErrorResponseSchema = z.object({
+  success: z.boolean().default(false),
+  error: z.string()
 });
 
 export default async function yourRoute(server: FastifyInstance) {
-  server.get('/your-endpoint', {
+  server.post('/your-endpoint', {
+    preValidation: requirePermission('your.permission'), // Authorization FIRST
     schema: {
       tags: ['Your Category'],
       summary: 'Brief description',
-      description: 'Detailed description',
+      description: 'Detailed description. Requires Content-Type: application/json header when sending request body.',
+      security: [{ cookieAuth: [] }],
+      
+      // Fastify validation schema
+      body: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', minLength: 1 },
+          email: { type: 'string', format: 'email' }
+        },
+        required: ['name', 'email'],
+        additionalProperties: false
+      },
+      
+      // createSchema() for OpenAPI documentation
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: createSchema(RequestSchema)
+          }
+        }
+      },
+      
       response: {
-        200: createSchema(responseSchema)
+        200: createSchema(ResponseSchema),
+        400: createSchema(ErrorResponseSchema.describe('Bad Request')),
+        401: createSchema(ErrorResponseSchema.describe('Unauthorized')),
+        403: createSchema(ErrorResponseSchema.describe('Forbidden'))
       }
     }
-  }, async () => {
+  }, async (request, reply) => {
+    // Validate with Zod for extra safety
+    const { name, email } = RequestSchema.parse(request.body);
+    
     // Your route logic
-    return { /* your response */ }
+    const successResponse = {
+      success: true,
+      message: `User ${name} processed successfully`
+    };
+    const jsonString = JSON.stringify(successResponse);
+    return reply.status(200).type('application/json').send(jsonString);
   });
 }
 ```
+
+**Key Requirements:**
+- ✅ **Parameter name**: `server: FastifyInstance` (not `fastify`)
+- ✅ **Method calls**: `server.post()` (not `fastify.post()`)
+- ✅ **No generic types**: Avoid `<{ Body: RequestInput }>`
+- ✅ **preValidation first**: Authorization before schema
+- ✅ **Dual schema**: Both `body` and `requestBody` properties
+- ✅ **Manual JSON serialization**: Use `JSON.stringify()` for responses
 
 ### Registration in index.ts
 
