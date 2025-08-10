@@ -272,6 +272,12 @@ The application uses an **event bus** for cross-component communication without 
 
 For complete details on the event bus system, including usage patterns, naming conventions, and implementation examples, see the [Event Bus Documentation](/development/frontend/event-bus).
 
+### Persistent State Management
+
+The application includes a **storage system** built into the event bus for managing persistent state across route changes and browser sessions. This system provides type-safe localStorage access with automatic event emission for reactive updates.
+
+For complete details on the storage system, including usage patterns, naming conventions, and best practices, see the [Frontend Storage System](/development/frontend/storage).
+
 ## Component Implementation Standards
 
 ### Vue Component Structure
@@ -455,7 +461,7 @@ For table implementations, use the shadcn-vue Table components as documented in 
 ### Frontend Security Principles
 
 1. **Never Trust Client**: All validation must happen on backend
-2. **Secure Storage**: Never store sensitive data in localStorage
+2. **Secure Storage**: Never store sensitive data (passwords, API keys, tokens) in localStorage. See [Frontend Storage System](/development/frontend/storage) for proper storage patterns
 3. **XSS Prevention**: Sanitize user input, use Vue's built-in protections
 4. **CSRF Protection**: Include tokens in API requests
 
