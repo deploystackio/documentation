@@ -16,6 +16,67 @@ This document establishes the official UI design patterns and component standard
 - **Performance**: Optimize for fast loading and smooth interactions
 - **Maintainability**: Write clean, reusable component code
 
+## Color System
+
+### Primary Colors
+
+The DeployStack color palette uses teal as the primary brand color, ensuring WCAG compliance for accessibility.
+
+```css
+/* Primary Brand Colors */
+--primary: #0f766e;        /* teal-700 - WCAG AA compliant on white */
+--primary-hover: #115e59;  /* teal-800 - WCAG AAA compliant on white */
+```
+
+#### WCAG Compliance
+- **Primary (teal-700)**: Contrast ratio 5.47:1 on white - ✅ AA Pass, ❌ AAA Fail
+- **Primary-hover (teal-800)**: Contrast ratio 7.58:1 on white - ✅ AA Pass, ✅ AAA Pass
+
+This ensures our primary color meets accessibility standards, with enhanced contrast on hover states.
+
+### Text Colors
+```css
+/* Light Mode / Dark Mode */
+--text-primary: theme('colors.zinc.800') / theme('colors.zinc.100');
+--text-secondary: theme('colors.zinc.600') / theme('colors.zinc.400');
+```
+
+### Background Colors
+```css
+/* Light Mode / Dark Mode */
+--bg-primary: white / theme('colors.zinc.900');
+--bg-secondary: theme('colors.zinc.50') / theme('colors.zinc.800');
+```
+
+### Link Color Scheme
+
+DeployStack implements intelligent link styling with automatic teal coloring for text links while preserving button styling:
+
+#### Text Links
+- **Light mode**: `text-teal-700` → `hover:text-teal-800` (WCAG AA → AAA on hover)
+- **Dark mode**: `text-teal-400` → `hover:text-teal-300` (Already WCAG AAA compliant)
+- **Underlines**: `decoration-teal-700/30` → `hover:decoration-teal-700/60`
+- **Focus states**: `outline-teal-700` (light) / `outline-teal-400` (dark)
+
+#### Usage Examples
+```html
+<!-- ✅ Gets teal link styling automatically -->
+<a href="/about">Learn more about us</a>
+<a href="https://example.com" class="font-semibold">External link</a>
+
+<!-- ❌ Excluded from link styling (keeps button appearance) -->
+<a href="/signup" class="rounded-md bg-primary px-4 py-2">Sign Up</a>
+<a href="/login" class="button-primary">Login</a>
+```
+
+### Color Usage Guidelines
+
+1. **Primary Actions**: Use `--primary` (teal-700) for primary buttons and key interactive elements
+2. **Hover States**: Transition to `--primary-hover` (teal-800) for enhanced contrast
+3. **Text Links**: Automatically styled with teal colors - no additional classes needed
+4. **Button Links**: Include styling classes (`bg-*`, `rounded-*`) to maintain button appearance
+5. **Focus States**: Ensure all interactive elements have visible focus indicators using the teal color scheme
+
 ## Data Tables
 
 For data table implementation, see the dedicated [Table Design System](/development/frontend/ui-design-system-table) guide.
@@ -277,36 +338,4 @@ If you have an existing table using raw HTML elements, follow these steps:
 4. **Update action menus** to use AlertDialog for destructive actions
 5. **Ensure proper badge usage** for status indicators
 
-### Example Migration
-
-**Before (deprecated):**
-```html
-<table class="w-full">
-  <thead>
-    <tr class="border-b">
-      <th class="h-12 px-4 text-left">Name</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr class="border-b">
-      <td class="p-4">{{ item.name }}</td>
-    </tr>
-  </tbody>
-</table>
-```
-
-**After (preferred):**
-```html
-<Table>
-  <TableHeader>
-    <TableRow>
-      <TableHead>Name</TableHead>
-    </TableRow>
-  </TableHeader>
-  <TableBody>
-    <TableRow>
-      <TableCell class="font-medium">{{ item.name }}</TableCell>
-    </TableRow>
-  </TableBody>
-</Table>
-```
+For detailed migration strategies and architectural considerations, see the [Frontend Architecture - Migration Guidelines](/development/frontend/architecture#migration-guidelines).
