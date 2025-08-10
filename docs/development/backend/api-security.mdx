@@ -57,24 +57,51 @@ Understanding Fastify's hook execution order is essential for proper security im
 
 ```typescript
 import { requireGlobalAdmin } from '../../../middleware/roleMiddleware';
-import { z } from 'zod';
-import { createSchema } from 'zod-openapi';
 
-// Define Zod schemas
-const RequestSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  value: z.string()
-});
+// Reusable Schema Constants
+const REQUEST_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', minLength: 1, description: 'Name is required' },
+    value: { type: 'string', description: 'Value field' }
+  },
+  required: ['name', 'value'],
+  additionalProperties: false
+} as const;
 
-const SuccessResponseSchema = z.object({
-  success: z.boolean(),
-  message: z.string()
-});
+const SUCCESS_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    message: { type: 'string' }
+  },
+  required: ['success', 'message']
+} as const;
 
-const ErrorResponseSchema = z.object({
-  success: z.boolean().default(false),
-  error: z.string()
-});
+const ERROR_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', default: false },
+    error: { type: 'string' }
+  },
+  required: ['success', 'error']
+} as const;
+
+// TypeScript interfaces
+interface RequestBody {
+  name: string;
+  value: string;
+}
+
+interface SuccessResponse {
+  success: boolean;
+  message: string;
+}
+
+interface ErrorResponse {
+  success: boolean;
+  error: string;
+}
 
 export default async function secureRoute(server: FastifyInstance) {
   server.post('/protected-endpoint', {
@@ -86,37 +113,48 @@ export default async function secureRoute(server: FastifyInstance) {
       security: [{ cookieAuth: [] }],
       
       // Fastify validation schema
-      body: {
-        type: 'object',
-        properties: {
-          name: { type: 'string', minLength: 1 },
-          value: { type: 'string' }
-        },
-        required: ['name', 'value'],
-        additionalProperties: false
-      },
+      body: REQUEST_SCHEMA,
       
-      // createSchema() for OpenAPI documentation
+      // OpenAPI documentation (same schema, reused)
       requestBody: {
         required: true,
         content: {
           'application/json': {
-            schema: createSchema(RequestSchema)
+            schema: REQUEST_SCHEMA
           }
         }
       },
       
       response: {
-        200: createSchema(SuccessResponseSchema.describe('Success')),
-        401: createSchema(ErrorResponseSchema.describe('Unauthorized')),
-        403: createSchema(ErrorResponseSchema.describe('Forbidden')),
-        400: createSchema(ErrorResponseSchema.describe('Bad Request'))
+        200: {
+          ...SUCCESS_RESPONSE_SCHEMA,
+          description: 'Success'
+        },
+        401: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Unauthorized'
+        },
+        403: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Forbidden'
+        },
+        400: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Bad Request'
+        }
       }
     }
   }, async (request, reply) => {
     // If we reach here, user is authorized AND input is validated
-    const validatedData = request.body;
+    const validatedData = request.body as RequestBody;
+    
     // Your business logic here
+    const successResponse: SuccessResponse = {
+      success: true,
+      message: 'Operation completed successfully'
+    };
+    const jsonString = JSON.stringify(successResponse);
+    return reply.status(200).type('application/json').send(jsonString);
   });
 }
 ```
@@ -233,23 +271,51 @@ For endpoints that operate within team contexts (e.g., `/teams/:teamId/resource`
 
 ```typescript
 import { requireTeamPermission } from '../../../middleware/roleMiddleware';
-import { z } from 'zod';
-import { createSchema } from 'zod-openapi';
 
-const CreateResourceSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  description: z.string().optional()
-});
+// Reusable Schema Constants
+const CREATE_RESOURCE_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', minLength: 1, description: 'Name is required' },
+    description: { type: 'string', description: 'Optional description' }
+  },
+  required: ['name'],
+  additionalProperties: false
+} as const;
 
-const SuccessResponseSchema = z.object({
-  success: z.boolean(),
-  message: z.string()
-});
+const SUCCESS_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    message: { type: 'string' }
+  },
+  required: ['success', 'message']
+} as const;
 
-const ErrorResponseSchema = z.object({
-  success: z.boolean().default(false),
-  error: z.string()
-});
+const ERROR_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', default: false },
+    error: { type: 'string' }
+  },
+  required: ['success', 'error']
+} as const;
+
+// TypeScript interfaces
+interface CreateResourceRequest {
+  name: string;
+  description?: string;
+}
+
+interface SuccessResponse {
+  success: boolean;
+  message: string;
+}
+
+interface ErrorResponse {
+  success: boolean;
+  error: string;
+}
 
 export default async function teamResourceRoute(server: FastifyInstance) {
   server.post('/teams/:teamId/resources', {
@@ -269,35 +335,39 @@ export default async function teamResourceRoute(server: FastifyInstance) {
         additionalProperties: false
       },
       
-      body: {
-        type: 'object',
-        properties: {
-          name: { type: 'string', minLength: 1 },
-          description: { type: 'string' }
-        },
-        required: ['name'],
-        additionalProperties: false
-      },
+      body: CREATE_RESOURCE_SCHEMA,
       
       requestBody: {
         required: true,
         content: {
           'application/json': {
-            schema: createSchema(CreateResourceSchema)
+            schema: CREATE_RESOURCE_SCHEMA
           }
         }
       },
       
       response: {
-        201: createSchema(SuccessResponseSchema),
-        401: createSchema(ErrorResponseSchema.describe('Unauthorized')),
-        403: createSchema(ErrorResponseSchema.describe('Forbidden - Not team member or insufficient permissions')),
-        400: createSchema(ErrorResponseSchema.describe('Bad Request'))
+        201: {
+          ...SUCCESS_RESPONSE_SCHEMA,
+          description: 'Resource created successfully'
+        },
+        401: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Unauthorized'
+        },
+        403: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Forbidden - Not team member or insufficient permissions'
+        },
+        400: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Bad Request'
+        }
       }
     }
   }, async (request, reply) => {
-    const { teamId } = request.params;
-    const resourceData = request.body;
+    const { teamId } = request.params as { teamId: string };
+    const resourceData = request.body as CreateResourceRequest;
     
     // User is guaranteed to be:
     // 1. Authenticated
@@ -306,6 +376,12 @@ export default async function teamResourceRoute(server: FastifyInstance) {
     // 4. Input is validated
     
     // Your business logic here
+    const successResponse: SuccessResponse = {
+      success: true,
+      message: `Resource "${resourceData.name}" created successfully`
+    };
+    const jsonString = JSON.stringify(successResponse);
+    return reply.status(201).type('application/json').send(jsonString);
   });
 }
 ```

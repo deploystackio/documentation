@@ -9,11 +9,12 @@ This document explains how to generate and use the OpenAPI specification for the
 
 ## Overview
 
-The DeployStack Backend uses Fastify with Swagger plugins to automatically generate OpenAPI 3.0 specifications. Route schemas are defined using [Zod](https://zod.dev/) for type safety and expressiveness, and then converted to JSON Schema using the [zod-openapi](https://www.npmjs.com/package/zod-openapi) library. This provides:
+The DeployStack Backend uses Fastify with Swagger plugins to automatically generate OpenAPI 3.0 specifications. Route schemas are defined using **reusable JSON Schema constants** for type safety and documentation. This provides:
 
 - **Interactive Documentation**: Swagger UI interface for testing APIs
 - **Postman Integration**: JSON/YAML specs that can be imported into Postman
 - **Automated Generation**: Specifications are generated from actual route code
+- **Type Safety**: TypeScript interfaces provide compile-time checking
 
 ## 🔒 Security First
 
@@ -246,28 +247,63 @@ services/backend/src/routes/mcp/
 
 ### Route File Template
 
-Each route file should follow this **mandatory pattern**:
+Each route file should follow this **recommended pattern**:
 
 ```typescript
 import { type FastifyInstance } from 'fastify'
-import { z } from 'zod'
-import { createSchema } from 'zod-openapi'
 
-// Define your Zod schemas
-const RequestSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  email: z.string().email('Valid email required')
-});
+// Reusable Schema Constants
+const REQUEST_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { 
+      type: 'string', 
+      minLength: 1,
+      description: 'Name is required'
+    },
+    email: { 
+      type: 'string', 
+      format: 'email',
+      description: 'Valid email required'
+    }
+  },
+  required: ['name', 'email'],
+  additionalProperties: false
+} as const;
 
-const ResponseSchema = z.object({
-  success: z.boolean(),
-  message: z.string()
-});
+const SUCCESS_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    message: { type: 'string' }
+  },
+  required: ['success', 'message']
+} as const;
 
-const ErrorResponseSchema = z.object({
-  success: z.boolean().default(false),
-  error: z.string()
-});
+const ERROR_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', default: false },
+    error: { type: 'string' }
+  },
+  required: ['success', 'error']
+} as const;
+
+// TypeScript interfaces for type safety
+interface RequestBody {
+  name: string;
+  email: string;
+}
+
+interface SuccessResponse {
+  success: boolean;
+  message: string;
+}
+
+interface ErrorResponse {
+  success: boolean;
+  error: string;
+}
 
 export default async function yourRoute(server: FastifyInstance) {
   server.post('/your-endpoint', {
@@ -279,39 +315,43 @@ export default async function yourRoute(server: FastifyInstance) {
       security: [{ cookieAuth: [] }],
       
       // Fastify validation schema
-      body: {
-        type: 'object',
-        properties: {
-          name: { type: 'string', minLength: 1 },
-          email: { type: 'string', format: 'email' }
-        },
-        required: ['name', 'email'],
-        additionalProperties: false
-      },
+      body: REQUEST_SCHEMA,
       
-      // createSchema() for OpenAPI documentation
+      // OpenAPI documentation (same schema, reused)
       requestBody: {
         required: true,
         content: {
           'application/json': {
-            schema: createSchema(RequestSchema)
+            schema: REQUEST_SCHEMA
           }
         }
       },
       
       response: {
-        200: createSchema(ResponseSchema),
-        400: createSchema(ErrorResponseSchema.describe('Bad Request')),
-        401: createSchema(ErrorResponseSchema.describe('Unauthorized')),
-        403: createSchema(ErrorResponseSchema.describe('Forbidden'))
+        200: {
+          ...SUCCESS_RESPONSE_SCHEMA,
+          description: 'Success'
+        },
+        400: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Bad Request'
+        },
+        401: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Unauthorized'
+        },
+        403: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Forbidden'
+        }
       }
     }
   }, async (request, reply) => {
-    // Validate with Zod for extra safety
-    const { name, email } = RequestSchema.parse(request.body);
+    // TypeScript type assertion (Fastify has already validated)
+    const { name, email } = request.body as RequestBody;
     
     // Your route logic
-    const successResponse = {
+    const successResponse: SuccessResponse = {
       success: true,
       message: `User ${name} processed successfully`
     };
@@ -324,9 +364,10 @@ export default async function yourRoute(server: FastifyInstance) {
 **Key Requirements:**
 - ✅ **Parameter name**: `server: FastifyInstance` (not `fastify`)
 - ✅ **Method calls**: `server.post()` (not `fastify.post()`)
-- ✅ **No generic types**: Avoid `<{ Body: RequestInput }>`
 - ✅ **preValidation first**: Authorization before schema
-- ✅ **Dual schema**: Both `body` and `requestBody` properties
+- ✅ **Reusable schemas**: Define schema constants at the top
+- ✅ **Single source**: Same schema for both `body` and `requestBody`
+- ✅ **TypeScript interfaces**: Provide type safety
 - ✅ **Manual JSON serialization**: Use `JSON.stringify()` for responses
 
 ### Registration in index.ts
@@ -442,7 +483,7 @@ const routeSchema = {
     required: true,
     content: {
       'application/json': {
-        schema: createSchema(requestSchema)
+        schema: REQUEST_SCHEMA
       }
     }
   },
@@ -452,118 +493,167 @@ const routeSchema = {
 
 ## Adding Documentation to Routes
 
-To add OpenAPI documentation to your routes, define your request body and response schemas using Zod. Then, use the `createSchema` utility to convert these Zod schemas into the JSON Schema format expected by Fastify.
+The DeployStack Backend uses **reusable JSON Schema constants** for both validation and documentation generation. This approach provides a single source of truth for API schemas.
 
-Make sure you have `zod` and `zod-openapi` installed in your backend service.
-
-### Recommended Approach: Dual-Schema Pattern for Validation + Documentation
-
-**IMPORTANT**: After the Zod v4 migration, we use a **dual-schema approach** to ensure both proper Fastify validation and accurate OpenAPI documentation.
+### Recommended Approach: Reusable Schema Constants
 
 ```typescript
-import { z } from 'zod';
-import { createSchema } from 'zod-openapi';
+import { type FastifyInstance } from 'fastify';
 
-// 1. Define your Zod schemas for request body, responses, etc.
-const myRequestBodySchema = z.object({
-  name: z.string().min(3).describe("The name of the item (min 3 chars)"),
-  count: z.number().positive().describe("How many items (must be positive)"),
-  type: z.enum(['mysql', 'sqlite']).describe("Database engine type")
-});
-
-const mySuccessResponseSchema = z.object({
-  success: z.boolean().describe("Indicates if the operation was successful"),
-  itemId: z.string().uuid().describe("The UUID of the created/affected item"),
-  message: z.string().optional().describe("Optional success message")
-});
-
-const myErrorResponseSchema = z.object({
-  success: z.boolean().default(false).describe("Indicates failure"),
-  error: z.string().describe("Error message detailing what went wrong")
-});
-
-// 2. Construct the Fastify route schema using DUAL-SCHEMA PATTERN
-const routeSchema = {
-  tags: ['Category'], // Your API category
-  summary: 'Brief description of your endpoint',
-  description: 'Detailed description of what this endpoint does, its parameters, and expected outcomes. Requires Content-Type: application/json header when sending request body.',
-  security: [{ cookieAuth: [] }], // Include if authentication is required
-  
-  // ✅ CRITICAL: Use plain JSON Schema for Fastify validation
-  body: {
-    type: 'object',
-    properties: {
-      name: { type: 'string', minLength: 3 },
-      count: { type: 'number', minimum: 1 },
-      type: { type: 'string', enum: ['mysql', 'sqlite'] }
+// 1. Define reusable JSON Schema constants
+const REQUEST_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { 
+      type: 'string', 
+      minLength: 3,
+      description: 'The name of the item (min 3 chars)'
     },
-    required: ['name', 'count', 'type'],
-    additionalProperties: false
-  },
-  
-  // ✅ Use createSchema() for OpenAPI documentation
-  requestBody: {
-    required: true,
-    content: {
-      'application/json': {
-        schema: createSchema(myRequestBodySchema)
-      }
+    count: { 
+      type: 'number', 
+      minimum: 1,
+      description: 'How many items (must be positive)'
+    },
+    type: { 
+      type: 'string', 
+      enum: ['mysql', 'sqlite'],
+      description: 'Database engine type'
     }
   },
-  response: {
-    200: createSchema(mySuccessResponseSchema.describe("Successful operation")),
-    400: createSchema(myErrorResponseSchema.describe("Bad Request - Invalid input")),
-    // Define other responses (e.g., 401, 403, 404, 500) similarly
-  }
-};
+  required: ['name', 'count', 'type'],
+  additionalProperties: false
+} as const;
 
-// 3. Use the schema in your Fastify route definition with proper TypeScript typing
+const SUCCESS_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { 
+      type: 'boolean',
+      description: 'Indicates if the operation was successful'
+    },
+    itemId: { 
+      type: 'string',
+      description: 'The UUID of the created/affected item'
+    },
+    message: { 
+      type: 'string',
+      description: 'Optional success message'
+    }
+  },
+  required: ['success', 'itemId']
+} as const;
+
+const ERROR_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { 
+      type: 'boolean', 
+      default: false,
+      description: 'Indicates failure'
+    },
+    error: { 
+      type: 'string',
+      description: 'Error message detailing what went wrong'
+    }
+  },
+  required: ['success', 'error']
+} as const;
+
+// 2. Define TypeScript interfaces for type safety
 interface RequestBody {
   name: string;
   count: number;
   type: 'mysql' | 'sqlite';
 }
 
-fastify.post<{ Body: RequestBody }>(
-  '/your-route', 
-  { schema: routeSchema }, 
-  async (request, reply) => {
-    // ✅ Fastify has already validated request.body using the JSON schema
-    // ✅ If we reach here, request.body is guaranteed to be valid
-    // ✅ No manual validation needed!
-    
-    const { name, count, type } = request.body; // Fully typed and validated
+interface SuccessResponse {
+  success: boolean;
+  itemId: string;
+  message?: string;
+}
+
+interface ErrorResponse {
+  success: boolean;
+  error: string;
+}
+
+// 3. Use schemas in route definition
+export default async function yourRoute(server: FastifyInstance) {
+  server.post('/your-route', {
+    preValidation: requirePermission('your.permission'),
+    schema: {
+      tags: ['Category'], // Your API category
+      summary: 'Brief description of your endpoint',
+      description: 'Detailed description of what this endpoint does, its parameters, and expected outcomes. Requires Content-Type: application/json header when sending request body.',
+      security: [{ cookieAuth: [] }], // Include if authentication is required
+      
+      // Single schema for both validation AND documentation
+      body: REQUEST_SCHEMA,
+      
+      // OpenAPI documentation (same schema, reused)
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: REQUEST_SCHEMA
+          }
+        }
+      },
+      
+      response: {
+        200: {
+          ...SUCCESS_RESPONSE_SCHEMA,
+          description: 'Successful operation'
+        },
+        400: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Bad Request - Invalid input'
+        },
+        401: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Unauthorized'
+        },
+        403: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Forbidden'
+        }
+      }
+    }
+  }, async (request, reply) => {
+    // TypeScript type assertion (Fastify has already validated)
+    const { name, count, type } = request.body as RequestBody;
     
     // Your route handler logic here
-    const successResponse = { 
+    const successResponse: SuccessResponse = { 
       success: true, 
       itemId: 'some-uuid-v4-here', 
       message: `Item ${name} processed successfully with ${count} items using ${type}.` 
     };
     const jsonString = JSON.stringify(successResponse);
     return reply.status(200).type('application/json').send(jsonString);
-  }
-);
+  });
+}
 ```
 
 ### Key Benefits of This Approach
 
-1. **Single Source of Truth**: Zod schemas define both validation AND documentation
+1. **Single Source of Truth**: JSON Schema constants define both validation AND documentation
 2. **Automatic Validation**: Fastify automatically validates requests before your handler runs
-3. **No Manual Validation**: Remove all manual `zod.parse()` calls and field checks
+3. **No Manual Validation**: Remove all manual validation calls and field checks
 4. **Better Error Messages**: Fastify provides detailed validation errors automatically
 5. **Type Safety**: Handlers receive properly typed, validated data
 6. **Cleaner Code**: No redundant validation logic in handlers
+7. **Schema Reuse**: Same schema serves both validation and documentation
 
 ## JSON Response Serialization Pattern
 
-**CRITICAL**: After the Zod v4 migration, all API responses must use manual JSON serialization to prevent `"[object Object]"` serialization issues.
+**CRITICAL**: All API responses must use manual JSON serialization to ensure consistent JSON output.
 
 ### Required Response Pattern
 
 ```typescript
 // ✅ CORRECT: Manual JSON serialization
-const successResponse = {
+const successResponse: SuccessResponse = {
   success: true,
   message: 'Operation completed successfully',
   data: { /* your data */ }
@@ -575,10 +665,10 @@ return reply.status(200).type('application/json').send(jsonString);
 ### What NOT to Do
 
 ```typescript
-// ❌ WRONG: Direct object response (causes serialization issues)
+// ❌ WRONG: Direct object response (can cause serialization issues)
 return reply.status(200).send({
   success: true,
-  message: 'This will become "[object Object]"'
+  message: 'This might not serialize correctly'
 });
 
 // ❌ WRONG: Using reply.send() without JSON.stringify()
@@ -592,7 +682,7 @@ All error responses must also use manual JSON serialization:
 
 ```typescript
 // ✅ CORRECT: Error response with manual serialization
-const errorResponse = {
+const errorResponse: ErrorResponse = {
   success: false,
   error: 'Detailed error message'
 };
@@ -616,22 +706,18 @@ return reply.status(401).type('application/json').send(jsonString);
 
 ### Why This Pattern is Required
 
-After the Zod v4 migration, Fastify's automatic JSON serialization can fail with complex objects, resulting in:
-- Response bodies showing `"[object Object]"` instead of actual data
-- Client applications receiving unparseable responses
-- Test failures due to missing `success` and `error` properties
-
 The manual JSON serialization pattern ensures:
 - ✅ Consistent, parseable JSON responses
 - ✅ Proper `success`/`error` properties in all responses
 - ✅ Reliable client-server communication
 - ✅ Passing e2e tests
+- ✅ No `"[object Object]"` serialization issues
 
 ### Why Both `body` and `requestBody` Properties?
 
 **Important**: You need BOTH properties for complete functionality:
 
-- **`body`**: Enables Fastify's automatic request validation using the Zod schema
+- **`body`**: Enables Fastify's automatic request validation using the JSON schema
 - **`requestBody`**: Ensures proper OpenAPI specification generation with Content-Type documentation
 
 Without `body`, validation won't work. Without `requestBody`, your API specification won't properly document the `application/json` Content-Type requirement.
@@ -642,14 +728,13 @@ Without `body`, validation won't work. Without `requestBody`, your API specifica
 
 ```typescript
 // BAD: Manual validation (redundant)
-const parsedBody = myRequestBodySchema.safeParse(request.body);
-if (!parsedBody.success) {
-  return reply.status(400).send({ error: 'Invalid request body' });
+if (!request.body.name || !request.body.count) {
+  return reply.status(400).send({ error: 'Required fields missing' });
 }
 
 // BAD: Manual field checks (redundant)
-if (!request.body.name || !request.body.count) {
-  return reply.status(400).send({ error: 'Required fields missing' });
+if (request.body.name.length < 3) {
+  return reply.status(400).send({ error: 'Name too short' });
 }
 
 // BAD: Manual enum validation (redundant)
@@ -662,64 +747,64 @@ if (request.body.type !== 'mysql' && request.body.type !== 'sqlite') {
 
 ```typescript
 // GOOD: Trust the validation - if handler runs, data is valid
-const { name, count, type } = request.body; // Already validated by Fastify
+const { name, count, type } = request.body as RequestBody; // Already validated by Fastify
 ```
 
 ### Validation Flow
 
 The validation chain works as follows:
 
-#### Zod Schema → JSON Schema → Fastify Validation → Handler
+#### JSON Schema → Fastify Validation → Handler
 
-1. **Zod Schema**: Define validation rules using Zod
-2. **JSON Schema**: Convert to OpenAPI format using `createSchema()`
-3. **Fastify Validation**: Fastify automatically validates incoming requests
-4. **Handler**: Receives validated, typed data
+1. **JSON Schema**: Define validation rules using JSON Schema
+2. **Fastify Validation**: Fastify automatically validates incoming requests
+3. **Handler**: Receives validated, typed data
 
 If validation fails, Fastify automatically returns a 400 error **before** your handler runs.
 
 ### Real-World Examples
 
-See these files for complete examples of proper Zod validation:
+See these files for complete examples of proper validation:
 
+- `src/routes/admin/email/test.ts` - **REFERENCE IMPLEMENTATION** showing complete reusable schema constants approach
 - `src/routes/db/setup.ts` - Database setup with enum validation
 - `src/routes/db/status.ts` - Simple GET endpoint with response schemas
 - `src/routes/auth/loginEmail.ts` - Login with required string fields
 - `src/routes/auth/registerEmail.ts` - Registration with complex validation rules
-
-**Note**: Older examples in this document (like the "Logout Route Documentation" below) might still show manually crafted JSON schemas. The recommended approach is now to use Zod with automatic Fastify validation as shown above.
 
 ## Example: Logout Route Documentation
 
 The logout route (`/api/auth/logout`) demonstrates proper documentation:
 
 ```typescript
+const LOGOUT_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { 
+      type: 'boolean',
+      description: 'Indicates if the logout operation was successful'
+    },
+    message: { 
+      type: 'string',
+      description: 'Human-readable message about the logout result'
+    }
+  },
+  required: ['success', 'message'],
+  examples: [
+    {
+      success: true,
+      message: 'Logged out successfully.'
+    }
+  ]
+} as const;
+
 const logoutSchema = {
   tags: ['Authentication'],
   summary: 'User logout',
   description: 'Invalidates the current user session and clears authentication cookies',
   security: [{ cookieAuth: [] }],
   response: {
-    200: {
-      type: 'object',
-      properties: {
-        success: { 
-          type: 'boolean',
-          description: 'Indicates if the logout operation was successful'
-        },
-        message: { 
-          type: 'string',
-          description: 'Human-readable message about the logout result'
-        }
-      },
-      required: ['success', 'message'],
-      examples: [
-        {
-          success: true,
-          message: 'Logged out successfully.'
-        }
-      ]
-    }
+    200: LOGOUT_RESPONSE_SCHEMA
   }
 };
 ```
@@ -728,7 +813,7 @@ const logoutSchema = {
 
 ### Fastify Server Configuration
 
-The Fastify server is configured with custom AJV options to ensure compatibility with `zod-openapi` schema generation. This configuration is in `src/server.ts`:
+The Fastify server is configured with custom AJV options to ensure compatibility with JSON Schema validation. This configuration is in `src/server.ts`:
 
 ```typescript
 const server = fastify({
@@ -746,11 +831,11 @@ const server = fastify({
 
 **Why these AJV options are required:**
 
-- **`strict: false`**: AJV v8+ runs in strict mode by default, which rejects schemas containing unknown keywords. The `zod-openapi` library generates schemas that may include keywords AJV doesn't recognize in strict mode.
-- **`strictTypes: false`**: Prevents strict type validation errors that can occur with complex Zod schemas.
+- **`strict: false`**: AJV v8+ runs in strict mode by default, which rejects schemas containing unknown keywords. This setting allows more flexible schema definitions.
+- **`strictTypes: false`**: Prevents strict type validation errors that can occur with complex schemas.
 - **`strictTuples: false`**: Allows more flexible tuple handling for array schemas.
 
-**Important**: These settings don't affect validation behavior - they only allow the schema compilation to succeed. All validation rules defined in your Zod schemas still work exactly as expected.
+**Important**: These settings don't affect validation behavior - they only allow the schema compilation to succeed. All validation rules defined in your JSON schemas still work exactly as expected.
 
 ### Swagger Configuration
 
@@ -802,7 +887,7 @@ Routes without schema definitions will appear in the specification but with mini
 
 To extend API documentation:
 
-1. Add schema definitions to more routes
+1. Add schema definitions to more routes using reusable constants
 2. Define reusable components in the OpenAPI configuration
 3. Add request body schemas for POST/PUT endpoints
 4. Include error response schemas (400, 401, 500, etc.)
