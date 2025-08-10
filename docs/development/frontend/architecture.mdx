@@ -268,27 +268,9 @@ User Interaction → View → Service → API
 
 ### Event-Driven Updates
 
-The application uses an **event bus** for cross-component communication without direct coupling.
+The application uses an **event bus** for cross-component communication without direct coupling. This enables real-time updates across unrelated components, cache invalidation signals, global notifications, and feature-to-feature communication.
 
-Read more about the global event bus in the [Event Bus Documentation](/development/frontend/event-bus).
-
-#### Event Bus Usage
-
-- Real-time updates across unrelated components
-- Cache invalidation signals
-- Global notifications
-- Feature-to-feature communication
-
-#### Event Naming Convention
-
-```
-{feature}-{action}
-```
-
-Examples:
-- `teams-updated`
-- `credential-deleted`
-- `mcp-server-deployed`
+For complete details on the event bus system, including usage patterns, naming conventions, and implementation examples, see the [Event Bus Documentation](/development/frontend/event-bus).
 
 ## Component Implementation Standards
 
