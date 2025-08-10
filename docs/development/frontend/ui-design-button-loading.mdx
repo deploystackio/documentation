@@ -1,0 +1,85 @@
+---
+title: Button with Loading States
+description: Guide for using the enhanced Button component with built-in loading states.
+sidebar: Button Loading
+---
+
+# Button with Loading States
+
+The Button component includes built-in loading state functionality for async operations.
+
+## Component Location
+
+```
+services/frontend/src/components/ui/button/
+├── Button.vue      # Enhanced button component with loading states
+└── index.ts        # Button variants and exports
+```
+
+## Features
+
+- **Automatic spinner** with `Loader2` icon from lucide-vue-next
+- **Auto-disable** during loading to prevent double submissions
+- **Optional loading text** to display custom messages
+- **Size-aware spinner** that scales with button size
+- **Works with all variants** (default, destructive, outline, etc.)
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `loading` | `boolean` | `false` | Shows spinner and disables button |
+| `loadingText` | `string` | `undefined` | Optional text during loading |
+| `disabled` | `boolean` | `false` | Disable independent of loading |
+| `variant` | `string` | `'default'` | Button style variant |
+| `size` | `string` | `'default'` | Button size (sm, default, lg, icon) |
+
+## Usage Example
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+import { Button } from '@/components/ui/button'
+import { toast } from 'vue-sonner'
+
+const isSubmitting = ref(false)
+
+const handleSubmit = async () => {
+  isSubmitting.value = true
+  try {
+    await saveData()
+    toast.success('Saved successfully')
+  } catch (error) {
+    toast.error('Save failed', { description: error.message })
+  } finally {
+    isSubmitting.value = false
+  }
+}
+</script>
+
+<template>
+  <Button 
+    :loading="isSubmitting"
+    loading-text="Saving..."
+    @click="handleSubmit"
+  >
+    Save Changes
+  </Button>
+</template>
+```
+
+## Implementation Details
+
+The component automatically:
+- Displays a spinning `Loader2` icon when `loading` is true
+- Hides the original slot content during loading
+- Shows `loadingText` alongside the spinner (if provided)
+- Disables the button to prevent multiple clicks
+- Adjusts spinner size based on button size prop
+
+For implementation details, see the source code at `services/frontend/src/components/ui/button/Button.vue`.
+
+## Related Documentation
+
+- [UI Design System](/development/frontend/ui-design-system) - Overall design patterns
+- [Global Sonner Toast System](/development/frontend/ui-design-global-sonner) - Toast notifications
