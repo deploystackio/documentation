@@ -70,7 +70,7 @@ eventBus.on('storage-changed', (data) => {
 })
 ```
 
-> **📖 For detailed storage usage, see [Frontend Storage System](./storage)**
+> **📖 For detailed storage usage, see [Frontend Storage System](/development/frontend/storage)**
 
 ## Usage
 
@@ -321,28 +321,57 @@ onUnmounted(() => {
 </script>
 ```
 
-## Best Practices
+## Event Naming Convention
 
-### 1. Event Naming Convention
+The event bus follows a consistent naming pattern to ensure clarity and maintainability across the application.
 
-Use descriptive, action-based names with consistent patterns:
+### Standard Pattern
 
-```typescript
-// Good
-'teams-updated'
-'user-profile-changed'
-'mcp-server-deployed'
-'notification-show'
-
-// Avoid
-'update'
-'change'
-'event1'
+```
+{feature}-{action}
 ```
 
-### 2. Type Safety
+This pattern makes events self-documenting and easy to understand at a glance.
 
-Always define event types in the `EventBusEvents` interface:
+### Examples
+
+```typescript
+// Team-related events
+'teams-updated'
+'team-created'
+'team-deleted'
+'team-selected'
+
+// Credential events
+'credentials-updated'
+'credential-created'
+'credential-deleted'
+
+// MCP server events
+'mcp-server-deployed'
+'mcp-server-installed'
+'mcp-installation-removed'
+
+// System events
+'notification-show'
+'storage-changed'
+'cache-cleared'
+```
+
+### Naming Guidelines
+
+- **Use kebab-case**: All event names should use lowercase with hyphens
+- **Feature first**: Start with the feature or domain name
+- **Action second**: End with the specific action or state change
+- **Be specific**: Avoid generic names like 'update' or 'change' without context
+- **Past tense for completed actions**: Use 'created', 'updated', 'deleted' for completed operations
+- **Present tense for commands**: Use 'show', 'hide', 'clear' for immediate actions
+
+## Best Practices
+
+### 1. Event Type Definition
+
+Always define event types in the `EventBusEvents` interface for type safety:
 
 ```typescript
 export type EventBusEvents = {
@@ -357,7 +386,7 @@ export type EventBusEvents = {
 }
 ```
 
-### 3. Memory Management
+### 2. Memory Management
 
 Always clean up event listeners to prevent memory leaks:
 
@@ -385,7 +414,7 @@ onUnmounted(() => {
 </script>
 ```
 
-### 4. Error Handling
+### 3. Error Handling
 
 Wrap event handlers in try-catch blocks:
 
@@ -405,7 +434,7 @@ const handleDataUpdate = (data: any) => {
 }
 ```
 
-### 5. Debugging Events
+### 4. Debugging Events
 
 Add logging for development:
 
