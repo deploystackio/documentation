@@ -245,6 +245,53 @@ services/backend/src/routes/mcp/
 - **Clear Responsibility**: Each file has a single, clear purpose
 - **Reduced Complexity**: Avoid hundreds of lines in single files
 
+### Shared Schemas for CRUD Modules (Mandatory)
+
+**MANDATORY PATTERN**: For route directories that implement complete CRUD operations on a single entity (Create, Read, Update, Delete), you **must** create a shared `schemas.ts` file to eliminate duplication and ensure consistency.
+
+#### When to Create Shared Schemas
+
+Create a `schemas.ts` file when your route directory contains:
+- **Multiple endpoints** operating on the same core entity
+- **Duplicate schema definitions** across route files
+- **Common response structures** (error responses, entity objects)
+- **Shared parameter validation** (ID parameters, common fields)
+
+#### What to Include in Shared Schemas
+
+**Always Share:**
+- **Error response schemas** that appear in multiple files
+- **Core entity object schemas** used in responses
+- **Common parameter schemas** (ID validation, shared fields)
+- **Shared TypeScript interfaces** for consistent typing
+
+**Keep Endpoint-Specific:**
+- **Request body schemas** with different requirements (create vs. update)
+- **Endpoint-specific success response wrappers**
+- **Unique validation rules** specific to individual operations
+
+#### Implementation Requirements
+
+1. **File Naming**: Use `schemas.ts` in the route directory
+2. **Export Pattern**: Export const schemas and TypeScript interfaces
+3. **Import Pattern**: Import shared components into individual route files
+4. **Documentation**: Include clear comments explaining shared vs. specific schemas
+
+#### Benefits of Shared Schemas
+
+- **Single Source of Truth**: Entity structure defined once
+- **Elimination of Duplication**: Removes copy-pasted schema definitions
+- **Improved Maintainability**: Changes happen in one place
+- **Enhanced Consistency**: All endpoints use identical shared structures
+- **Better Type Safety**: Shared interfaces prevent type drift
+
+#### Module Examples Requiring Shared Schemas
+
+- `/mcp/categories/` - Complete category management CRUD
+- `/mcp/servers/` - Server management operations
+- `/teams/` - Team management functionality
+- Any directory with 3+ routes operating on the same entity
+
 ### Route File Template
 
 Each route file should follow this **recommended pattern**:
