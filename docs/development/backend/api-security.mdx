@@ -58,26 +58,103 @@ Understanding Fastify's hook execution order is essential for proper security im
 ```typescript
 import { requireGlobalAdmin } from '../../../middleware/roleMiddleware';
 
-export default async function secureRoute(fastify: FastifyInstance) {
-  fastify.post<{ Body: RequestInput }>('/protected-endpoint', {
+// Reusable Schema Constants
+const REQUEST_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', minLength: 1, description: 'Name is required' },
+    value: { type: 'string', description: 'Value field' }
+  },
+  required: ['name', 'value'],
+  additionalProperties: false
+} as const;
+
+const SUCCESS_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    message: { type: 'string' }
+  },
+  required: ['success', 'message']
+} as const;
+
+const ERROR_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', default: false },
+    error: { type: 'string' }
+  },
+  required: ['success', 'error']
+} as const;
+
+// TypeScript interfaces
+interface RequestBody {
+  name: string;
+  value: string;
+}
+
+interface SuccessResponse {
+  success: boolean;
+  message: string;
+}
+
+interface ErrorResponse {
+  success: boolean;
+  error: string;
+}
+
+export default async function secureRoute(server: FastifyInstance) {
+  server.post('/protected-endpoint', {
+    preValidation: requireGlobalAdmin(), // ✅ CORRECT: Runs before validation
     schema: {
       tags: ['Protected'],
       summary: 'Protected endpoint',
       description: 'Requires admin permissions',
       security: [{ cookieAuth: [] }],
-      body: createSchema(RequestSchema),
+      
+      // Fastify validation schema
+      body: REQUEST_SCHEMA,
+      
+      // OpenAPI documentation (same schema, reused)
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: REQUEST_SCHEMA
+          }
+        }
+      },
+      
       response: {
-        200: createSchema(SuccessResponseSchema.describe('Success')),
-        401: createSchema(ErrorResponseSchema.describe('Unauthorized')),
-        403: createSchema(ErrorResponseSchema.describe('Forbidden')),
-        400: createSchema(ErrorResponseSchema.describe('Bad Request'))
+        200: {
+          ...SUCCESS_RESPONSE_SCHEMA,
+          description: 'Success'
+        },
+        401: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Unauthorized'
+        },
+        403: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Forbidden'
+        },
+        400: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Bad Request'
+        }
       }
-    },
-    preValidation: requireGlobalAdmin(), // ✅ CORRECT: Runs before validation,
+    }
   }, async (request, reply) => {
     // If we reach here, user is authorized AND input is validated
-    const validatedData = request.body;
+    const validatedData = request.body as RequestBody;
+    
     // Your business logic here
+    const successResponse: SuccessResponse = {
+      success: true,
+      message: 'Operation completed successfully'
+    };
+    const jsonString = JSON.stringify(successResponse);
+    return reply.status(200).type('application/json').send(jsonString);
   });
 }
 ```
@@ -85,14 +162,19 @@ export default async function secureRoute(fastify: FastifyInstance) {
 ### ❌ Insecure Pattern: preHandler for Authorization
 
 ```typescript
-export default async function insecureRoute(fastify: FastifyInstance) {
-  fastify.post<{ Body: RequestInput }>('/protected-endpoint', {
+export default async function insecureRoute(server: FastifyInstance) {
+  server.post('/protected-endpoint', {
     schema: {
       // Schema definition...
-      body: zodToJsonSchema(RequestSchema, {
-        $refStrategy: 'none',
-        target: 'openApi3'
-      })
+      body: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', minLength: 1 },
+          value: { type: 'string' }
+        },
+        required: ['name', 'value'],
+        additionalProperties: false
+      }
     },
     preHandler: requireGlobalAdmin(), // ❌ WRONG: Runs after validation
   }, async (request, reply) => {
@@ -161,22 +243,24 @@ For endpoints that support both web users (cookies) and CLI users (OAuth2 Bearer
 ```typescript
 import { requireAuthenticationAny, requireOAuthScope } from '../../middleware/oauthMiddleware';
 
-fastify.get('/dual-auth-endpoint', {
-  schema: {
-    security: [
-      { cookieAuth: [] },    // Cookie authentication
-      { bearerAuth: [] }     // OAuth2 Bearer token
-    ]
-  },
-  preValidation: [
-    requireAuthenticationAny(),     // Accept either auth method
-    requireOAuthScope('your:scope') // Enforce OAuth2 scope
-  ]
-}, async (request, reply) => {
-  // Endpoint accessible via both authentication methods
-  const authType = request.tokenPayload ? 'oauth2' : 'cookie';
-  const userId = request.user!.id;
-});
+export default async function dualAuthRoute(server: FastifyInstance) {
+  server.get('/dual-auth-endpoint', {
+    preValidation: [
+      requireAuthenticationAny(),     // Accept either auth method
+      requireOAuthScope('your:scope') // Enforce OAuth2 scope
+    ],
+    schema: {
+      security: [
+        { cookieAuth: [] },    // Cookie authentication
+        { bearerAuth: [] }     // OAuth2 Bearer token
+      ]
+    }
+  }, async (request, reply) => {
+    // Endpoint accessible via both authentication methods
+    const authType = request.tokenPayload ? 'oauth2' : 'cookie';
+    const userId = request.user!.id;
+  });
+}
 ```
 
 For detailed OAuth2 implementation, see the [Backend OAuth Implementation Guide](/development/backend/oauth-providers) and [Backend Security Policy](/development/backend/security#oauth2-server-security).
@@ -188,31 +272,102 @@ For endpoints that operate within team contexts (e.g., `/teams/:teamId/resource`
 ```typescript
 import { requireTeamPermission } from '../../../middleware/roleMiddleware';
 
-export default async function teamResourceRoute(fastify: FastifyInstance) {
-  fastify.post<{
-    Params: { teamId: string };
-    Body: CreateResourceRequest;
-  }>('/teams/:teamId/resources', {
+// Reusable Schema Constants
+const CREATE_RESOURCE_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', minLength: 1, description: 'Name is required' },
+    description: { type: 'string', description: 'Optional description' }
+  },
+  required: ['name'],
+  additionalProperties: false
+} as const;
+
+const SUCCESS_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    message: { type: 'string' }
+  },
+  required: ['success', 'message']
+} as const;
+
+const ERROR_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', default: false },
+    error: { type: 'string' }
+  },
+  required: ['success', 'error']
+} as const;
+
+// TypeScript interfaces
+interface CreateResourceRequest {
+  name: string;
+  description?: string;
+}
+
+interface SuccessResponse {
+  success: boolean;
+  message: string;
+}
+
+interface ErrorResponse {
+  success: boolean;
+  error: string;
+}
+
+export default async function teamResourceRoute(server: FastifyInstance) {
+  server.post('/teams/:teamId/resources', {
+    preValidation: requireTeamPermission('resources.create'), // ✅ Team-aware authorization
     schema: {
       tags: ['Team Resources'],
       summary: 'Create team resource',
       description: 'Creates a resource within the specified team context',
       security: [{ cookieAuth: [] }],
-      params: zodToJsonSchema(z.object({
-        teamId: z.string().min(1, 'Team ID is required')
-      })),
-      body: zodToJsonSchema(CreateResourceSchema),
+      
+      params: {
+        type: 'object',
+        properties: {
+          teamId: { type: 'string', minLength: 1 }
+        },
+        required: ['teamId'],
+        additionalProperties: false
+      },
+      
+      body: CREATE_RESOURCE_SCHEMA,
+      
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: CREATE_RESOURCE_SCHEMA
+          }
+        }
+      },
+      
       response: {
-        201: zodToJsonSchema(SuccessResponseSchema),
-        401: zodToJsonSchema(ErrorResponseSchema.describe('Unauthorized')),
-        403: zodToJsonSchema(ErrorResponseSchema.describe('Forbidden - Not team member or insufficient permissions')),
-        400: zodToJsonSchema(ErrorResponseSchema.describe('Bad Request'))
+        201: {
+          ...SUCCESS_RESPONSE_SCHEMA,
+          description: 'Resource created successfully'
+        },
+        401: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Unauthorized'
+        },
+        403: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Forbidden - Not team member or insufficient permissions'
+        },
+        400: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Bad Request'
+        }
       }
-    },
-    preValidation: requireTeamPermission('resources.create'), // ✅ Team-aware authorization
+    }
   }, async (request, reply) => {
-    const { teamId } = request.params;
-    const resourceData = request.body;
+    const { teamId } = request.params as { teamId: string };
+    const resourceData = request.body as CreateResourceRequest;
     
     // User is guaranteed to be:
     // 1. Authenticated
@@ -221,6 +376,12 @@ export default async function teamResourceRoute(fastify: FastifyInstance) {
     // 4. Input is validated
     
     // Your business logic here
+    const successResponse: SuccessResponse = {
+      success: true,
+      message: `Resource "${resourceData.name}" created successfully`
+    };
+    const jsonString = JSON.stringify(successResponse);
+    return reply.status(201).type('application/json').send(jsonString);
   });
 }
 ```
@@ -358,21 +519,21 @@ team_user: [
 
 ```typescript
 // Global admin only
-fastify.delete('/admin/users/:id', {
-  schema: { /* ... */ },
+server.delete('/admin/users/:id', {
   preValidation: requireGlobalAdmin(),
+  schema: { /* ... */ }
 }, handler);
 
 // Specific permission required
-fastify.post('/settings/bulk', {
-  schema: { /* ... */ },
+server.post('/settings/bulk', {
   preValidation: requirePermission('settings.edit'),
+  schema: { /* ... */ }
 }, handler);
 
 // User can access own data OR admin can access any
-fastify.get('/users/:id/profile', {
-  schema: { /* ... */ },
+server.get('/users/:id/profile', {
   preValidation: requireOwnershipOrAdmin(getUserIdFromParams),
+  schema: { /* ... */ }
 }, handler);
 ```
 
@@ -441,13 +602,13 @@ For complex authorization requirements:
 
 ```typescript
 // Multiple checks in sequence
-fastify.post('/complex-endpoint', {
-  schema: { /* ... */ },
+server.post('/complex-endpoint', {
   preValidation: [
     requireAuthentication(),     // Must be logged in
     requireRole('team_member'),  // Must have team role
     requirePermission('data.write') // Must have write permission
   ],
+  schema: { /* ... */ }
 }, handler);
 ```
 
@@ -465,9 +626,9 @@ async function conditionalAuth(request: FastifyRequest, reply: FastifyReply) {
   }
 }
 
-fastify.post('/conditional-endpoint', {
-  schema: { /* ... */ },
+server.post('/conditional-endpoint', {
   preValidation: conditionalAuth,
+  schema: { /* ... */ }
 }, handler);
 ```
 

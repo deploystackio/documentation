@@ -1,0 +1,618 @@
+---
+title: Frontend Architecture
+description: Comprehensive guide to DeployStack frontend application architecture, design patterns, and development principles
+sidebar: Architecture
+---
+
+# Frontend Architecture
+
+This document defines the architectural principles, patterns, and conventions that govern the DeployStack frontend application. All developers must understand and follow these guidelines to maintain consistency and quality across the codebase.
+
+## Architectural Overview
+
+The DeployStack frontend follows a **feature-based modular architecture** with clear separation of concerns. The application is built on Vue 3's Composition API, emphasizing type safety, reusability, and maintainability.
+
+### Core Principles
+
+1. **Feature-First Organization**: Code is organized by feature domains rather than technical layers
+2. **Type Safety First**: TypeScript is mandatory for all new code
+3. **Composition Over Inheritance**: Use composables and the Composition API exclusively
+4. **Direct API Communication**: No abstraction layers over fetch() calls
+5. **Component-Driven Development**: Build from small, reusable components up to complex features
+
+## Directory Architecture
+
+### Views Layer (`/views`)
+
+Views represent **page-level components** that map directly to routes. They orchestrate the overall page functionality and data flow.
+
+#### Organization Rules
+
+1. **Route Mapping**: Each view corresponds to a specific route in the application
+2. **Nested Structure**: Mirror the URL structure in the directory hierarchy
+3. **Feature Grouping**: Group related views in subdirectories
+
+```
+views/
+├── admin/                    # Admin-only views
+│   ├── mcp-categories/      # Category management feature
+│   │   └── index.vue        # Main listing page
+│   └── mcp-server-catalog/  # Catalog management feature
+│       ├── index.vue        # Listing
+│       ├── add.vue          # Creation
+│       └── edit/[id].vue    # Dynamic editing
+├── teams/                    # Team management feature
+│   ├── index.vue            # Teams listing
+│   └── manage/[id].vue      # Team management page
+└── Dashboard.vue            # Top-level dashboard
+```
+
+#### View Responsibilities
+
+- **Route handling**: Process route parameters and query strings
+- **Data orchestration**: Coordinate multiple service calls
+- **Layout selection**: Choose appropriate layout wrapper
+- **Permission checks**: Verify user access rights
+- **Error boundaries**: Handle page-level errors
+
+#### What Views Should NOT Do
+
+- Contain complex business logic (use services)
+- Implement reusable UI patterns (use components)
+- Directly manage global state (use stores)
+- Include detailed form validation (use composables)
+
+### Components Layer (`/components`)
+
+Components are **reusable UI building blocks** that encapsulate specific functionality and presentation logic.
+
+#### Component Categories
+
+1. **UI Components** (`/ui`): Generic, design-system components - read the [UI Design System](/development/frontend/ui-design-system)
+   - Examples: Buttons, Modals, Inputs
+   - Stateless and focused on presentation
+   - Use shadcn-vue components where applicable
+   - Follow shadcn-vue patterns
+   - No business logic
+   - Highly reusable across features
+   - Follow shadcn-vue patterns
+
+2. **Feature Components** (`/components/[feature]`): Domain-specific components
+   - Contain feature-specific logic
+   - Reusable within their domain
+   - May compose UI components
+
+3. **Shared Components** (`/components`): Cross-feature components
+   - Used across multiple features
+   - Examples: `AppSidebar`, `DashboardLayout`
+
+#### Component Design Rules
+
+1. **Single Responsibility**: Each component has one clear purpose
+2. **Props Down, Events Up**: Maintain unidirectional data flow
+3. **Composition Pattern**: Break complex components into smaller parts
+4. **Self-Contained**: Components should work in isolation
+
+### Services Layer (`/services`)
+
+Services handle **all external communication and business logic processing**. They act as the bridge between the frontend and backend APIs.
+
+#### Service Architecture Patterns
+
+1. **Static Class Pattern**: All service methods must be static
+2. **Direct Fetch Usage**: Use native fetch() API exclusively
+3. **Type-Safe Contracts**: Define interfaces for all API requests/responses
+4. **Error Transformation**: Convert API errors to user-friendly messages
+
+#### Service Responsibilities
+
+- API endpoint communication
+- Request/response transformation
+- Error handling and normalization
+- Cache management (when applicable)
+- Business logic that spans multiple components
+
+### Composables Layer (`/composables`)
+
+Composables are **reusable logic units** that leverage Vue's Composition API to share stateful logic across components.
+
+#### Composable Design Patterns
+
+1. **Naming Convention**: Always prefix with `use` (e.g., `useAuth`, `useEventBus`)
+2. **Single Purpose**: Each composable solves one specific problem
+3. **Return Interface**: Clearly define what's returned (state, methods, computed)
+4. **Lifecycle Awareness**: Handle setup/cleanup in lifecycle hooks
+
+#### Common Composable Patterns
+
+- **Data Fetching**: `useAsyncData`, `usePagination`
+- **Form Handling**: `useForm`, `useValidation`
+- **UI State**: `useModal`, `useToast`
+- **Feature Logic**: `useTeamManagement`, `useCredentials`
+
+### Stores Layer (`/stores`)
+
+Stores manage **global application state** using Pinia, Vue's official state management solution.
+
+#### Store Guidelines
+
+1. **Feature-Based Stores**: One store per major feature domain
+2. **Composition API Style**: Use setup stores, not options API
+3. **Readonly State**: Export readonly refs to prevent external mutations
+4. **Action Pattern**: All state changes through defined actions
+
+#### When to Use Stores
+
+- User session and authentication state
+- Cross-component shared data
+- Cache for expensive operations
+- Application-wide settings
+
+#### When NOT to Use Stores
+
+- Component-specific state
+- Temporary UI state
+- Form data (use local state)
+
+## API Integration Architecture
+
+### Service Layer Pattern
+
+**IMPORTANT**: The frontend uses a service layer pattern with direct `fetch()` calls for API communication. This is the established pattern and must be followed for consistency.
+
+#### ✅ Required Pattern - Direct Fetch Calls
+
+All API services must use direct `fetch()` calls instead of API client libraries. This ensures consistency across the codebase and simplifies maintenance.
+
+```typescript
+// services/mcpServerService.ts
+export class McpServerService {
+  private static baseUrl = getEnv('VITE_API_URL')
+
+  static async getAllServers(): Promise<McpServer[]> {
+    const response = await fetch(`${this.baseUrl}/api/mcp-servers`)
+    if (!response.ok) {
+      throw new Error('Failed to fetch MCP servers')
+    }
+    return response.json()
+  }
+
+  static async deployServer(serverId: string, config: DeployConfig): Promise<Deployment> {
+    const response = await fetch(`${this.baseUrl}/api/mcp-servers/${serverId}/deploy`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(config),
+    })
+    
+    if (!response.ok) {
+      throw new Error('Failed to deploy MCP server')
+    }
+    
+    return response.json()
+  }
+}
+```
+
+#### ❌ Avoid - API Client Libraries
+
+Do not use API client libraries like Axios, or custom API client wrappers:
+
+```typescript
+// DON'T DO THIS
+import axios from 'axios'
+import { apiClient } from '@/utils/apiClient'
+
+// Avoid these patterns
+const response = await axios.get('/api/servers')
+const data = await apiClient.get('/api/servers')
+```
+
+#### Service Layer Guidelines
+
+1. **Use Static Classes**: All service methods should be static
+2. **Direct Fetch**: Always use native `fetch()` API
+3. **Error Handling**: Throw meaningful errors for failed requests
+4. **Type Safety**: Define proper TypeScript interfaces for requests/responses
+5. **Consistent Naming**: Use descriptive method names (e.g., `getAllServers`, `createCategory`)
+6. **Base URL**: Always use environment variables for API endpoints
+
+### Using Services in Components
+
+```vue
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { McpServerService } from '@/services/mcpServerService'
+import type { McpServer } from '@/types/mcp'
+
+const servers = ref<McpServer[]>([])
+const isLoading = ref(false)
+const error = ref<string | null>(null)
+
+async function fetchServers() {
+  isLoading.value = true
+  error.value = null
+  
+  try {
+    servers.value = await McpServerService.getAllServers()
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unknown error'
+    console.error('Failed to fetch servers:', err)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchServers()
+})
+</script>
+```
+
+## Data Flow Architecture
+
+### Unidirectional Data Flow
+
+```bash
+User Interaction → View → Service → API
+                    ↓
+                Component ← Store ← Response
+```
+
+1. **User triggers action** in a View or Component
+2. **View/Component calls Service** method
+3. **Service communicates with API** using fetch()
+4. **Response updates Store** (if global state)
+5. **Components react** to store changes
+
+### Event-Driven Updates
+
+The application uses an **event bus** for cross-component communication without direct coupling. This enables real-time updates across unrelated components, cache invalidation signals, global notifications, and feature-to-feature communication.
+
+For complete details on the event bus system, including usage patterns, naming conventions, and implementation examples, see the [Event Bus Documentation](/development/frontend/event-bus).
+
+### Persistent State Management
+
+The application includes a **storage system** built into the event bus for managing persistent state across route changes and browser sessions. This system provides type-safe localStorage access with automatic event emission for reactive updates.
+
+For complete details on the storage system, including usage patterns, naming conventions, and best practices, see the [Frontend Storage System](/development/frontend/storage).
+
+## Component Implementation Standards
+
+### Vue Component Structure
+
+**Always prefer Vue Single File Components (SFC) with `<script setup>` and `<template>` sections over TypeScript files with render functions.**
+
+#### ✅ Preferred Approach - Vue SFC:
+
+```vue
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { Button } from '@/components/ui/button'
+import { Settings } from 'lucide-vue-next'
+
+// Props with TypeScript
+interface Props {
+  title: string
+  count?: number
+  onAction?: (id: string) => void
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  count: 0
+})
+
+// Composables
+const { t } = useI18n()
+
+// Reactive state
+const isVisible = ref(true)
+
+// Computed properties
+const displayTitle = computed(() => 
+  `${props.title} (${props.count})`
+)
+
+// Methods
+function toggleVisibility() {
+  isVisible.value = !isVisible.value
+}
+
+function handleAction(id: string) {
+  props.onAction?.(id)
+}
+</script>
+
+<template>
+  <div v-if="isVisible" class="component-container">
+    <h2 class="text-xl font-semibold">{{ displayTitle }}</h2>
+    <Button 
+      @click="toggleVisibility"
+      class="mt-2"
+      variant="outline"
+    >
+      <Settings class="h-4 w-4 mr-2" />
+      {{ t('common.toggle') }}
+    </Button>
+  </div>
+</template>
+```
+
+#### ❌ Avoid - TypeScript files with render functions:
+
+```typescript
+// Don't create files like this for UI components
+import { h } from 'vue'
+import type { ColumnDef } from '@tanstack/vue-table'
+
+export function createColumns(): ColumnDef[] {
+  return [
+    {
+      id: 'actions',
+      cell: ({ row }) => {
+        return h('div', { class: 'flex justify-end' }, [
+          h(Button, {
+            onClick: () => handleAction(row.original.id)
+          }, () => 'Action')
+        ])
+      }
+    }
+  ]
+}
+```
+
+#### Why Vue SFC is Preferred
+
+1. **Better Developer Experience**: Clear separation of logic, template, and styles
+2. **Improved Readability**: Template syntax is more intuitive than render functions
+3. **Better Tooling Support**: Vue DevTools, syntax highlighting, and IntelliSense work better
+4. **Easier Maintenance**: Future developers can understand and modify components more easily
+5. **Vue 3 Best Practices**: Aligns with official Vue 3 recommendations
+
+### Table Components
+
+For table implementations, use the shadcn-vue Table components as documented in the [Table Design System](/development/frontend/ui-design-system-table). Never use raw HTML table elements.
+
+## Component Communication Patterns
+
+### Parent-Child Communication
+
+1. **Props for Data Down**: Pass data from parent to child
+2. **Events for Actions Up**: Emit events from child to parent
+3. **v-model for Two-Way**: Use for form inputs and controlled components
+
+### Sibling Communication
+
+1. **Through Parent**: Lift state up to common parent
+2. **Event Bus**: For loosely coupled components
+3. **Shared Store**: For persistent shared state
+
+### Cross-Feature Communication
+
+1. **Event Bus**: Primary method for feature-to-feature updates
+2. **Shared Services**: Common API operations
+3. **Global Store**: Application-wide state
+
+## Form Architecture
+
+### Form Handling Strategy
+
+1. **Local State First**: Keep form data in component state
+2. **Validation Composables**: Reuse validation logic
+3. **Service Layer Submission**: Process through services
+4. **Error Display Pattern**: Consistent error messaging
+
+### Form Patterns
+
+- Use VeeValidate with Zod schemas for complex forms
+- Implement field-level validation feedback
+- Show loading states during submission
+- Handle API validation errors gracefully
+
+## Routing Architecture
+
+### Route Organization
+
+1. **Feature Modules**: Group related routes by feature
+2. **Lazy Loading**: Use dynamic imports for route components
+3. **Route Guards**: Implement authentication and authorization checks
+4. **Breadcrumb Support**: Maintain hierarchical navigation
+
+### Dynamic Routes
+
+- Use `[id]` notation for dynamic segments
+- Handle route parameter validation in views
+- Implement proper 404 handling for invalid IDs
+
+## Error Handling Architecture
+
+### Error Boundaries
+
+1. **View Level**: Catch and display page-level errors
+2. **Component Level**: Handle component-specific errors
+3. **Global Level**: Catch unhandled errors
+
+### Error Patterns
+
+- Display user-friendly error messages
+- Log technical details for debugging
+- Provide recovery actions when possible
+- Maintain application stability on errors
+
+## Performance Architecture
+
+### Code Splitting Strategy
+
+1. **Route-Based Splitting**: Each route loads its own bundle
+2. **Component Lazy Loading**: Heavy components load on demand
+3. **Vendor Chunking**: Separate third-party libraries
+
+### Optimization Patterns
+
+- Use `shallowRef` for large objects
+- Implement virtual scrolling for long lists
+- Debounce expensive operations
+- Memoize computed values appropriately
+
+## Security Architecture
+
+### Frontend Security Principles
+
+1. **Never Trust Client**: All validation must happen on backend
+2. **Secure Storage**: Never store sensitive data (passwords, API keys, tokens) in localStorage. See [Frontend Storage System](/development/frontend/storage) for proper storage patterns
+3. **XSS Prevention**: Sanitize user input, use Vue's built-in protections
+4. **CSRF Protection**: Include tokens in API requests
+
+### Authentication Flow
+
+- Token-based authentication (JWT)
+- Automatic token refresh
+- Secure token storage (httpOnly cookies preferred)
+- Route protection via navigation guards
+
+## Testing Architecture
+
+### Testing Strategy
+
+1. **Unit Tests**: For services, composables, and utilities
+2. **Component Tests**: For isolated component behavior
+3. **Integration Tests**: For feature workflows
+4. **E2E Tests**: For critical user paths
+
+### Test Organization
+
+- Mirror source structure in test directories
+- Co-locate test files with source files
+- Use descriptive test names
+- Follow AAA pattern (Arrange, Act, Assert)
+
+## Plugin Architecture
+
+### Plugin System Design
+
+The application supports runtime plugin loading for extensibility.
+
+#### Plugin Structure
+
+1. **Entry Point**: Each plugin exports a default configuration
+2. **Extension Points**: Plugins hook into defined extension points
+3. **Isolation**: Plugins run in isolated contexts
+4. **Version Management**: Plugins declare compatible versions
+
+#### Plugin Guidelines
+
+- Plugins cannot modify core functionality
+- Use provided APIs and extension points
+- Handle errors gracefully
+- Document dependencies clearly
+
+## Development Workflow
+
+### Code Organization Rules
+
+1. **Feature Cohesion**: Keep related code together
+2. **Explicit Imports**: No magic globals or auto-imports
+3. **Type Definitions**: Colocate types with their usage
+4. **Consistent Naming**: Follow established patterns
+
+### File Naming Conventions
+
+- **Components**: PascalCase (e.g., `UserProfile.vue`)
+- **Composables**: camelCase with 'use' prefix (e.g., `useAuth.ts`)
+- **Services**: camelCase with 'Service' suffix (e.g., `userService.ts`)
+- **Types**: PascalCase for interfaces/types (e.g., `UserCredentials`)
+- **Views**: Match route names (e.g., `index.vue`, `[id].vue`)
+
+### Import Order
+
+1. External dependencies
+2. Vue and framework imports
+3. Internal aliases (@/ imports)
+4. Relative imports
+5. Type imports
+
+## Anti-Patterns to Avoid
+
+### Component Anti-Patterns
+
+- ❌ Using Options API in new components
+- ❌ Mixing paradigms (Options + Composition)
+- ❌ Direct DOM manipulation
+- ❌ Inline styles for layout
+- ❌ Business logic in templates
+
+### State Management Anti-Patterns
+
+- ❌ Mutating props directly
+- ❌ Excessive global state
+- ❌ Circular store dependencies
+- ❌ Store logic in components
+
+### Service Anti-Patterns
+
+- ❌ Using Axios or other HTTP libraries
+- ❌ Instance-based service classes
+- ❌ Mixing UI concerns in services
+- ❌ Inconsistent error handling
+
+### General Anti-Patterns
+
+- ❌ Premature optimization
+- ❌ Deep component nesting (>3 levels)
+- ❌ Tight coupling between features
+- ❌ Ignoring TypeScript errors
+- ❌ Copy-paste programming
+
+## Architecture Decision Records
+
+### Why Static Services?
+
+Static service methods ensure:
+- No instance management complexity
+- Predictable behavior
+- Easy testing and mocking
+- Clear API boundaries
+
+### Why Direct Fetch?
+
+Using native fetch() provides:
+- No external dependencies
+- Consistent API across services
+- Full control over request/response
+- Smaller bundle size
+
+### Why Feature-Based Structure?
+
+Feature organization offers:
+- Better code locality
+- Easier feature removal/addition
+- Clear ownership boundaries
+- Reduced merge conflicts
+
+## Migration Guidelines
+
+When refactoring existing code:
+
+1. **Incremental Migration**: Update feature by feature
+2. **Test Coverage First**: Add tests before refactoring
+3. **Preserve Functionality**: No behavior changes during refactor
+4. **Document Changes**: Update relevant documentation
+5. **Review Thoroughly**: Architecture changes need careful review
+
+## Future Considerations
+
+As the application grows, consider:
+
+- Micro-frontend architecture for team autonomy
+- Module federation for dynamic feature loading
+- GraphQL adoption for efficient data fetching
+- Server-side rendering for performance
+- Progressive Web App capabilities
+
+## Conclusion
+
+This architecture provides a scalable, maintainable foundation for the DeployStack frontend. Following these patterns ensures consistency, reduces bugs, and improves developer productivity. When in doubt, prioritize clarity and simplicity over clever solutions.
+
+Remember: **Architecture is a team effort**. Propose improvements, discuss trade-offs, and evolve these patterns as the application grows.

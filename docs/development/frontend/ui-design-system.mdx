@@ -16,6 +16,109 @@ This document establishes the official UI design patterns and component standard
 - **Performance**: Optimize for fast loading and smooth interactions
 - **Maintainability**: Write clean, reusable component code
 
+## Color System
+
+### Primary Colors
+
+The DeployStack color palette uses teal as the primary brand color, ensuring WCAG compliance for accessibility.
+
+```css
+/* Primary Brand Colors */
+--primary: #0f766e;        /* teal-700 - WCAG AA compliant on white */
+--primary-hover: #115e59;  /* teal-800 - WCAG AAA compliant on white */
+```
+
+#### WCAG Compliance
+- **Primary (teal-700)**: Contrast ratio 5.47:1 on white - ✅ AA Pass, ❌ AAA Fail
+- **Primary-hover (teal-800)**: Contrast ratio 7.58:1 on white - ✅ AA Pass, ✅ AAA Pass
+
+This ensures our primary color meets accessibility standards, with enhanced contrast on hover states.
+
+### Text Colors
+```css
+/* Light Mode / Dark Mode */
+--text-primary: theme('colors.zinc.800') / theme('colors.zinc.100');
+--text-secondary: theme('colors.zinc.600') / theme('colors.zinc.400');
+```
+
+### Background Colors
+```css
+/* Light Mode / Dark Mode */
+--bg-primary: white / theme('colors.zinc.900');
+--bg-secondary: theme('colors.zinc.50') / theme('colors.zinc.800');
+```
+
+### Link Color Scheme
+
+DeployStack implements intelligent link styling with automatic teal coloring for text links while preserving button styling:
+
+#### Text Links
+- **Light mode**: `text-teal-700` → `hover:text-teal-800` (WCAG AA → AAA on hover)
+- **Dark mode**: `text-teal-400` → `hover:text-teal-300` (Already WCAG AAA compliant)
+- **Underlines**: `decoration-teal-700/30` → `hover:decoration-teal-700/60`
+- **Focus states**: `outline-teal-700` (light) / `outline-teal-400` (dark)
+
+#### Usage Examples
+```html
+<!-- ✅ Gets teal link styling automatically -->
+<a href="/about">Learn more about us</a>
+<a href="https://example.com" class="font-semibold">External link</a>
+
+<!-- ❌ Excluded from link styling (keeps button appearance) -->
+<a href="/signup" class="rounded-md bg-primary px-4 py-2">Sign Up</a>
+<a href="/login" class="button-primary">Login</a>
+```
+
+### Color Usage Guidelines
+
+1. **Primary Actions**: Use `--primary` (teal-700) for primary buttons and key interactive elements
+2. **Hover States**: Transition to `--primary-hover` (teal-800) for enhanced contrast
+3. **Text Links**: Automatically styled with teal colors - no additional classes needed
+4. **Button Links**: Include styling classes (`bg-*`, `rounded-*`) to maintain button appearance
+5. **Focus States**: Ensure all interactive elements have visible focus indicators using the teal color scheme
+
+## Layout Design Patterns
+
+### Content Wrapper Pattern
+
+DeployStack follows a **mandatory content wrapper pattern** for all tabbed content and detail pages. This pattern ensures visual consistency and proper content hierarchy throughout the application.
+
+#### Design Requirements
+
+The content wrapper pattern is **required** for:
+- Team management pages
+- MCP server installation pages  
+- Settings and configuration pages
+- Any page using tabbed content with `DsTabs`
+- Detail views that need elevated content presentation
+
+#### Implementation
+
+Use the `ContentWrapper` component for all qualifying pages:
+
+```vue
+<ContentWrapper>
+  <YourTabContent />
+</ContentWrapper>
+```
+
+The wrapper provides:
+- Gray background container (`bg-muted/50`)
+- Responsive max-width constraints
+- White card elevation with proper spacing
+- Consistent vertical rhythm
+
+For complete implementation details, see the component source code at `services/frontend/src/components/ContentWrapper.vue`.
+
+#### Visual Hierarchy
+
+This pattern creates a three-tier visual hierarchy:
+1. **Page background** - Default dashboard background
+2. **Content container** - Gray muted background wrapper  
+3. **Content card** - White elevated card with content
+
+This hierarchy is a **design system requirement** and must be followed consistently across all applicable pages.
+
 ## Data Tables
 
 For data table implementation, see the dedicated [Table Design System](/development/frontend/ui-design-system-table) guide.
@@ -111,6 +214,20 @@ Use `AlertDialog` for forms in modals:
 
 ## Button Patterns
 
+### Loading States
+Buttons now include built-in loading state functionality. For comprehensive loading button documentation, see the [Button Loading States Guide](/development/frontend/ui-design-button-loading).
+
+```html
+<!-- Button with loading state -->
+<Button 
+  :loading="isSubmitting"
+  loading-text="Saving..."
+  @click="handleSave"
+>
+  Save Changes
+</Button>
+```
+
 ### Primary Actions
 ```html
 <Button @click="handlePrimaryAction">
@@ -131,18 +248,24 @@ Use `AlertDialog` for forms in modals:
 <Button 
   variant="destructive" 
   @click="handleDelete"
+  :loading="isDeleting"
+  loading-text="Deleting..."
   class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
 >
-  <Trash2 class="h-4 w-4 mr-2" />
+  <Trash2 v-if="!isDeleting" class="h-4 w-4 mr-2" />
   {{ t('actions.delete') }}
 </Button>
 ```
 
 ### Icon-Only Buttons
 ```html
-<Button variant="ghost" class="h-8 w-8 p-0">
+<Button 
+  variant="ghost" 
+  size="icon"
+  :loading="isRefreshing"
+>
   <span class="sr-only">{{ t('actions.menu') }}</span>
-  <MoreHorizontal class="h-4 w-4" />
+  <MoreHorizontal v-if="!isRefreshing" class="h-4 w-4" />
 </Button>
 ```
 
@@ -277,36 +400,4 @@ If you have an existing table using raw HTML elements, follow these steps:
 4. **Update action menus** to use AlertDialog for destructive actions
 5. **Ensure proper badge usage** for status indicators
 
-### Example Migration
-
-**Before (deprecated):**
-```html
-<table class="w-full">
-  <thead>
-    <tr class="border-b">
-      <th class="h-12 px-4 text-left">Name</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr class="border-b">
-      <td class="p-4">{{ item.name }}</td>
-    </tr>
-  </tbody>
-</table>
-```
-
-**After (preferred):**
-```html
-<Table>
-  <TableHeader>
-    <TableRow>
-      <TableHead>Name</TableHead>
-    </TableRow>
-  </TableHeader>
-  <TableBody>
-    <TableRow>
-      <TableCell class="font-medium">{{ item.name }}</TableCell>
-    </TableRow>
-  </TableBody>
-</Table>
-```
+For detailed migration strategies and architectural considerations, see the [Frontend Architecture - Migration Guidelines](/development/frontend/architecture#migration-guidelines).

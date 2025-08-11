@@ -114,11 +114,75 @@ console.log('All stored data:', allData)
 eventBus.clearAllState()
 ```
 
+## Storage Key Naming Convention
+
+The storage system follows strict naming conventions to ensure consistency and prevent conflicts across the application.
+
+### Naming Pattern
+
+```
+{feature}_{description}
+```
+
+All storage keys should:
+- Use **snake_case** (lowercase with underscores)
+- Start with the **feature name** or domain
+- End with a **descriptive identifier**
+- Be **specific and meaningful**
+
+### Examples
+
+```typescript
+// Good storage key names
+'selected_team_id'          // Team selection
+'user_preferences'          // User preferences object
+'dashboard_layout'          // Dashboard configuration
+'recent_searches'           // Search history
+'sidebar_collapsed'         // UI state
+'notification_settings'     // Notification preferences
+'selected_theme'            // Theme selection
+'last_visited_page'         // Navigation tracking
+
+// Avoid these patterns
+'data'                      // Too generic
+'temp'                      // Not descriptive
+'userPref'                  // Use snake_case, not camelCase
+'TEAM_ID'                   // Use lowercase, not uppercase
+'team-id'                   // Use underscores, not hyphens
+```
+
+### Storage Key Categories
+
+1. **UI State**: `{component}_{state}`
+   - `sidebar_collapsed`
+   - `modal_shown`
+   - `tab_selected`
+
+2. **User Preferences**: `{feature}_preferences` or `user_{setting}`
+   - `notification_preferences`
+   - `user_language`
+   - `user_timezone`
+
+3. **Selection State**: `selected_{entity}_id`
+   - `selected_team_id`
+   - `selected_project_id`
+   - `selected_workspace_id`
+
+4. **Cache/History**: `{feature}_history` or `recent_{items}`
+   - `search_history`
+   - `recent_searches`
+   - `visited_pages`
+
+5. **Feature Data**: `{feature}_{data_type}`
+   - `dashboard_layout`
+   - `form_draft`
+   - `wizard_state`
+
 ## Adding New Storage Values
 
-### Step 1: Add to Configuration (Optional)
+### Step 1: Define Your Storage Key
 
-For better organization, add your new storage key to the configuration:
+Follow the naming convention and optionally add your key to the configuration for better organization:
 
 ```typescript
 // In /composables/useEventBus.ts
@@ -126,9 +190,9 @@ const STORAGE_CONFIG = {
   prefix: 'deploystack_',
   keys: {
     SELECTED_TEAM_ID: 'selected_team_id',
-    SELECTED_THEME: 'selected_theme',           // NEW
-    USER_DASHBOARD_LAYOUT: 'dashboard_layout',  // NEW
-    RECENT_SEARCHES: 'recent_searches',         // NEW
+    SELECTED_THEME: 'selected_theme',           // NEW - follows pattern
+    USER_DASHBOARD_LAYOUT: 'dashboard_layout',  // NEW - follows pattern
+    RECENT_SEARCHES: 'recent_searches',         // NEW - follows pattern
   }
 }
 ```
@@ -252,67 +316,24 @@ const reorderPanels = (newOrder: string[]) => {
 </script>
 ```
 
-### Example 3: Search History
-
-```typescript
-// SearchComponent.vue
-<script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useEventBus } from '@/composables/useEventBus'
-
-const eventBus = useEventBus()
-const searchQuery = ref('')
-const searchHistory = ref<string[]>([])
-
-// Initialize search history
-onMounted(() => {
-  const storedHistory = eventBus.getState<string[]>('recent_searches', [])
-  searchHistory.value = storedHistory
-})
-
-// Add search to history
-const addToHistory = (query: string) => {
-  if (!query.trim()) return
-  
-  // Remove duplicates and add to beginning
-  const newHistory = [query, ...searchHistory.value.filter(item => item !== query)]
-  
-  // Keep only last 10 searches
-  searchHistory.value = newHistory.slice(0, 10)
-  
-  // Persist to storage
-  eventBus.setState('recent_searches', searchHistory.value)
-}
-
-// Clear search history
-const clearHistory = () => {
-  searchHistory.value = []
-  eventBus.clearState('recent_searches')
-}
-
-const performSearch = () => {
-  if (searchQuery.value.trim()) {
-    addToHistory(searchQuery.value.trim())
-    // Perform actual search...
-  }
-}
-</script>
-```
-
 ## Best Practices
 
-### 1. Use Descriptive Keys
+### 1. Follow Naming Conventions
+
+Always use the established naming pattern `{feature}_{description}` with snake_case:
 
 ```typescript
-// Good
+// ✅ Good - follows convention
 eventBus.setState('selected_team_id', teamId)
 eventBus.setState('user_dashboard_layout', layout)
 eventBus.setState('notification_preferences', prefs)
+eventBus.setState('sidebar_collapsed', true)
 
-// Avoid
-eventBus.setState('data', someData)
-eventBus.setState('temp', tempValue)
-eventBus.setState('x', value)
+// ❌ Bad - violates convention
+eventBus.setState('data', someData)           // Too generic
+eventBus.setState('selectedTeamId', teamId)   // Wrong case (camelCase)
+eventBus.setState('TEAM_ID', teamId)          // Wrong case (uppercase)
+eventBus.setState('team-id', teamId)          // Wrong separator (hyphen)
 ```
 
 ### 2. Provide Default Values
@@ -421,45 +442,6 @@ The storage system uses `localStorage`, which is supported in all modern browser
 - **JSON Serialization**: Large objects may impact performance during serialization
 - **Storage Limits**: localStorage typically has a 5-10MB limit per domain
 - **Event Frequency**: Storage change events are emitted for every setState/clearState call
-
-## Migration Guide
-
-### From Component State to Storage
-
-**Before:**
-```typescript
-// Component-level state
-const selectedTeam = ref<Team | null>(null)
-
-onMounted(() => {
-  // Initialize from API or default
-  selectedTeam.value = await getDefaultTeam()
-})
-```
-
-**After:**
-```typescript
-// Storage-backed state
-const selectedTeam = ref<Team | null>(null)
-
-onMounted(() => {
-  // Initialize from storage with fallback
-  const storedTeamId = eventBus.getState<string>('selected_team_id')
-  if (storedTeamId) {
-    selectedTeam.value = await getTeamById(storedTeamId)
-  } else {
-    const defaultTeam = await getDefaultTeam()
-    selectedTeam.value = defaultTeam
-    eventBus.setState('selected_team_id', defaultTeam.id)
-  }
-})
-
-// Update storage when state changes
-const selectTeam = (team: Team) => {
-  selectedTeam.value = team
-  eventBus.setState('selected_team_id', team.id)
-}
-```
 
 ## Related Documentation
 
