@@ -9,6 +9,7 @@ import { getFinalPageTitle } from '@/lib/h1-extractor';
 import { readFile } from 'fs/promises';
 import { getMDXComponents } from '@/mdx-components';
 import { homeOptions, docsOptions } from '../layout.config';
+import { generateTechArticleSchema, generateBreadcrumbSchema, combineSchemas } from '@/lib/structured-data';
 
 export default async function Page({
   params,
@@ -27,16 +28,46 @@ export default async function Page({
   // Determine if this is the root page (no sidebar needed)
   const isRootPage = !slug || slug.length === 0;
 
+  // Generate structured data for non-root pages
+  let structuredData = '';
+  if (!isRootPage && slug) {
+    const slugString = slug.join('/');
+    const url = `https://deploystack.io/docs/${slugString}`;
+    
+    // Get the final title (same logic as in generateMetadata)
+    let finalTitle = page.data.title;
+    try {
+      const filePath = page.file.path;
+      const absolutePath = `./docs/${filePath}`;
+      const rawContent = await readFile(absolutePath, 'utf-8');
+      finalTitle = getFinalPageTitle(rawContent, page.data.title);
+    } catch (error) {
+      finalTitle = page.data.title;
+    }
+
+    const articleSchema = generateTechArticleSchema({
+      title: finalTitle,
+      description: page.data.description,
+      slug,
+      url,
+    });
+    
+    const breadcrumbSchema = generateBreadcrumbSchema(slug);
+    structuredData = combineSchemas(articleSchema, breadcrumbSchema);
+  }
+
   // Use HomeLayout for root page (no sidebar), DocsLayout for all other pages
   if (isRootPage) {
     return (
-      <HomeLayout {...homeOptions}>
-        <div className="container max-w-6xl mx-auto px-4 py-8">
-          <article className="prose prose-neutral dark:prose-invert max-w-none">
-            <MDX components={getMDXComponents()} />
-          </article>
-        </div>
-      </HomeLayout>
+      <>
+        <HomeLayout {...homeOptions}>
+          <div className="container max-w-6xl mx-auto px-4 py-8">
+            <article className="prose prose-neutral dark:prose-invert max-w-none">
+              <MDX components={getMDXComponents()} />
+            </article>
+          </div>
+        </HomeLayout>
+      </>
     );
   }
 
@@ -54,23 +85,31 @@ export default async function Page({
   }
 
   return (
-    <DocsLayout
-      {...docsOptions}
-      tree={pageTree}
-      nav={{
-        title: navTitle,
-        url: '/',
-      }}
-      sidebar={{
-        defaultOpenLevel: 1
-      }}
-    >
-      <DocsPage toc={page.data.toc} full={page.data.full}>
-        <DocsBody>
-          <MDX components={getMDXComponents()} />
-        </DocsBody>
-      </DocsPage>
-    </DocsLayout>
+    <>
+      {structuredData && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: structuredData }}
+        />
+      )}
+      <DocsLayout
+        {...docsOptions}
+        tree={pageTree}
+        nav={{
+          title: navTitle,
+          url: '/',
+        }}
+        sidebar={{
+          defaultOpenLevel: 1
+        }}
+      >
+        <DocsPage toc={page.data.toc} full={page.data.full}>
+          <DocsBody>
+            <MDX components={getMDXComponents()} />
+          </DocsBody>
+        </DocsPage>
+      </DocsLayout>
+    </>
   );
 }
 
