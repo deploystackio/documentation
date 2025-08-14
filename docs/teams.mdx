@@ -1,25 +1,25 @@
 ---
 title: Teams Structure in DeployStack
-description: Organize your MCP server deployments with teams - your workspace for managing servers, credentials, and environment variables in DeployStack.
+description: Organize your MCP server management with teams - your workspace for managing servers, credentials, and environment variables in DeployStack.
 sidebar: Teams
 ---
 
 # Teams
 
-Teams are the organizational foundation of DeployStack, serving as dedicated workspaces where you manage all your MCP server deployments, cloud provider credentials, and environment variables. Think of teams as isolated containers that keep your deployment resources organized and secure.
+Teams are the organizational foundation of DeployStack, serving as dedicated workspaces where you manage all your MCP server configurations, cloud provider credentials, and environment variables. Think of teams as isolated containers that keep your team resources organized and secure.
 
 ## Overview
 
 In DeployStack, teams provide:
 
-- **Isolated Workspaces**: Each team maintains its own separate environment for deployments
+- **Isolated Workspaces**: Each team maintains its own separate environment for MCP server management
 - **Resource Organization**: All your MCP servers, credentials, and settings are organized within teams
-- **Access Control**: Team-based permissions ensure secure access to your deployment resources
+- **Access Control**: Team-based permissions ensure secure access to your team resources
 - **Multi-Project Support**: Create multiple teams to organize different projects or environments
 - **Team Collaboration**: Teams support multiple members with role-based access control
 - **Default Team Protection**: Your personal default team cannot have additional members added
 
-Every team acts as a complete deployment environment, containing everything needed to deploy and manage MCP servers across various cloud providers.
+Every team acts as a complete team environment, containing everything needed to configure and manage MCP servers through the DeployStack Gateway.
 
 ## Getting Started with Teams
 
@@ -32,7 +32,7 @@ When you register for DeployStack, a default team is automatically created for y
 - **Description**: Automatically set as "[username]'s team"
 - **Role**: You become the Team Administrator with full control
 
-This default team is immediately ready for use - you can start deploying MCP servers right away.
+This default team is immediately ready for use - you can start configuring MCP servers right away.
 
 ### Additional Teams
 
@@ -40,27 +40,27 @@ You can create additional teams beyond your automatically created default team t
 
 ## What Teams Contain
 
-Teams serve as comprehensive containers for all your deployment resources:
+Teams serve as comprehensive containers for all your team resources:
 
 ### MCP Server Settings
 - **Team MCP Servers**: Private MCP servers visible only to your team members
-- **Global MCP Server Access**: Browse and deploy community-wide MCP servers
+- **Global MCP Server Access**: Browse and use community-wide MCP servers
 - **Server Management**: Team administrators can create, edit, and delete team servers
 - **Version Control**: Track different versions of your team's MCP servers
 - **GitHub Integration**: Automatic synchronization with GitHub repositories (see [GitHub App Integration Guide](/github-application))
 - **Custom Configurations**: Team-specific server settings and parameters
-- **Deployment History**: Complete logs and monitoring data for team deployments
+- **Process History**: Complete logs and monitoring data for team MCP servers
 
-### Cloud Provider Credentials
-- **local MCP Servers**: Credentials for local MCP environments
-- **Google Cloud**: API tokens and service configurations
+### MCP Server Credentials
+- **API Keys and Tokens**: Secure storage for MCP server authentication
+- **Service Credentials**: Authentication tokens for various MCP server integrations
 
 ### Global Environment Variables
 - **Node.js Environment Variables**: Custom env vars for Node.js-based MCP servers
 - **Reusable Variables**: Environment variables that can be applied across multiple servers
 - **Secure Storage**: All environment variables are encrypted and securely stored
 
-These global environment variables allow you to define common settings once and apply them to multiple MCP servers within the same team, streamlining your deployment process.
+These global environment variables allow you to define common settings once and apply them to multiple MCP servers within the same team, streamlining your MCP server management.
 
 ## Team Management
 
@@ -151,7 +151,7 @@ Teams support two distinct roles with different capabilities:
 
 #### Team Administrator
 - **Full team management**: Can add/remove members, change roles, transfer ownership
-- **Resource access**: Full access to all team resources and deployments
+- **Resource access**: Full access to all team resources and MCP servers
 - **Team settings**: Can modify team name, description, and all configurations
 - **Member management**: Can promote team users to admins or demote admins to users
 
@@ -231,7 +231,7 @@ These restrictions ensure that every user always has a personal, private team fo
 
 Each team maintains complete isolation:
 
-- **Separate Credentials**: Cloud provider credentials are team-specific
+- **Separate Credentials**: MCP server credentials are team-specific
 - **Independent Servers**: MCP servers in one team don't affect others
 - **Isolated Variables**: Environment variables are scoped to individual teams
 - **Secure Boundaries**: No cross-team access to resources
@@ -253,7 +253,7 @@ Each team maintains complete isolation:
 
 #### Deleting a Team (Non-Default Only)
 
-1. **Prepare the Team**: Remove all MCP servers and configurations
+1. **Prepare the Team**: Remove all MCP server configurations
 2. **Access Management**: Click "Manage" on the team you want to delete
 3. **Find Danger Zone**: Scroll down to the "Danger Zone" section
 4. **Click Delete**: Click the "Delete Team" button
@@ -283,9 +283,9 @@ For each team, you can:
 
 - **Update Team Name**: Modify the display name
 - **Edit Description**: Change or add team descriptions
-- **Manage Credentials**: Add, update, or remove cloud provider credentials
+- **Manage Credentials**: Add, update, or remove MCP server credentials
 - **Configure Variables**: Set up global environment variables
-- **Monitor Deployments**: View all MCP servers and their status
+- **Monitor MCP Servers**: View all MCP servers and their status
 
 ### Understanding Team Slugs
 
@@ -312,7 +312,7 @@ Team slugs serve as unique identifiers:
 
 For non-default teams, multiple safety measures protect against accidental deletion:
 
-1. **Active Server Check**: Teams with active MCP servers **cannot be deleted**
+1. **Active Server Check**: Teams with configured MCP servers **cannot be deleted**
 2. **Confirmation Dialog**: A modal dialog requires explicit confirmation
 3. **Clear Warning**: The interface clearly explains the consequences
 4. **Two-Step Process**: You must first remove all servers, then confirm deletion
@@ -321,7 +321,7 @@ For non-default teams, multiple safety measures protect against accidental delet
 
 To delete a non-default team, you must:
 
-1. **Stop All Running MCP Servers**: Ensure no servers are currently deployed or running
+1. **Stop All Running MCP Servers**: Ensure no servers are currently configured or running
 2. **Remove All Server Configurations**: Delete all MCP server settings and configurations
 3. **Access Danger Zone**: Navigate to the "Danger Zone" section in team management
 4. **Confirm Deletion**: Click delete and confirm in the popup dialog
@@ -330,10 +330,10 @@ To delete a non-default team, you must:
 
 When you delete a team, you lose **everything** associated with it:
 
-- **All MCP Server Settings**: Complete server configurations and deployment history
-- **All Cloud Provider Credentials**: Stored API keys, tokens, and authentication data
+- **All MCP Server Settings**: Complete server configurations and process history
+- **All MCP Server Credentials**: Stored API keys, tokens, and authentication data
 - **All Global Environment Variables**: Custom environment settings and variables
-- **Complete Deployment History**: Logs, monitoring data, and historical information
+- **Complete Process History**: Logs, monitoring data, and historical information
 
 ### No Recovery Options
 
@@ -362,16 +362,16 @@ Global administrators have enhanced visibility into all teams across the system:
 - **`teams.delete`**: Delete teams (after removing all servers)
 - **`teams.manage`**: Full team management capabilities
 
-### Deployment Capabilities
+### MCP Server Management Capabilities
 
 Your team role affects your ability to:
 
-- Deploy new MCP servers
+- Configure new MCP servers
 - Modify server configurations
-- Manage cloud provider credentials
+- Manage MCP server credentials
 - Set up environment variables
-- Monitor deployment status
-- Access deployment logs
+- Monitor MCP server status
+- Access process logs
 
 ## Getting the Most from Teams
 
@@ -385,9 +385,9 @@ Consider creating separate teams for:
 
 Within each team:
 
-- **Group Related Servers**: Deploy related MCP servers in the same team
-- **Shared Credentials**: Use the same cloud provider credentials across servers
+- **Group Related Servers**: Configure related MCP servers in the same team
+- **Shared Credentials**: Use the same MCP server credentials across servers
 - **Common Variables**: Leverage global environment variables for consistency
 - **Logical Organization**: Use descriptive names and descriptions
 
-Teams provide the foundation for organized, secure, and efficient MCP server deployment in DeployStack. By understanding how teams work, you can effectively manage your deployment resources and maintain clean separation between different projects and environments.
+Teams provide the foundation for organized, secure, and efficient MCP server management in DeployStack. By understanding how teams work, you can effectively manage your team resources and maintain clean separation between different projects and environments.
