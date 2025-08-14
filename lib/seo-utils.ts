@@ -112,9 +112,6 @@ export function generatePageMetadata(pageData: PageSEOData): Metadata {
     alternates: {
       canonical: url,
     },
-    other: {
-      'application/ld+json': JSON.stringify(getSchemaOrgData(pageData)),
-    },
   };
 }
 

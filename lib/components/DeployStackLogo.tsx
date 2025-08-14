@@ -1,7 +1,7 @@
 import React from 'react';
 import Image from 'next/image';
 
-export const DeployStackLogo: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => {
+export const DeployStackLogo: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => {
   return (
     <Image
       src="/logo-deploystack.png"
