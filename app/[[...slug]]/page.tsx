@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import { DocsPage, DocsBody } from 'fumadocs-ui/page';
 import { notFound } from 'next/navigation';
-import { source, mainSource, developmentSource, selfHostedSource } from '@/lib/source';
+import { source } from '@/lib/source';
 import { generatePageMetadata, getCanonicalUrl } from '@/lib/seo-utils';
 import { getFinalPageTitle } from '@/lib/h1-extractor';
 import { readFile } from 'fs/promises';
