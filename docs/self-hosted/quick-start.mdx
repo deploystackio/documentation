@@ -1,0 +1,325 @@
+---
+title: Quick Start
+description: Get DeployStack running in minutes with Docker Compose or individual Docker containers.
+sidebar: Quick Start
+icon: Zap
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { Steps, Step } from 'fumadocs-ui/components/steps';
+
+# Quick Start
+
+Get DeployStack up and running in minutes. Choose between our recommended Docker Compose setup or individual Docker containers for maximum flexibility.
+
+## Prerequisites
+
+- **Docker**: [Install Docker](https://docs.docker.com/get-docker/)
+- **Docker Compose**: [Install Docker Compose](https://docs.docker.com/compose/install/)
+- **System Requirements**: 4GB RAM, 20GB disk space
+
+## Method 1: Docker Compose (Recommended)
+
+The fastest way to get DeployStack running with proper networking and persistence.
+
+<Steps>
+  <Step>
+    **Download and Start**
+    
+    Run these two commands to get DeployStack running:
+    
+    ```bash
+    curl -o docker-compose.yml https://raw.githubusercontent.com/deploystackio/deploystack/main/docker-compose.yml
+    DEPLOYSTACK_ENCRYPTION_SECRET=$(openssl rand -hex 16) docker-compose up -d
+    ```
+  </Step>
+  
+  <Step>
+    **Access DeployStack**
+    
+    Open your browser and navigate to:
+    - **DeployStack Interface**: [http://localhost:8080](http://localhost:8080)
+    - **Backend API**: [http://localhost:3000](http://localhost:3000)
+  </Step>
+  
+  <Step>
+    **Complete Setup**
+    
+    Follow the on-screen setup wizard to:
+    - Create your admin account
+    - Configure basic settings
+    - Set up your first MCP Server
+  </Step>
+</Steps>
+
+### Managing Your Installation
+
+```bash
+# View running services
+docker-compose ps
+
+# View logs
+docker-compose logs
+
+# Stop services
+docker-compose down
+
+# Start services
+docker-compose up -d
+
+# Update to latest version
+docker-compose pull && docker-compose up -d
+```
+
+## Method 2: Individual Docker Containers
+
+For more control over the deployment, run frontend and backend containers separately.
+
+### Step 1: Generate Encryption Secret
+
+<Tabs items={['Linux/macOS', 'Windows']}>
+  <Tab value="Linux/macOS">
+    ```bash
+    # Generate a secure secret
+    export DEPLOYSTACK_ENCRYPTION_SECRET=$(openssl rand -hex 16)
+    echo "Your encryption secret: $DEPLOYSTACK_ENCRYPTION_SECRET"
+    ```
+  </Tab>
+  
+  <Tab value="Windows">
+    ```powershell
+    # Generate a secure secret
+    $env:DEPLOYSTACK_ENCRYPTION_SECRET = -join ((1..32) | ForEach {'{0:X}' -f (Get-Random -Max 16)})
+    Write-Host "Your encryption secret: $env:DEPLOYSTACK_ENCRYPTION_SECRET"
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="warn">
+  **Save this secret!** You'll need it for upgrades and configuration changes.
+</Callout>
+
+### Step 2: Start Backend Service
+
+```bash
+docker run -d \
+  --name deploystack-backend \
+  -p 3000:3000 \
+  -e DEPLOYSTACK_FRONTEND_URL="http://localhost:8080" \
+  -e DEPLOYSTACK_ENCRYPTION_SECRET="$DEPLOYSTACK_ENCRYPTION_SECRET" \
+  -v deploystack_backend_persistent:/app/persistent_data \
+  deploystack/backend:latest
+```
+
+### Step 3: Start Frontend Service
+
+```bash
+docker run -d \
+  --name deploystack-frontend \
+  -p 8080:80 \
+  -e VITE_DEPLOYSTACK_BACKEND_URL="http://localhost:3000" \
+  -e VITE_APP_TITLE="DeployStack" \
+  deploystack/frontend:latest
+```
+
+### Step 4: Verify Installation
+
+```bash
+# Check if containers are running
+docker ps
+
+# Check backend health
+curl http://localhost:3000/
+
+# Access the interface
+open http://localhost:8080  # macOS
+# or visit http://localhost:8080 in your browser
+```
+
+## Production Deployment
+
+For production deployments on a server or VPS:
+
+### Update Environment Variables
+
+Replace `localhost` with your server's IP address or domain:
+
+<Tabs items={['Docker Compose', 'Individual Containers']}>
+  <Tab value="Docker Compose">
+    Create a `.env` file:
+    
+    ```bash
+    # .env file
+    DEPLOYSTACK_ENCRYPTION_SECRET=your-generated-secret-here
+    DEPLOYSTACK_FRONTEND_URL=http://YOUR_SERVER_IP:8080
+    VITE_DEPLOYSTACK_BACKEND_URL=http://YOUR_SERVER_IP:3000
+    ```
+    
+    Then start with:
+    ```bash
+    docker-compose up -d
+    ```
+  </Tab>
+  
+  <Tab value="Individual Containers">
+    Update the Docker run commands:
+    
+    ```bash
+    # Backend
+    docker run -d \
+      --name deploystack-backend \
+      -p 3000:3000 \
+      -e DEPLOYSTACK_FRONTEND_URL="http://YOUR_SERVER_IP:8080" \
+      -e DEPLOYSTACK_ENCRYPTION_SECRET="your-secret-here" \
+      -v deploystack_backend_persistent:/app/persistent_data \
+      deploystack/backend:latest
+    
+    # Frontend
+    docker run -d \
+      --name deploystack-frontend \
+      -p 8080:80 \
+      -e VITE_DEPLOYSTACK_BACKEND_URL="http://YOUR_SERVER_IP:3000" \
+      -e VITE_APP_TITLE="DeployStack Production" \
+      deploystack/frontend:latest
+    ```
+  </Tab>
+</Tabs>
+
+### Firewall Configuration
+
+Ensure your firewall allows traffic on the required ports:
+
+```bash
+# Ubuntu/Debian
+sudo ufw allow 3000  # Backend API
+sudo ufw allow 8080  # Frontend
+
+# CentOS/RHEL
+sudo firewall-cmd --permanent --add-port=3000/tcp
+sudo firewall-cmd --permanent --add-port=8080/tcp
+sudo firewall-cmd --reload
+```
+
+## Environment Variables Reference
+
+### Required Variables
+
+| Variable | Description | Example |
+|----------|-------------|----------|
+| `DEPLOYSTACK_ENCRYPTION_SECRET` | 32-character secret for encrypting sensitive data | `a1b2c3d4e5f6789...` |
+
+### Optional Variables
+
+| Variable | Description | Default | Example |
+|----------|-------------|---------|----------|
+| `DEPLOYSTACK_FRONTEND_URL` | URL where frontend is accessible | `http://localhost:8080` | `https://deploystack.company.com` |
+| `VITE_DEPLOYSTACK_BACKEND_URL` | Backend API URL for frontend | `http://localhost:3000` | `https://api.deploystack.company.com` |
+| `VITE_APP_TITLE` | Custom application title | `DeployStack` | `Company DeployStack` |
+
+## Next Steps
+
+Once DeployStack is running:
+
+<Steps>
+  <Step>
+    **Complete Initial Setup**
+    
+    - Create your admin account
+    - Configure global settings (email, authentication)
+    - Set up user roles and permissions
+  </Step>
+  
+  <Step>
+    **Deploy Your First MCP Server**
+    
+    - Browse the MCP server catalog
+    - Configure credentials and settings
+    - Deploy to your preferred cloud provider
+  </Step>
+  
+  <Step>
+    **Explore Advanced Features**
+    
+    - Set up team collaboration
+    - Create private MCP server catalogs
+    - Configure CI/CD integrations
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Common Issues
+
+#### Port Conflicts
+
+If ports 3000 or 8080 are already in use:
+
+```bash
+# Check what's using the ports
+lsof -i :3000
+lsof -i :8080
+
+# Use different ports
+docker run -p 3001:3000 ...  # Backend on port 3001
+docker run -p 8081:80 ...    # Frontend on port 8081
+```
+
+#### Services Won't Start
+
+```bash
+# Check container logs
+docker logs deploystack-backend
+docker logs deploystack-frontend
+
+# Check system resources
+docker stats
+df -h  # Check disk space
+free -h  # Check memory
+```
+
+#### Can't Access the Interface
+
+1. **Check if services are running**:
+   ```bash
+   docker ps
+   curl http://localhost:3000/
+   ```
+
+2. **Check firewall settings**:
+   ```bash
+   # Test local connectivity
+   telnet localhost 8080
+   telnet localhost 3000
+   ```
+
+3. **Check environment variables**:
+   ```bash
+   docker inspect deploystack-frontend | grep -A 10 Env
+   docker inspect deploystack-backend | grep -A 10 Env
+   ```
+
+### Getting Help
+
+If you need assistance:
+
+- **Community**: Join our [Discord](https://discord.gg/UjFWwByB)
+- **Issues**: Report problems on [GitHub](https://github.com/deploystackio/deploystack/issues)
+- **Support**: Contact us for enterprise support options
+
+## What's Next?
+
+### Learn More
+
+- **[Self-Hosted Documentation](/self-hosted)**: Comprehensive deployment guides
+- **[Local Development](/local-setup)**: Set up development environment
+- **[Global Settings](/global-settings)**: Configure email, auth, and more
+- **[User Roles](/roles)**: Manage team permissions
+
+### Deploy MCP Servers
+
+- **[MCP Server Catalog](https://deploystack.io/mcp)**: Browse available servers
+
+---
+
+**🎉 Congratulations!** You now have DeployStack running. Start deploying MCP servers and streamline your AI agent infrastructure!

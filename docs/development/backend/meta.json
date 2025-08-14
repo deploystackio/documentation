@@ -2,7 +2,7 @@
   "title": "Backend Development",
   "description": "Documentation for DeployStack Backend Development",
   "icon": "Server",
-  "root": true,
+  "root": false,
   "pages": [
     "..."
   ]

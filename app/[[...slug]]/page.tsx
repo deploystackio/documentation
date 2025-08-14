@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { DocsLayout } from 'fumadocs-ui/layouts/docs';
-import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { DocsPage, DocsBody } from 'fumadocs-ui/page';
 import { notFound } from 'next/navigation';
 import { source, mainSource, developmentSource, selfHostedSource } from '@/lib/source';
@@ -8,7 +7,7 @@ import { generatePageMetadata, getCanonicalUrl } from '@/lib/seo-utils';
 import { getFinalPageTitle } from '@/lib/h1-extractor';
 import { readFile } from 'fs/promises';
 import { getMDXComponents } from '@/mdx-components';
-import { homeOptions, docsOptions } from '../layout.config';
+import { docsOptions } from '../layout.config';
 import { generateTechArticleSchema, generateBreadcrumbSchema, combineSchemas } from '@/lib/structured-data';
 
 export default async function Page({
@@ -25,12 +24,9 @@ export default async function Page({
 
   const MDX = page.data.body;
 
-  // Determine if this is the root page (no sidebar needed)
-  const isRootPage = !slug || slug.length === 0;
-
-  // Generate structured data for non-root pages
+  // Generate structured data for all pages with content
   let structuredData = '';
-  if (!isRootPage && slug) {
+  if (slug && slug.length > 0) {
     const slugString = slug.join('/');
     const url = `https://deploystack.io/docs/${slugString}`;
     
@@ -56,34 +52,11 @@ export default async function Page({
     structuredData = combineSchemas(articleSchema, breadcrumbSchema);
   }
 
-  // Use HomeLayout for root page (no sidebar), DocsLayout for all other pages
-  if (isRootPage) {
-    return (
-      <>
-        <HomeLayout {...homeOptions}>
-          <div className="container max-w-6xl mx-auto px-4 py-8">
-            <article className="prose prose-neutral dark:prose-invert max-w-none">
-              <MDX components={getMDXComponents()} />
-            </article>
-          </div>
-        </HomeLayout>
-      </>
-    );
-  }
+  // Always use the unified source pageTree that includes all sections
+  // Instead of switching between different trees, show all sections together
+  const pageTree = source.pageTree;
 
-  // Determine which section we're in and get the appropriate page tree
-  const firstSegment = slug[0];
-  let pageTree = mainSource.pageTree;
-  let navTitle = 'DeployStack Docs';
-  
-  if (firstSegment === 'development') {
-    pageTree = developmentSource.pageTree;
-    navTitle = 'Development Docs';
-  } else if (firstSegment === 'self-hosted') {
-    pageTree = selfHostedSource.pageTree;
-    navTitle = 'Self-Hosted Docs';
-  }
-
+  // Always use DocsLayout with sidebar for all pages including root
   return (
     <>
       {structuredData && (
@@ -96,7 +69,7 @@ export default async function Page({
         {...docsOptions}
         tree={pageTree}
         nav={{
-          title: navTitle,
+          title: 'DeployStack Docs',
           url: '/',
         }}
         sidebar={{
