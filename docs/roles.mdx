@@ -22,22 +22,22 @@ User roles determine what actions a person can perform in DeployStack. Think of 
 - Manage roles and permissions
 - Access all system features
 - Manage all teams
-- View cloud credentials metadata across all teams (no credential values shown)
+- View MCP server credentials metadata across all teams (no credential values shown)
 - **MCP Catalog**: Full management of global MCP servers and categories
 - **MCP Oversight**: View all team MCP servers across the platform (read-only)
 
 **Important**: The first person to register automatically becomes a Global Administrator.
 
-**Note**: Global Administrators can see that teams have cloud credentials but cannot view the actual credential values for security reasons.
+**Note**: Global Administrators can see that teams have MCP server credentials but cannot view the actual credential values for security reasons.
 
 ### Global User
-**Who needs this**: Regular users who want to deploy applications.
+**Who needs this**: Regular users who want to configure MCP servers.
 
 **What they can do**:
 - View and edit their own profile
-- Create up to 3 teams
+- Create multiple teams
 - Manage their own teams
-- Deploy applications through their teams
+- Configure MCP servers through their teams
 - **MCP Catalog**: Browse and view global MCP servers only
 
 **Note**: This is the default role for new users.
@@ -48,11 +48,11 @@ User roles determine what actions a person can perform in DeployStack. Think of 
 **What they can do**:
 - Manage their team's settings
 - View team members
-- **Add new members to their teams** (up to 3 members total)
+- **Add new members to their teams**
 - **Change member roles** (promote team_user to team_admin, or demote)
 - **Remove team members** (except team owners)
 - **Transfer team ownership** to another team member
-- Manage team deployments
+- Manage team MCP server configurations
 - Delete teams they own (except default teams)
 - **MCP Catalog**: View global servers + full management of team MCP servers
 
@@ -79,7 +79,6 @@ The following table shows exactly what each role can do with team member managem
 - **Team admins** can only manage team_users, not other team_admins or owners
 - **Team owners** have full control over their teams (except default teams)
 - **Global admins** can override most restrictions but still cannot modify default teams
-- **3-member limit** applies to all teams (owner + 2 additional members maximum)
 
 ## MCP Catalog Permissions
 
@@ -100,7 +99,7 @@ The MCP (Model Context Protocol) Catalog has specific permissions based on your 
 - **Team Isolation**: Teams can only manage their own servers, not other teams' servers
 
 ### Team User
-**Who needs this**: Basic team members who participate in deployments.
+**Who needs this**: Basic team members who participate in MCP server configuration.
 
 **What they can do**:
 - View team information
@@ -112,13 +111,13 @@ The MCP (Model Context Protocol) Catalog has specific permissions based on your 
 
 ## Understanding Teams
 
-Teams are groups where users organize their deployment projects. Here's how teams work:
+Teams are groups where users organize their MCP server configurations. Here's how teams work:
 
 ### Team Basics
-- **Automatic Team**: Every user gets their own team when they register
-- **Team Limit**: Users can create up to 3 teams total
+- **Automatic Team**: Every user gets their own default team when they register
+- **Multi-User Support**: Teams support multiple members with role-based access control
 - **Team Owner**: The person who created the team has full control
-- **Single User Teams**: Currently, each team has one user (multi-user teams coming soon)
+- **Default Team Protection**: Your personal default team cannot have additional members added
 
 ### Team Management
 - **Create Teams**: Use descriptive names for your different projects
@@ -134,13 +133,13 @@ Teams are groups where users organize their deployment projects. Here's how team
 
 ### Small Team
 - **Administrator**: One person manages the system and users
-- **Team Members**: Everyone else is a Global User with their own teams
-- **Collaboration**: Users can share deployment information outside the system
+- **Team Members**: Everyone else is a Global User who can join teams
+- **Collaboration**: Users can collaborate within shared teams
 
 ### Organization
 - **System Admin**: Global Administrator manages the DeployStack installation
 - **Project Leads**: Team Administrators manage specific project teams
-- **Developers**: Global Users participate in deployments
+- **Developers**: Global Users participate in team configurations
 
 ## Managing User Roles
 
@@ -183,8 +182,7 @@ All users can:
 - **Delete teams**: Remove teams you no longer need
 
 ### Team Limitations
-- **3 Team Maximum**: You can only create 3 teams total
-- **One User per Team**: Teams currently support single users
+- **Default Team Protection**: Your personal default team cannot have additional members
 - **Owner Control**: Only team owners can modify team settings
 
 ## Security and Access Control
@@ -209,7 +207,7 @@ All users can:
 
 ### Can't Create Teams
 **Problem**: "Create Team button is disabled"
-**Solution**: You may have reached the 3-team limit. Delete unused teams or contact your administrator.
+**Solution**: Contact your administrator if you're unable to create teams.
 
 ### Can't Change Role
 **Problem**: "I want to be an administrator"
