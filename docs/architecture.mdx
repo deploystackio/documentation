@@ -1,0 +1,317 @@
+---
+title: Architecture Overview
+description: Complete architectural overview of DeployStack's Control Plane / Data Plane system for enterprise MCP management
+sidebar: Architecture
+icon: Network
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Zap, Shield, Monitor, Cloud, Settings, Users } from 'lucide-react';
+
+# DeployStack Architecture
+
+DeployStack transforms MCP from individual developer tools into enterprise-ready infrastructure through a sophisticated **Control Plane / Data Plane architecture**. Our platform eliminates configuration complexity, provides secure credential management, and offers complete organizational visibility for teams of any size.
+
+## The Problem: MCP Without Management
+
+<div style={{backgroundColor: '#000', padding: '2rem', borderRadius: '0.75rem', marginBottom: '2rem'}}>
+  <img
+    src="https://deploystack.io/img/architecture-without-deploystack.webp"
+    alt="Traditional MCP architecture showing direct connection between Agent (VS Code) and MCP Server"
+    style={{maxWidth: '100%', height: 'auto', display: 'block', margin: '0 auto'}}
+  />
+</div>
+
+Traditional MCP implementation creates significant organizational challenges:
+
+### Configuration Hell
+- **Manual Setup**: Developers spend hours configuring each MCP server with complex JSON files
+- **Environment Variables**: API keys and tokens scattered across local `.env` files and shell configurations
+- **Inconsistent Environments**: "Works on my machine" problems due to configuration drift across team members
+
+### Security & Compliance Gaps
+- **Credential Sprawl**: API keys shared via Slack, email, or committed to version control
+- **Zero Visibility**: Organizations have no insight into which MCP tools are being used or by whom
+- **No Access Control**: Anyone can run any MCP server locally without oversight
+
+### Operational Chaos
+- **Onboarding Friction**: New team members need days to set up all required MCP tools
+- **Tool Discovery**: Developers waste time finding and configuring tools individually
+- **No Standardization**: No central catalog or approved tool list for organizational use
+
+## The Solution: Enterprise Control Plane
+
+<div style={{backgroundColor: '#000', padding: '2rem', borderRadius: '0.75rem', marginBottom: '2rem'}}>
+  <img
+    src="https://deploystack.io/img/architecture-with-deploystack.webp"
+    alt="DeployStack architecture showing cloud control plane managing local gateway and MCP servers"
+    style={{maxWidth: '100%', height: 'auto', display: 'block', margin: '0 auto'}}
+  />
+</div>
+
+DeployStack introduces a **Control Plane / Data Plane architecture** that brings enterprise-grade management to the MCP ecosystem while maintaining the performance and flexibility developers expect.
+
+## Core Components
+
+<Cards>
+  <Card 
+    icon={<Cloud />} 
+    title="Control Plane"
+  >
+    **cloud.deploystack.io** - Centralized management platform for teams, credentials, and MCP server configurations
+  </Card>
+  
+  <Card 
+    icon={<Shield />} 
+    title="Data Plane"
+  >
+    **DeployStack Gateway** - Local secure proxy managing persistent MCP server processes with credential injection
+  </Card>
+  
+  <Card 
+    icon={<Monitor />} 
+    title="Developer Interface"
+  >
+    **Agent Integration** - VS Code, CLI tools, and other MCP clients connect seamlessly through the gateway
+  </Card>
+</Cards>
+
+### Control Plane: cloud.deploystack.io
+
+The cloud-based control plane provides centralized management for all MCP infrastructure:
+
+#### Team & Access Management
+- **Role-Based Access Control**: [Define teams](/teams), [roles, and permissions](/roles) for MCP server access
+- **Centralized User Management**: Single source of truth for team membership and access rights
+- **Policy Enforcement**: Granular control over which teams can access which MCP servers
+
+#### Secure Credential Vault
+- **Encrypted Storage**: All API keys and tokens stored with [enterprise-grade encryption](/security)
+- **Zero-Exposure Model**: Developers never directly handle credentials
+
+#### MCP Server Catalog
+- **Configuration Management**: [Store and manage all MCP server configurations](/mcp-catalog) including commands, arguments, and environment variables
+- **Version Control**: Track changes to MCP server configurations over time (coming soon)
+
+#### Analytics & Governance (Coming soon)
+- **Usage Analytics**: Track which developers use which MCP servers and how frequently
+- **Cost Tracking**: Monitor expensive API usage across teams and optimize spending
+- **Audit Trails**: Complete logging of all MCP server interactions for compliance
+
+### Data Plane: DeployStack Gateway
+
+The local gateway acts as an intelligent proxy and process manager running on each developer's machine:
+
+#### Persistent Process Management
+- **Background Processes**: All configured MCP servers run as [persistent background processes](/development/gateway/process-management) when the gateway starts
+- **Instant Availability**: Tools are immediately available without process spawning delays
+- **Language Agnostic**: Supports MCP servers written in Node.js, Python, Go, Rust, or any language
+
+#### Dual Transport Architecture
+The gateway implements sophisticated transport protocols for maximum compatibility:
+
+**SSE Transport (VS Code Compatibility)**:
+```
+VS Code → GET /sse → DeployStack Gateway
+       ← SSE Stream with session endpoint
+VS Code → POST /message?session=xyz → Gateway → MCP Server (stdio)
+       ← JSON-RPC response via SSE
+```
+
+**stdio Transport (CLI Compatibility)**:
+```
+CLI Tool → DeployStack Gateway → MCP Server (stdio)
+        ← Direct JSON-RPC over stdio
+```
+
+#### Secure Credential Injection
+- **Runtime Injection**: Credentials are injected directly into MCP server process environments at startup
+- **Zero Disk Exposure**: No credentials written to disk in plain text
+- **Process Isolation**: Each MCP server runs in its own isolated environment
+
+## Protocol Flow
+
+### 1. Developer Authentication
+```bash
+deploystack login
+```
+- Gateway authenticates with cloud.deploystack.io using OAuth2
+- Downloads team configurations and access policies
+- Caches encrypted configurations locally
+
+### 2. Gateway Startup
+```bash
+deploystack start
+```
+- **Configuration Sync**: Downloads latest team MCP server configurations
+- **Process Spawning**: Starts all configured MCP servers as background processes
+- **Credential Injection**: Securely injects team credentials into process environments
+- **Service Discovery**: Discovers and caches all available tools from running processes
+- **HTTP Server**: Starts local server at `http://localhost:9095/sse` for client connections
+
+### 3. Client Connection
+**VS Code Configuration**:
+```json
+{
+  "mcpServers": {
+    "deploystack": {
+      "url": "http://localhost:9095/sse"
+    }
+  }
+}
+```
+
+**Connection Flow**:
+1. **SSE Establishment**: VS Code connects to `/sse` endpoint
+2. **Session Creation**: Gateway generates cryptographically secure session ID
+3. **Tool Discovery**: Client calls `tools/list` to discover available MCP servers
+4. **Request Routing**: All tool requests routed through gateway to persistent MCP processes
+
+### 4. Request Processing
+```
+Client Request → Gateway Session Validation → Route to MCP Process → Return Response
+```
+
+## Security Architecture
+
+DeployStack implements enterprise-grade security across all components of the platform. For comprehensive security details including credential management, access control, and compliance features, see our [Security Documentation](/security).
+
+Key security principles:
+- **Zero-Trust Credential Model**: Credentials never stored on developer machines
+- **Process Isolation**: Each MCP server runs in complete isolation
+- **Cryptographic Sessions**: 256-bit entropy for all client connections
+
+## Performance Optimization
+
+### Persistent Process Model
+Unlike on-demand spawning, DeployStack uses persistent background processes:
+
+- **Zero Latency**: All tools immediately available from running processes
+- **Resource Efficiency**: No spawn/cleanup overhead during development workflows
+- **Memory Stability**: Consistent resource usage patterns
+- **Parallel Processing**: Concurrent handling of multiple requests across processes
+
+### Caching Strategy
+DeployStack implements sophisticated caching mechanisms to optimize performance and enable offline operation. For detailed information about the caching architecture, implementation, and team isolation strategies, see our [Gateway Caching System Documentation](/development/gateway/caching-system).
+
+## Enterprise Features
+
+### Organizational Visibility
+- **Real-Time Analytics**: Live dashboard showing MCP server usage across the organization
+- **Cost Optimization**: Track expensive API usage and identify optimization opportunities
+- **Resource Planning**: Understand which tools drive the most value for different teams
+
+### Compliance & Governance
+- **Audit Logging**: Complete trails of all MCP server interactions
+- **Policy Enforcement**: Centralized policies automatically enforced at the gateway level
+- **Access Reviews**: Regular reviews of team access to sensitive MCP servers
+
+### Operational Controls
+- **Centralized Updates**: Push MCP server configuration changes to all team members
+- **Emergency Disable**: Instantly disable problematic MCP servers across the organization
+- **Health Monitoring**: Real-time monitoring of MCP server performance and availability
+
+## Team Context Switching
+
+DeployStack supports multiple team memberships with seamless context switching:
+
+```bash
+# List available teams
+deploystack teams
+
+# Switch to different team
+deploystack teams --switch 2
+```
+
+**Context Switch Process**:
+1. **Graceful Shutdown**: Stop all current team's MCP server processes
+2. **Configuration Refresh**: Download new team's configurations and credentials
+3. **Process Restart**: Start all MCP servers for the new team
+4. **State Synchronization**: Update local cache and runtime state
+
+## Deployment Models
+
+### Cloud-Native (Default)
+- **Control Plane**: Hosted at cloud.deploystack.io
+- **Data Plane**: Local gateway on developer machines
+- **Benefits**: Zero infrastructure management, automatic updates, shared team configurations
+
+### Self-Hosted Enterprise
+- **Control Plane**: Deployed in customer's infrastructure
+- **Data Plane**: Local gateways connect to private control plane
+- **Benefits**: Complete data sovereignty, custom compliance requirements, air-gapped environments
+
+## Development Workflow
+
+### Before DeployStack
+```bash
+# Developer manually configures each MCP server
+1. Find MCP server documentation
+2. Install server individually (npm install @github/mcp)
+3. Obtain API credentials from various sources
+4. Configure complex JSON in VS Code settings
+5. Debug configuration issues
+6. Repeat for each team member
+```
+
+### After DeployStack
+```bash
+# One-time setup for entire team
+1. npm install -g @deploystack/gateway
+2. deploystack login
+3. # Done! All authorized tools available immediately
+```
+
+**VS Code Configuration**:
+```json
+{
+  "mcpServers": {
+    "deploystack": {
+      "url": "http://localhost:9095/sse"
+    }
+  }
+}
+```
+
+## Monitoring & Observability (comming soon)
+
+### Gateway Metrics
+- **Process Health**: Real-time status of all MCP server processes
+- **Request Throughput**: Performance metrics for tool usage
+- **Error Rates**: Failure detection and automatic recovery
+- **Resource Usage**: CPU, memory, and network consumption
+
+### Cloud Metrics
+- **Team Activity**: Organization-wide usage patterns and trends
+- **Cost Analysis**: API usage costs and optimization recommendations
+- **Security Events**: Authentication, authorization, and policy violations
+- **Performance Analytics**: Gateway and MCP server performance across teams
+
+## Benefits Summary
+
+### For Developers
+- **Zero Configuration**: One command setup, then everything works
+- **Instant Access**: All team tools immediately available
+- **Consistent Environment**: Identical setup across all team members
+- **No Credential Management**: Never handle API keys or tokens
+
+### for Organizations
+- **Complete Visibility**: Know what MCP tools are used, by whom, and how often
+- **Security Control**: Centralized credential management and access policies
+- **Cost Optimization**: Track and optimize expensive API usage
+- **Compliance Ready**: Full audit trails and governance controls
+
+### For Administrators
+- **Central Management**: Single dashboard for entire MCP ecosystem
+- **Policy Enforcement**: Granular control over tool access by team and role
+- **Instant Deployment**: Push configuration changes to all team members
+- **Operational Insights**: Real-time monitoring and analytics
+
+<Callout type="info">
+  **Enterprise Transformation**: DeployStack transforms MCP from individual developer tools into enterprise-ready infrastructure, providing the security, governance, and operational control that organizations need while maintaining the developer experience that teams love.
+</Callout>
+
+---
+
+**Next Steps**: Explore our [Quick Start Guide](/quick-start) to experience the architecture in action, or dive into the [Development Documentation](/development) to understand implementation details.

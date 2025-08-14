@@ -1,6 +1,6 @@
 ---
 title: Development Guide
-description: Complete development documentation for DeployStack - covering frontend, backend, and contribution guidelines for the MCP server deployment platform.
+description: Complete development documentation for DeployStack - covering frontend, backend, and contribution guidelines for the MCP server management platform.
 icon: FileCode
 ---
 
@@ -9,13 +9,13 @@ import { Code2, Server, GitBranch, Users, Shield } from 'lucide-react';
 
 # DeployStack Development
 
-Welcome to the DeployStack development documentation! DeployStack is a comprehensive enterprise platform for deploying and managing Model Context Protocol (MCP) servers, featuring a cloud control plane, local gateway proxy, and modern web interface for team-based MCP server orchestration.
+Welcome to the DeployStack development documentation! DeployStack is a comprehensive enterprise platform for managing Model Context Protocol (MCP) servers, featuring a cloud control plane, local gateway proxy, and modern web interface for team-based MCP server orchestration.
 
 ## Architecture Overview
 
 DeployStack implements a sophisticated Control Plane / Data Plane architecture for enterprise MCP server management:
 
-- **Frontend**: Vue 3 + TypeScript web application providing the management interface for MCP server deployments
+- **Frontend**: Vue 3 + TypeScript web application providing the management interface for MCP server configurations
 - **Backend**: Fastify-based cloud control plane handling authentication, team management, and configuration distribution
 - **Gateway**: Local secure proxy that runs on developer machines, managing MCP server processes and credential injection
 - **Shared**: Common utilities and TypeScript types used across all services
