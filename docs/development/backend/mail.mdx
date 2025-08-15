@@ -51,17 +51,9 @@ The email system automatically integrates with your existing SMTP global setting
 
 ## Basic Usage
 
-### Import the Email Service
-
 ```typescript
 import { EmailService } from '../email';
-// or
-import EmailService from '../email';
-```
 
-### Send a Basic Email
-
-```typescript
 const result = await EmailService.sendEmail({
   to: 'user@example.com',
   subject: 'Welcome to DeployStack',
@@ -69,139 +61,40 @@ const result = await EmailService.sendEmail({
   variables: {
     userName: 'John Doe',
     userEmail: 'user@example.com',
-    loginUrl: 'https://app.deploystack.com/login',
-    supportEmail: 'support@deploystack.com'
+    loginUrl: 'https://app.deploystack.io/login'
   }
 });
 
 if (result.success) {
-  request.log.info({
-    messageId: result.messageId,
-    recipients: result.recipients,
-    operation: 'send_email'
-  }, 'Email sent successfully');
+  request.log.info('Email sent successfully');
 } else {
-  request.log.error({
-    error: result.error,
-    recipients: result.recipients,
-    operation: 'send_email'
-  }, 'Failed to send email');
+  request.log.error('Failed to send email:', result.error);
 }
-```
-
-### Send to Multiple Recipients
-
-```typescript
-const result = await EmailService.sendEmail({
-  to: ['user1@example.com', 'user2@example.com'],
-  subject: 'System Maintenance Notice',
-  template: 'notification',
-  variables: {
-    title: 'Scheduled Maintenance',
-    message: 'We will be performing system maintenance on Sunday at 2 AM UTC.',
-    actionUrl: 'https://status.deploystack.com',
-    actionText: 'View Status Page'
-  }
-});
 ```
 
 ## Type-Safe Helper Methods
 
-The email service provides type-safe helper methods for common email types:
-
-### Welcome Email
+### Available Methods
+- `sendWelcomeEmail(options)` - Welcome email for new users
+- `sendPasswordResetEmail(options)` - Password reset instructions  
+- `sendNotificationEmail(options)` - General notifications
 
 ```typescript
+// Example usage
 const result = await EmailService.sendWelcomeEmail({
   to: 'newuser@example.com',
   userName: 'Jane Smith',
   userEmail: 'newuser@example.com',
-  loginUrl: 'https://app.deploystack.com/login',
-  supportEmail: 'support@deploystack.com' // optional
+  loginUrl: 'https://app.deploystack.io/login'
 });
 ```
 
-### Password Reset Email
+## Advanced Features
 
-```typescript
-const result = await EmailService.sendPasswordResetEmail({
-  to: 'user@example.com',
-  userName: 'John Doe',
-  resetUrl: 'https://app.deploystack.com/reset-password?token=abc123',
-  expirationTime: '24 hours',
-  supportEmail: 'support@deploystack.com' // optional
-});
-```
-
-### Notification Email
-
-```typescript
-const result = await EmailService.sendNotificationEmail({
-  to: 'user@example.com',
-  title: 'Deployment Complete',
-  message: 'Your application has been successfully deployed to production.',
-  actionUrl: 'https://app.deploystack.com/deployments/123',
-  actionText: 'View Deployment',
-  userName: 'John Doe' // optional
-});
-```
-
-## Advanced Usage
-
-### Custom From Address
-
-```typescript
-const result = await EmailService.sendEmail({
-  to: 'user@example.com',
-  subject: 'Custom Sender Example',
-  template: 'notification',
-  from: {
-    name: 'DeployStack Notifications',
-    email: 'notifications@deploystack.com'
-  },
-  variables: {
-    title: 'Custom Message',
-    message: 'This email is sent from a custom sender.'
-  }
-});
-```
-
-### Email with Attachments
-
-```typescript
-const result = await EmailService.sendEmail({
-  to: 'user@example.com',
-  subject: 'Report Attached',
-  template: 'notification',
-  variables: {
-    title: 'Monthly Report',
-    message: 'Please find your monthly deployment report attached.'
-  },
-  attachments: [
-    {
-      filename: 'report.pdf',
-      content: reportBuffer,
-      contentType: 'application/pdf'
-    }
-  ]
-});
-```
-
-### CC and BCC Recipients
-
-```typescript
-const result = await EmailService.sendEmail({
-  to: 'primary@example.com',
-  cc: ['manager@example.com'],
-  bcc: ['audit@example.com'],
-  subject: 'Important Update',
-  template: 'notification',
-  variables: {
-    title: 'System Update',
-    message: 'Important system update notification.'
-  }
-});
-```
+- **Custom From Address**: Override default sender information
+- **Multiple Recipients**: Send to arrays of email addresses
+- **Attachments**: Include files with emails
+- **CC/BCC**: Additional recipient types supported
 
 ## Template System
 
@@ -221,97 +114,17 @@ All templates have access to these common variables:
 - `appName`: Application name (default: 'DeployStack')
 - `supportEmail`: Support email address (if provided)
 
-### Creating Custom Templates
+### Custom Templates
 
-1. **Create a new Pug template** in `src/email/templates/`:
+To create custom templates:
 
-```pug
-//- custom-template.pug
-//- @description Custom email template
-//- @variables customVar1, customVar2
-extends layouts/base.pug
+1. Add new Pug template in `src/email/templates/`
+2. Add TypeScript types in `src/email/types.ts`
+3. Use with `EmailService.sendEmail()`
 
-block content
-  h1 Custom Email
-  
-  p Hello #{customVar1}!
-  
-  p= customVar2
-  
-  .text-center
-    a.button(href="https://example.com") Take Action
-```
+#### Color Guidelines
 
-2. **Add TypeScript types** in `src/email/types.ts`:
-
-```typescript
-export interface CustomEmailVariables {
-  customVar1: string;
-  customVar2: string;
-}
-
-// Add to TemplateVariableMap
-export interface TemplateVariableMap {
-  welcome: WelcomeEmailVariables;
-  'password-reset': PasswordResetEmailVariables;
-  notification: NotificationEmailVariables;
-  'custom-template': CustomEmailVariables; // Add this line
-}
-```
-
-3. **Use the custom template**:
-
-```typescript
-const result = await EmailService.sendEmail({
-  to: 'user@example.com',
-  subject: 'Custom Email',
-  template: 'custom-template',
-  variables: {
-    customVar1: 'John',
-    customVar2: 'This is a custom message.'
-  }
-});
-```
-
-## Template Layout System
-
-### Base Layout
-
-The base layout (`layouts/base.pug`) provides:
-
-- Responsive HTML email structure
-- Cross-client CSS compatibility
-- Header and footer inclusion
-- Mobile-friendly design
-- Professional styling
-
-### Header Component
-
-The header (`layouts/header.pug`) displays:
-
-- Application name/logo
-- Consistent branding
-- Professional appearance
-
-### Footer Component
-
-The footer (`layouts/footer.pug`) includes:
-
-- Copyright information
-- Contact information
-- Unsubscribe/support links
-- Legal disclaimers
-
-### Customizing Layouts
-
-To customize the layout, modify the files in `src/email/templates/layouts/`:
-
-```pug
-//- layouts/header.pug
-.header
-  img(src="https://your-domain.com/logo.png" alt="Your Logo" style="height: 40px;")
-  h1= appName || 'Your App Name'
-```
+When adding colors to email templates, follow the official DeployStack color system to maintain brand consistency. If you want to check what our primary colors are, visit the [UI Design System](/development/frontend/ui-design-system) page.
 
 ## Utility Methods
 
@@ -320,349 +133,50 @@ To customize the layout, modify the files in `src/email/templates/layouts/`:
 ```typescript
 const status = await EmailService.testConnection(request.log);
 if (status.success) {
-  request.log.info({
-    operation: 'test_smtp_connection'
-  }, 'SMTP connection successful');
+  request.log.info('SMTP connection successful');
 } else {
-  request.log.error({
-    error: status.error,
-    operation: 'test_smtp_connection'
-  }, 'SMTP connection failed');
+  request.log.error('SMTP connection failed:', status.error);
 }
 ```
 
-### Check SMTP Configuration
+### Other Utilities
 
-```typescript
-const status = await EmailService.getSmtpStatus(request.log);
-if (status.configured) {
-  request.log.info({
-    operation: 'check_smtp_status'
-  }, 'SMTP is configured');
-} else {
-  request.log.error({
-    error: status.error,
-    operation: 'check_smtp_status'
-  }, 'SMTP not configured');
-}
-```
-
-### Refresh Configuration
-
-```typescript
-// Call this after updating SMTP settings
-await EmailService.refreshConfiguration(request.log);
-```
-
-### Get Available Templates
-
-```typescript
-const templates = EmailService.getAvailableTemplates(request.log);
-request.log.info({
-  templates,
-  templateCount: templates.length,
-  operation: 'get_available_templates'
-}, 'Available templates retrieved');
-// Output: ['welcome', 'password-reset', 'notification']
-```
-
-### Validate Template
-
-```typescript
-const validation = await EmailService.validateTemplate('welcome', {
-  userName: 'John',
-  userEmail: 'john@example.com',
-  loginUrl: 'https://app.com/login'
-});
-
-if (validation.valid) {
-  request.log.info({
-    template: 'welcome',
-    operation: 'validate_template'
-  }, 'Template is valid');
-} else {
-  request.log.error({
-    template: 'welcome',
-    errors: validation.errors,
-    missingVariables: validation.missingVariables,
-    operation: 'validate_template'
-  }, 'Template validation failed');
-}
-```
+- `getSmtpStatus()` - Check SMTP configuration status
+- `refreshConfiguration()` - Reload SMTP configuration
+- `getAvailableTemplates()` - Get list of available templates
+- `validateTemplate()` - Validate template and variables
 
 ## Error Handling
 
-The email service provides comprehensive error handling:
+The email service provides comprehensive error handling with specific error messages for:
 
-```typescript
-const result = await EmailService.sendEmail({
-  to: 'invalid-email',
-  subject: 'Test',
-  template: 'welcome',
-  variables: { userName: 'Test' }
-});
+- SMTP configuration issues
+- Missing templates
+- Invalid email addresses
+- Connection failures
 
-if (!result.success) {
-  switch (result.error) {
-    case 'SMTP configuration is not available or invalid':
-      // Handle SMTP configuration issues
-      break;
-    case 'Template \'welcome\' not found':
-      // Handle missing template
-      break;
-    default:
-      // Handle other errors
-      request.log.error({
-        error: result.error,
-        operation: 'send_email'
-      }, 'Email failed');
-  }
-}
-```
+## Security & Performance
 
-## Performance Considerations
+### Security Features
+- Passwords encrypted in global settings
+- Secure connections (TLS/SSL) supported
+- Template security with escaped variable injection
 
-### Template Caching
+### Performance Features
+- Template caching after first compilation
+- Connection pooling (max 5 concurrent connections)
+- Rate limiting (5 emails per 20 seconds)
 
-Templates are automatically cached after first compilation:
-
-```typescript
-// First call compiles and caches the template
-await EmailService.sendEmail({ template: 'welcome', ... });
-
-// Subsequent calls use cached template (faster)
-await EmailService.sendEmail({ template: 'welcome', ... });
-```
-
-### Clear Cache (Development)
-
-```typescript
-import { TemplateRenderer } from '../email';
-
-// Clear template cache during development
-TemplateRenderer.clearCache();
-```
-
-### Connection Pooling
-
-The email service uses connection pooling for better performance:
-
-- Maximum 5 concurrent connections
-- Maximum 100 messages per connection
-- Rate limiting: 5 emails per 20 seconds
-
-## Security Best Practices
-
-### Input Validation
-
-All email parameters are validated using Zod schemas:
-
-```typescript
-// This will throw a validation error
-await EmailService.sendEmail({
-  to: 'invalid-email-format',  // ❌ Invalid email
-  subject: '',                 // ❌ Empty subject
-  template: '',               // ❌ Empty template
-  variables: {}
-});
-```
-
-### Template Security
-
-- Templates are compiled server-side (no client-side execution)
-- Variable injection is escaped by default
-- No arbitrary code execution in templates
-
-### SMTP Security
-
-- Passwords are encrypted in global settings
-- Secure connections (TLS/SSL) are supported
-- Connection pooling with rate limiting
-
-## Integration Examples
+## Common Usage Patterns
 
 ### User Registration
+Send welcome emails after user account creation.
 
-```typescript
-// In your user registration service
-import { EmailService } from '../email';
+### Password Reset
+Generate reset tokens and send secure reset links.
 
-export class UserService {
-  static async registerUser(userData: UserRegistrationData) {
-    // Create user account
-    const user = await this.createUser(userData);
-    
-    // Send welcome email
-    const emailResult = await EmailService.sendWelcomeEmail({
-      to: user.email,
-      userName: user.name,
-      userEmail: user.email,
-      loginUrl: `${process.env.FRONTEND_URL}/login`,
-      supportEmail: 'support@deploystack.com'
-    });
-    
-    if (!emailResult.success) {
-      request.log.error({
-        error: emailResult.error,
-        userId: user.id,
-        operation: 'send_welcome_email'
-      }, 'Failed to send welcome email');
-      // Don't fail registration if email fails
-    }
-    
-    return user;
-  }
-}
-```
-
-### Password Reset Flow
-
-```typescript
-// In your auth service
-import { EmailService } from '../email';
-
-export class AuthService {
-  static async requestPasswordReset(email: string) {
-    const user = await this.findUserByEmail(email);
-    if (!user) {
-      throw new Error('User not found');
-    }
-    
-    // Generate reset token
-    const resetToken = await this.generateResetToken(user.id);
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    
-    // Send reset email
-    const emailResult = await EmailService.sendPasswordResetEmail({
-      to: user.email,
-      userName: user.name,
-      resetUrl,
-      expirationTime: '24 hours',
-      supportEmail: 'support@deploystack.com'
-    });
-    
-    if (!emailResult.success) {
-      throw new Error('Failed to send password reset email');
-    }
-    
-    return { message: 'Password reset email sent' };
-  }
-}
-```
-
-### Deployment Notifications
-
-```typescript
-// In your deployment service
-import { EmailService } from '../email';
-
-export class DeploymentService {
-  static async notifyDeploymentComplete(deploymentId: string) {
-    const deployment = await this.getDeployment(deploymentId);
-    const user = await this.getUser(deployment.userId);
-    
-    const emailResult = await EmailService.sendNotificationEmail({
-      to: user.email,
-      title: 'Deployment Complete',
-      message: `Your deployment "${deployment.name}" has been successfully completed.`,
-      actionUrl: `${process.env.FRONTEND_URL}/deployments/${deploymentId}`,
-      actionText: 'View Deployment',
-      userName: user.name
-    });
-    
-    if (!emailResult.success) {
-      request.log.error({
-        error: emailResult.error,
-        deploymentId,
-        userId: user.id,
-        operation: 'send_deployment_notification'
-      }, 'Failed to send deployment notification');
-    }
-  }
-}
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **SMTP Configuration Not Found**
-
-   ```text
-   Error: SMTP configuration is not complete. Please configure SMTP settings in global settings.
-   ```
-
-   **Solution**: Configure SMTP settings in the global settings interface.
-
-2. **Template Not Found**
-
-   ```text
-   Error: Template 'welcome' not found at /path/to/templates/welcome.pug
-   ```
-
-   **Solution**: Ensure the template file exists in the templates directory.
-
-3. **Invalid Email Address**
-
-   ```text
-   Error: Invalid email address
-   ```
-
-   **Solution**: Validate email addresses before sending.
-
-4. **SMTP Connection Failed**
-
-   ```text
-   Error: Connection timeout
-   ```
-
-   **Solution**: Check SMTP server settings and network connectivity.
-
-### Debug Mode
-
-Enable debug logging for email operations:
-
-```typescript
-// Set environment variable
-process.env.DEBUG_EMAIL = 'true';
-
-// Or log email results
-const result = await EmailService.sendEmail({...}, request.log);
-request.log.debug({
-  success: result.success,
-  messageId: result.messageId,
-  recipients: result.recipients,
-  operation: 'send_email'
-}, 'Email result');
-```
-
-### Testing SMTP Configuration
-
-```typescript
-// Test SMTP connection before sending emails
-const connectionTest = await EmailService.testConnection(request.log);
-if (!connectionTest.success) {
-  request.log.error({
-    error: connectionTest.error,
-    operation: 'test_smtp_connection'
-  }, 'SMTP test failed');
-  return;
-}
-
-// Proceed with sending emails
-const emailResult = await EmailService.sendEmail({...}, request.log);
-```
-
-## Best Practices
-
-1. **Always handle email failures gracefully** - Don't let email failures break your main application flow
-2. **Use type-safe helper methods** when possible for better developer experience
-3. **Test email templates** in different email clients for compatibility
-4. **Monitor email delivery** and set up alerts for failures
-5. **Use meaningful subject lines** and clear call-to-action buttons
-6. **Respect user preferences** for email notifications
-7. **Keep templates simple** and mobile-friendly
-8. **Cache templates** in production for better performance
+### System Notifications
+Alert users about deployments, system updates, or important events.
 
 ## API Reference
 
@@ -692,4 +206,4 @@ const emailResult = await EmailService.sendEmail({...}, request.log);
 
 ---
 
-For more information about global settings configuration, see [GLOBAL_SETTINGS](/development/backend/global-settings).
+For more information about global settings configuration, see [Global Settings](/development/backend/global-settings).
