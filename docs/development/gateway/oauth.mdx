@@ -35,7 +35,7 @@ The authorization URL includes:
 - `response_type=code` for authorization code flow
 - `client_id=deploystack-gateway-cli` for client identification
 - `redirect_uri=http://localhost:8976/oauth/callback` for callback handling
-- Requested scopes: `mcp:read account:read user:read teams:read offline_access`
+- Requested scopes (see [OAuth Scope Management](#oauth-scope-management) below)
 - PKCE parameters: `code_challenge` and `code_challenge_method=S256`
 - Random `state` parameter for security
 
@@ -90,7 +90,7 @@ The gateway is pre-registered with the backend as:
 - **Client ID**: `deploystack-gateway-cli`
 - **Client Type**: Public client (no secret required)
 - **Redirect URIs**: `http://localhost:8976/oauth/callback`, `http://127.0.0.1:8976/oauth/callback`
-- **Allowed Scopes**: `mcp:read`, `account:read`, `user:read`, `teams:read`, `offline_access`
+- **Allowed Scopes**: See source code at `services/gateway/src/utils/auth-config.ts`
 - **PKCE**: Required with SHA256 method
 - **Token Lifetime**: 1 week access tokens, 30 day refresh tokens
 
@@ -211,6 +211,50 @@ The OAuth implementation follows security best practices:
 - **No Secrets**: Public client design eliminates secret management
 
 For detailed security implementation including credential storage, token expiration, and local file security, see the [Gateway Security Guide](/development/gateway/security).
+
+## OAuth Scope Management
+
+The gateway requests specific OAuth scopes during authentication to access backend APIs. Scope configuration must stay synchronized between the gateway and backend.
+
+### Current Scopes
+
+For the current list of supported scopes, check the source code at:
+- **Gateway scopes**: `services/gateway/src/utils/auth-config.ts` in the `scopes` array
+- **Backend validation**: `services/backend/src/services/oauth/authorizationService.ts` in the `validateScope()` method
+
+### Adding New Scopes
+
+When the backend adds support for a new OAuth scope, you must update the gateway configuration:
+
+1. **Add the scope** to the `scopes` array in `services/gateway/src/utils/auth-config.ts`
+2. **Add a description** to the `SCOPE_DESCRIPTIONS` object in the same file
+3. **Test the login flow** to ensure the new scope is requested and granted
+
+Example:
+```typescript
+// In services/gateway/src/utils/auth-config.ts
+scopes: [
+  'mcp:read',
+  'mcp:categories:read',
+  'your-new-scope',  // Add new scope here
+  // ... other scopes
+],
+
+// And add description
+export const SCOPE_DESCRIPTIONS: Record<string, string> = {
+  'mcp:read': 'Access your MCP server installations and configurations',
+  'your-new-scope': 'Description of what this scope allows',  // Add description
+  // ... other descriptions
+};
+```
+
+### Scope Synchronization
+
+**Critical**: The gateway and backend must have matching scope configurations:
+- If backend supports a scope but gateway doesn't request it, users won't get that permission
+- If gateway requests a scope but backend doesn't support it, authentication will fail
+
+Always coordinate scope changes between both services.
 
 ## Testing OAuth Flow
 
