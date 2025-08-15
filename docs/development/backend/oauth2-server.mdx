@@ -154,13 +154,7 @@ For complete API specifications including request parameters, response schemas, 
 
 ### Available Scopes
 
-Fine-grained permissions for API access:
-
-- `mcp:read` - Read MCP server configurations
-- `account:read` - Read account information
-- `user:read` - Read user profile
-- `teams:read` - Read team memberships
-- `offline_access` - Refresh token support
+For the current list of supported scopes, see the source code at `services/backend/src/services/oauth/authorizationService.ts` in the `validateScope()` method.
 
 ### Scope Enforcement
 
@@ -320,6 +314,75 @@ Comprehensive logging for debugging:
 - Scope validations
 - Error conditions
 - Security events
+
+## OAuth Scope Management
+
+The backend validates OAuth scopes to control API access. Scope configuration must stay synchronized between the backend and gateway.
+
+### Current Scopes
+
+For the current list of supported scopes, check the source code at:
+- **Backend validation**: `services/backend/src/services/oauth/authorizationService.ts` in the `validateScope()` method
+- **Gateway requests**: `services/gateway/src/utils/auth-config.ts` in the `scopes` array
+
+### Adding New Scopes
+
+When adding support for a new OAuth scope in the backend:
+
+1. **Add the scope** to the `allowedScopes` array in `services/backend/src/services/oauth/authorizationService.ts`
+2. **Update the gateway** to request the new scope (see [Gateway OAuth Implementation](/development/gateway/oauth))
+3. **Apply scope enforcement** to relevant API endpoints using middleware
+4. **Test the complete flow** to ensure proper scope validation
+
+Example:
+```typescript
+// In services/backend/src/services/oauth/authorizationService.ts
+static validateScope(scope: string): boolean {
+  const requestedScopes = scope.split(' ');
+  const allowedScopes = [
+    'mcp:read',
+    'mcp:categories:read',
+    'your-new-scope',  // Add new scope here
+    // ... other scopes
+  ];
+  
+  return requestedScopes.every(s => allowedScopes.includes(s));
+}
+```
+
+### Scope Enforcement in Routes
+
+Apply scope requirements to API endpoints:
+
+```typescript
+// Single scope requirement
+server.get('/api/your-endpoint', {
+  preValidation: [
+    requireValidAccessToken(),
+    requireOAuthScope('your-new-scope')
+  ]
+}, async (request, reply) => {
+  // Your endpoint logic
+});
+
+// Multiple scope options
+server.get('/api/another-endpoint', {
+  preValidation: [
+    requireValidAccessToken(),
+    requireAnyOAuthScope(['scope1', 'scope2'])
+  ]
+}, async (request, reply) => {
+  // Your endpoint logic
+});
+```
+
+### Scope Synchronization
+
+**Critical**: The backend and gateway must have matching scope configurations:
+- If backend supports a scope but gateway doesn't request it, users won't get that permission
+- If gateway requests a scope but backend doesn't support it, authentication will fail
+
+Always coordinate scope changes between both services.
 
 ## Gateway Integration
 

@@ -1,0 +1,288 @@
+---
+title: User Preferences System
+description: Developer guide for managing user preferences in DeployStack Backend - adding new preferences, using the service layer, and understanding the architecture.
+---
+
+# User Preferences System
+
+The User Preferences System provides a flexible, config-driven approach to managing user-specific settings and behavioral data in DeployStack. This system handles everything from onboarding states to UI preferences without requiring database migrations for new preferences.
+
+## System Overview
+
+We use a separate table architecture where each preference is stored as an individual row, providing excellent queryability and performance. The system is designed around three core principles:
+
+- **Config-Driven**: New preferences require only configuration changes, no database migrations
+- **Type-Safe**: Full TypeScript integration with runtime validation
+- **Self-Service**: Users manage only their own preferences with proper security isolation
+
+## Architecture Components
+
+### Configuration Layer
+All preferences are defined in `/src/config/user-preferences.ts` as the single source of truth. This file contains default values and type definitions for all available preferences.
+
+### Service Layer
+The `UserPreferencesService` handles all database operations, type conversion, and business logic for preference management.
+
+### API Layer
+RESTful endpoints provide secure access to preferences with permission-based authorization.
+
+### Database Layer
+The `userPreferences` table stores individual key-value pairs with proper indexing for performance.
+
+## Adding New Preferences
+
+Adding a new preference is remarkably simple and requires no database migrations.
+
+### Step 1: Update Configuration
+
+Edit `/src/config/user-preferences.ts` and add your new preference to the `DEFAULT_USER_PREFERENCES` object:
+
+```typescript
+export const DEFAULT_USER_PREFERENCES = {
+  // Existing preferences...
+  show_survey_overall: true,
+  show_survey_company: true,
+  
+  // Your new preferences
+  new_feature_enabled: false,
+  user_language: 'en',
+  dashboard_layout: 'grid',
+  notification_frequency: 'daily',
+} as const;
+```
+
+### Step 2: Restart Application
+
+That's it! Restart the application and:
+- New users automatically receive the new preferences with default values
+- Existing users can access the new preferences (they'll get defaults when first accessed)
+- No database migration required
+- **API schemas and TypeScript types are automatically updated** from your config changes
+
+### Single Source of Truth
+
+The system automatically generates API validation schemas and TypeScript interfaces from the configuration file. This means:
+
+- **No duplication**: You only define preferences in one place
+- **Completely generic**: Works with any preference type (string, boolean, number)
+- **No special cases**: All preferences are handled uniformly, no hardcoded values
+- **Automatic validation**: API endpoints automatically validate against your config
+- **Type safety**: TypeScript interfaces are auto-generated from your preferences
+- **Zero maintenance**: Adding/removing preferences doesn't require schema updates
+
+## Using the Service Layer
+
+The `UserPreferencesService` provides a clean interface for working with preferences in your application code.
+
+### Basic Operations
+
+```typescript
+import { UserPreferencesService } from '../services/UserPreferencesService';
+import { getDb } from '../db';
+
+const db = getDb();
+const preferencesService = new UserPreferencesService(db);
+
+// Get a specific preference with fallback default
+const theme = await preferencesService.getPreference(userId, 'theme', 'auto');
+
+// Set a single preference
+await preferencesService.setPreference(userId, 'show_survey_overall', false);
+
+// Update multiple preferences at once
+await preferencesService.updatePreferences(userId, {
+  theme: 'dark',
+  sidebar_collapsed: true,
+  email_notifications_enabled: false
+});
+
+// Get all user preferences
+const allPreferences = await preferencesService.getUserPreferences(userId);
+```
+
+### Specialized Methods
+
+```typescript
+// Walkthrough management
+const shouldShow = await preferencesService.shouldShowWalkthrough(userId);
+await preferencesService.completeWalkthrough(userId);
+await preferencesService.cancelWalkthrough(userId);
+
+// Notification acknowledgments
+await preferencesService.acknowledgeNotification(userId, 'welcome-2024');
+```
+
+### Integration in Route Handlers
+
+```typescript
+export default async function myRoute(server: FastifyInstance) {
+  server.get('/my-feature', {
+    preValidation: requirePermission('preferences.view'),
+  }, async (request, reply) => {
+    const userId = request.user!.id;
+    const db = getDb();
+    const preferencesService = new UserPreferencesService(db);
+    
+    // Check if user has enabled the feature
+    const featureEnabled = await preferencesService.getPreference(
+      userId, 
+      'new_feature_enabled', 
+      false
+    );
+    
+    if (!featureEnabled) {
+      return reply.status(403).send({ error: 'Feature not enabled' });
+    }
+    
+    // Continue with feature logic...
+  });
+}
+```
+
+## Security Model
+
+The User Preferences System implements a strict self-service security model with important restrictions:
+
+### Core Security Principle: Self-Service Only
+- **Users can ONLY view and modify their own preferences**
+- **Even `global_admin` users CANNOT access other users' preferences**
+- **No admin override capability exists (by design for privacy)**
+- **All preference operations are strictly user-scoped**
+
+### Permissions Required
+- `preferences.view` - Required to read own preferences
+- `preferences.edit` - Required to modify own preferences
+
+### Role Assignments
+- `global_admin` - Has both view and edit permissions (for their own preferences only)
+- `global_user` - Has both view and edit permissions (for their own preferences only)
+- Team roles - No preference permissions (preferences are user-scoped, not team-scoped)
+
+### Access Control Implementation
+- All routes extract `userId` from the authenticated user's session (`request.user!.id`)
+- No route accepts a `userId` parameter - it's always the authenticated user
+- Permission-based authorization happens before validation (security-first pattern)
+- Database queries are automatically scoped to the authenticated user's ID
+
+### What This Means for Developers
+- You cannot build admin tools to manage other users' preferences
+- Support teams cannot directly modify user preferences through the API
+- All preference management is strictly self-service
+- Users have complete privacy and control over their preference data
+
+## Current Available Preferences
+
+The system currently supports these preference categories:
+
+### Survey Preferences
+- `show_survey_overall` (boolean) - Display overall satisfaction survey
+- `show_survey_company` (boolean) - Display company-specific survey
+
+### Walkthrough Preferences  
+- `walkthrough_completed` (boolean) - User completed onboarding walkthrough
+- `walkthrough_cancelled` (boolean) - User cancelled onboarding walkthrough
+
+### UI Preferences
+- `theme` (string) - UI theme: 'light', 'dark', or 'auto'
+- `sidebar_collapsed` (boolean) - Sidebar collapsed state
+
+### Notification Preferences
+- `email_notifications_enabled` (boolean) - Email notifications enabled
+- `browser_notifications_enabled` (boolean) - Browser notifications enabled  
+- `notification_acknowledgments` (string) - Comma-separated acknowledged notification IDs
+
+### Feature Preferences
+- `beta_features_enabled` (boolean) - Beta features enabled
+
+## Frontend Integration
+
+The User Preferences System integrates seamlessly with frontend applications through the service layer and existing API endpoints. Frontend developers can access preferences through the established API patterns used throughout DeployStack.
+
+## Performance Considerations
+
+The system is optimized for performance with several key features:
+
+### Database Indexing
+- Primary index on `user_id` for fast user lookups
+- Composite index on `user_id, preference_key` for specific preference queries
+- Index on `preference_key` for analytics queries
+- Index on `updated_at` for temporal queries
+
+### Efficient Queries
+- Single query to fetch all user preferences
+- Batch updates for multiple preference changes
+- Automatic type conversion between strings and native types
+
+## Type Safety Features
+
+The system provides comprehensive type safety:
+
+### Runtime Validation
+All preference values are validated against the configuration schema before storage.
+
+### TypeScript Integration
+Full TypeScript support with auto-completion and type checking:
+
+```typescript
+// Type-safe preference access
+const preferences: UserPreferences = await preferencesService.getUserPreferences(userId);
+
+// TypeScript knows the available keys and their types
+const theme: string = preferences.theme || 'auto';
+const sidebarCollapsed: boolean = preferences.sidebar_collapsed || false;
+```
+
+### Configuration-Driven Types
+Types are automatically derived from the configuration, ensuring consistency between defaults and usage.
+
+## Migration Strategy
+
+If you need to rename or remove preferences:
+
+### Renaming Preferences
+1. Add the new preference to config with desired default
+2. Create a migration script to copy old values to new keys
+3. Remove the old preference from config after migration
+4. Restart application
+
+### Removing Preferences
+1. Remove from configuration file
+2. Restart application
+3. Old preference data remains in database but becomes inaccessible
+4. Optionally clean up old data with a maintenance script
+
+## Development Workflow
+
+### Local Development
+1. Add preference to config file
+2. Restart development server
+3. Test with new user registration (gets defaults automatically)
+4. Test with existing users (gets defaults on first access)
+
+### Production Deployment
+1. Deploy code changes with new preferences in config
+2. Restart application servers
+3. New preferences are immediately available
+4. No database downtime or migration required
+
+## Related Documentation
+
+- [API Security](/development/backend/api-security) - Security patterns and authorization
+- [Role Management](/development/backend/roles) - Permission system details
+- [Database Schema](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/db/schema.sqlite.ts) - Complete database schema reference
+
+## Key Benefits
+
+### For Developers
+- **Zero Migration Workflow**: Add preferences without database changes
+- **Type Safety**: Full TypeScript support with runtime validation
+- **Simple API**: Intuitive service layer methods
+- **Performance**: Optimized queries with proper indexing
+
+### For Operations
+- **No Downtime**: Preference additions require no database migrations
+- **Secure**: Permission-based access with proper isolation
+- **Scalable**: Separate table architecture supports complex queries
+- **Maintainable**: Config-driven approach with clear separation of concerns
+
+The User Preferences System represents a modern approach to user settings management, balancing flexibility with performance while maintaining the simplicity that DeployStack developers expect.
