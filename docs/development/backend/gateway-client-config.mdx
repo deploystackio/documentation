@@ -1,0 +1,78 @@
+---
+title: Gateway Client Configuration API
+description: Developer guide for the Gateway Client Configuration endpoint that provides pre-formatted configuration files for MCP clients to connect to the DeployStack Gateway
+---
+
+# Gateway Client Configuration API
+
+The Gateway Client Configuration API provides pre-formatted configuration files for various MCP clients to connect to the local DeployStack Gateway. This eliminates manual configuration steps and reduces setup errors for developers.
+
+## Overview
+
+The endpoint generates client-specific JSON configurations that users can directly use in their MCP clients (Claude Desktop, Cline, VSCode, Cursor, Windsurf) to connect to their local DeployStack Gateway running on `http://localhost:9095/sse`.
+
+## API Endpoint
+
+**Route:** `GET /api/gateway/config/:client`
+
+**Parameters:**
+- `:client` - The MCP client type (required)
+  - Supported values: `claude-desktop`, `cline`, `vscode`, `cursor`, `windsurf`
+
+**Authentication:** Dual authentication support
+- Cookie-based authentication (web users)
+- OAuth2 Bearer token authentication (CLI users)
+
+**Required Permission:** `gateway.config:read`
+**Required OAuth2 Scope:** `gateway:config:read`
+
+## Client Configurations
+
+The endpoint supports multiple MCP client types, each with its own optimized configuration format. All configurations use the DeployStack Gateway's SSE endpoint: `http://localhost:9095/sse`
+
+**Supported Clients:**
+- `claude-desktop` - Claude Desktop application
+- `cline` - Cline VS Code extension
+- `vscode` - VS Code MCP extension
+- `cursor` - Cursor IDE
+- `windsurf` - Windsurf AI IDE
+
+**Configuration Source:** For the current client configuration formats and JSON structures, see the `generateClientConfig()` function in:
+
+```bash
+services/backend/src/routes/gateway/config/get-client-config.ts
+```
+
+## Permission System
+
+### Role Assignments
+
+The `gateway.config:read` permission is assigned to:
+- **global_admin** - Basic access to get gateway configs they need
+- **global_user** - Basic access to get gateway configs they need
+
+### OAuth2 Scope
+
+The `gateway:config:read` OAuth2 scope:
+- **Purpose:** Enables CLI tools and OAuth2 clients to fetch gateway configurations
+- **Description:** "Generate client-specific gateway configuration files"
+- **Gateway Integration:** Automatically requested during gateway OAuth login
+
+## Future Enhancements
+
+### Additional Client Types
+- **Zed Editor** - Growing popularity in developer community
+- **Neovim** - Popular among command-line developers
+- **Custom Clients** - Generic JSON format for custom integrations
+
+### Configuration Customization
+- **Environment Variables** - Support for different gateway URLs
+- **TLS/SSL Support** - When gateway supports secure connections
+- **Authentication Tokens** - If gateway adds authentication in future
+
+## Related Documentation
+
+- [Backend API Security](/development/backend/api-security) - Security patterns and authorization
+- [Backend OAuth2 Server](/development/backend/oauth2-server) - OAuth2 implementation details
+- [Gateway OAuth Implementation](/development/gateway/oauth) - Gateway OAuth client
+- [Gateway SSE Transport](/development/gateway/sse-transport) - Gateway SSE architecture
