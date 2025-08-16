@@ -16,62 +16,30 @@ services/gateway/
 ├── src/                      # Source code
 │   ├── index.ts             # CLI entry point and command registration
 │   ├── commands/            # Command implementations
-│   │   ├── index.ts         # Command exports
 │   │   ├── login.ts         # Authentication with cloud.deploystack.io
-│   │   ├── logout.ts        # Clear local credentials
 │   │   ├── start.ts         # Start the gateway server
-│   │   ├── stop.ts          # Stop the gateway server
-│   │   ├── status.ts        # Show gateway status
-│   │   ├── mcp.ts           # MCP server management and tool discovery
-│   │   └── config.ts        # Manage local configuration
+│   │   ├── refresh.ts       # Root-level refresh command
+│   │   └── ...              # Other CLI commands
 │   ├── core/                # Core business logic
 │   │   ├── auth/            # Authentication handling
-│   │   │   ├── client.ts    # OAuth and API client
-│   │   │   └── storage.ts   # Secure credential storage
-│   │   ├── server/          # HTTP proxy server
-│   │   │   ├── proxy.ts     # Request routing and dual-endpoint logic
-│   │   │   ├── session-manager.ts # SSE session lifecycle management
-│   │   │   └── sse-handler.ts # Server-Sent Events implementation
+│   │   ├── server/          # HTTP proxy server with SSE support
 │   │   ├── process/         # MCP process management
-│   │   │   ├── manager.ts   # Process lifecycle and stdio communication
-│   │   │   └── runtime-state.ts # In-memory process state tracking
 │   │   ├── mcp/             # MCP configuration management
-│   │   │   ├── config-service.ts # Team config sync and processing
-│   │   │   ├── config-processor.ts # Installation method processing
-│   │   │   ├── tool-discovery.ts # MCP server tool discovery
-│   │   │   ├── tool-cache.ts # Team-aware tool caching system
-│   │   │   └── team-context-manager.ts # Team switching with process lifecycle
 │   │   └── config/          # Configuration utilities
-│   │       └── defaults.ts  # Default gateway settings
+│   ├── services/            # Shared business services
+│   │   ├── refresh-service.ts # Shared MCP configuration refresh logic
+│   │   ├── server-start-service.ts # Centralized server startup logic
+│   │   └── ...              # Other shared services
 │   ├── utils/               # Shared utilities
-│   │   ├── tool-discovery-manager.ts # Centralized tool discovery and caching
-│   │   ├── state-comparator.ts # Compare expected vs actual running processes
-│   │   ├── logger.ts        # Centralized logging with chalk
-│   │   ├── spinner.ts       # Progress indicators with ora
-│   │   ├── config.ts        # Configuration management
-│   │   ├── errors.ts        # Custom error types
-│   │   └── crypto.ts        # Encryption utilities
+│   │   ├── logger.ts        # Centralized logging
+│   │   └── ...              # Other utilities
 │   └── types/               # TypeScript type definitions
-│       ├── index.ts         # Main type exports
-│       ├── mcp.ts           # MCP protocol types
-│       └── config.ts        # Configuration types
-├── bin/                     # Executable entry
-│   └── gateway.js           # Node.js shebang wrapper
+├── bin/gateway.js           # Executable entry point
 ├── dist/                    # Compiled JavaScript (gitignored)
 ├── tests/                   # Test suite
-│   ├── unit/               # Unit tests
-│   ├── integration/        # Integration tests
-│   └── fixtures/           # Test data
-├── scripts/                 # Development scripts
-│   ├── build.ts            # Build script
-│   └── release.ts          # Release automation
-├── .config/                # Default configurations
-│   └── defaults.json       # Default gateway settings
-├── package.json            # Dependencies and scripts
-├── tsconfig.json           # TypeScript configuration
-├── tsup.config.ts          # Build configuration
-├── .env.example            # Environment variables template
-└── README.md               # Gateway-specific documentation
+├── package.json             # Dependencies and scripts
+├── tsconfig.json            # TypeScript configuration
+└── README.md                # Gateway-specific documentation
 ```
 
 ## Key Design Decisions
@@ -80,6 +48,7 @@ services/gateway/
 The codebase is organized into distinct modules:
 - **Commands**: User-facing CLI commands
 - **Core**: Business logic separated by domain
+- **Services**: Shared business services for cross-command functionality
 - **Utils**: Reusable utilities and helpers
 
 ### Process Management
@@ -142,6 +111,11 @@ export function registerLoginCommand(program: Command) {
 - MCP server tool discovery and capability exploration
 - Team-aware tool caching system as detailed in [Caching System](/development/gateway/caching-system)
 - Installation method processing for correct server spawning
+
+**services/**: Shared business services for cross-command functionality
+- **refresh-service.ts**: Centralized MCP configuration refresh logic used by both `deploystack refresh` and `deploystack mcp --refresh` commands
+- Eliminates code duplication while maintaining identical behavior across commands
+- Provides consistent error handling and user feedback
 
 **utils/**: Shared utilities and centralized services
 - **tool-discovery-manager.ts**: Centralized tool discovery eliminating code duplication across commands
