@@ -74,6 +74,17 @@ For table-specific implementations, refer to the [Table Design System](/developm
 
 The frontend uses **TailwindCSS** for styling with **shadcn-vue** component library for consistent UI elements. For comprehensive styling guidelines, component patterns, and design standards, see the [UI Design System](/development/frontend/ui-design-system) documentation.
 
+### ⚠️ **Mandatory Design Patterns**
+
+All structured information displays must follow the **[Structured Data Display Pattern](/development/frontend/ui-design-system-structured-data)**. This includes:
+- User profiles and settings
+- Form layouts 
+- Configuration displays
+- Installation details
+- Any information presented in label-value pairs
+
+This pattern ensures visual consistency across the entire application.
+
 ## Environment Configuration
 
 The frontend uses a sophisticated environment variable system that works seamlessly across development and production environments. For complete details on configuring and using environment variables, see the dedicated [Environment Variables Guide](/development/frontend/environment-variables).
@@ -115,6 +126,7 @@ Continue reading the detailed guides:
 
 - [Frontend Architecture](/development/frontend/architecture) - Application architecture, patterns, and development principles
 - [UI Design System](/development/frontend/ui-design-system) - Component patterns, styling guidelines, and design standards
+- **[Structured Data Display Pattern](/development/frontend/ui-design-system-structured-data)** - **Mandatory pattern** for consistent information display
 - [Environment Variables](/development/frontend/environment-variables) - Complete environment configuration guide
 - [Global Event Bus](/development/frontend/event-bus) - Cross-component communication system
 - [Internationalization (i18n)](/development/frontend/internationalization) - Multi-language support
