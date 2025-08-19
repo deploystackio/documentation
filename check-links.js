@@ -6,6 +6,32 @@ import fetch from 'node-fetch';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// URLs to ignore during external link checking
+const IGNORED_URLS = [
+    'https://deploystack.io',
+    'https://deploystack.io/*',
+    'https://cloud.deploystack.io'
+];
+
+// Check if a URL should be ignored
+const shouldIgnoreUrl = (url) => {
+    for (const pattern of IGNORED_URLS) {
+        if (pattern.endsWith('/*')) {
+            // Handle wildcard patterns
+            const baseUrl = pattern.slice(0, -2); // Remove /*
+            if (url === baseUrl || url.startsWith(baseUrl + '/')) {
+                return true;
+            }
+        } else {
+            // Handle exact matches
+            if (url === pattern) {
+                return true;
+            }
+        }
+    }
+    return false;
+};
+
 // Read a markdown file and extract all markdown links
 const extractLinks = (content) => {
     const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
@@ -79,6 +105,12 @@ const checkExternalUrl = async (url) => {
     // Check if it's a localhost URL and skip validation
     if (isLocalhostUrl(url)) {
         console.log(`  ➡️  ${url} (localhost - skipped)`);
+        return true;
+    }
+    
+    // Check if URL should be ignored
+    if (shouldIgnoreUrl(url)) {
+        console.log(`  ➡️  ${url} (ignored)`);
         return true;
     }
     
