@@ -1,0 +1,287 @@
+---
+title: MCP Schema Creation Workflow for Global Administrators
+description: Learn how global administrators transform raw MCP configurations into DeployStack's secure three-tier schema system with lock/unlock controls.
+sidebar: Admin Schema Workflow
+---
+
+# MCP Schema Creation Workflow for Global Administrators
+
+Global administrators transform raw MCP server configurations into structured schemas that enable teams and users to safely configure MCP servers. This workflow creates the foundation for DeployStack's three-tier configuration system.
+
+## Overview
+
+When you add new MCP servers to the catalog, you design the entire configuration experience by precisely categorizing every configuration element and setting sophisticated lock/unlock controls:
+- **What stays locked forever** (template elements like system commands, package names)
+- **What teams can configure and control** (team-level settings like API keys, shared credentials) 
+- **What users can always customize** (user-level settings like local paths, personal preferences)
+- **Lock/unlock defaults and visibility controls** for each configurable element
+
+For an overview of how the three-tier system works, see [MCP Configuration System](/mcp-configuration).
+
+## The Four-Step Admin Workflow
+
+Adding an MCP server to the catalog follows this process:
+
+```
+Step 1: GitHub Repository     ──→ Link to source repository
+Step 2: Claude Desktop Config ──→ Input raw configuration JSON  
+Step 3: Configuration Schema  ──→ **Categorize every element into three tiers with lock/unlock controls**
+Step 4: Basic Info           ──→ Set name, description, category
+```
+
+**Step 3** is the sophisticated categorization process where you transform raw configuration into the three-tier system with precise lock/unlock controls.
+
+### Step 1: GitHub Repository
+
+- **Repository URL** - GitHub repository containing the MCP server
+- **Branch** - Usually `main` or `master`
+- **Sync Settings** - Automatic vs manual synchronization
+
+### Step 2: Claude Desktop Configuration
+
+Input the raw Claude Desktop configuration:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/username/Desktop"
+      ]
+    }
+  }
+}
+```
+
+The system extracts all arguments and environment variables for categorization.
+
+### Step 3: Configuration Schema Definition
+
+Categorize every argument and environment variable from the Claude Desktop config into one of three tiers with sophisticated lock/unlock controls - this determines exactly what teams and users can configure.
+
+### Step 4: Basic Information
+
+- **Server Name** - Display name in catalog
+- **Description** - Clear explanation of functionality
+- **Category** - Organizational classification
+
+## Step 3: Configuration Schema Definition (Detailed)
+
+### The Sophisticated Categorization Process
+
+For every argument and environment variable extracted from the Claude Desktop config, you make precise categorization decisions with lock/unlock controls:
+
+**Categorization Options:**
+- **🔒 Template (Static)** - Locked forever, never changes (system commands, package names)
+- **🔧 Team Configurable** - Teams set values during installation and control user access
+- **🔓 User Configurable** - Always available for individual user customization
+
+**Lock/Unlock Controls:**
+- **Default Lock State** - Whether teams start with elements locked or unlocked for users
+- **Visibility Controls** - Whether users can see values (important for secrets)
+- **Schema Validation** - Data types, requirements, and constraints for each element
+
+This sophisticated system determines the exact configuration experience for teams and users.
+
+### Example: Filesystem MCP Server
+
+**Raw Configuration:**
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/username/Desktop"
+      ]
+    }
+  }
+}
+```
+
+**Your Categorization:**
+- **🔒 Template**: `-y` and `@modelcontextprotocol/server-filesystem` (system commands, locked forever)
+- **🔓 User Configurable**: `/Users/username/Desktop` (personal directory paths, default unlocked)
+- **No Team Level**: This server doesn't need shared team configuration
+
+**Lock/Unlock Decisions:**
+- Directory paths: Default unlocked (users can customize their own directories)
+- No visibility restrictions (directory paths are not sensitive)
+- Validation: Require valid directory paths, allow 1-10 directories per user
+
+**Result**: Users can configure their own directories, but can't modify the core system commands.
+
+### Another Example: API MCP Server with Secrets
+
+**Raw Configuration:**
+```json
+{
+  "mcpServers": {
+    "api": {
+      "command": "npx",
+      "args": ["-y", "@company/api-server"],
+      "env": {
+        "TEAM_API_KEY": "team-secret",
+        "DEBUG": "false"
+      }
+    }
+  }
+}
+```
+
+**Your Categorization:**
+- **🔒 Template**: System commands (`npx`, `-y`, package name) - locked forever
+- **🔧 Team Configurable**: `TEAM_API_KEY` (shared credential, team controls access)
+- **🔓 User Configurable**: `DEBUG` (personal preference, always available to users)
+
+**Lock/Unlock Decisions:**
+- `TEAM_API_KEY`: Default locked for users, hidden from users (security)
+- `DEBUG`: Default unlocked for users, visible to users (personal preference)
+- Validation: API key must be valid format, debug must be boolean
+
+**Result**: Teams manage shared API keys securely, users can toggle debug mode.
+
+### Smart Suggestions
+
+DeployStack provides suggestions to help with categorization:
+
+**🔒 Template Suggestions:**
+- CLI commands (`npx`, `python`, `node`)
+- Package names (`@modelcontextprotocol/server-*`)
+- System flags (`-y`, `--verbose`)
+
+**🔧 Team Configurable Suggestions:**
+- Variables containing "team", "api", "key"
+- Database connection strings
+- Service endpoints
+
+**🔓 User Configurable Suggestions:**
+- File paths with `/Users/` or `/home/`
+- Debug and preference settings
+- Device-specific configuration
+
+### Configuration Schema Step Interface
+
+The Configuration Schema Step presents a sophisticated interface for categorizing and controlling every configuration element:
+
+#### Arguments Categorization Interface
+```
+Extracted Arguments from Claude Desktop Config:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ [0] "-y"                                                                   │
+│     Configuration Level: Template (Static) ▼                               │
+│     ✓ Locked Forever (Cannot be changed by teams or users)                │
+│                                                                             │
+│ [1] "@modelcontextprotocol/server-filesystem"                             │
+│     Configuration Level: Template (Static) ▼                               │
+│     ✓ Locked Forever (Cannot be changed by teams or users)                │
+│                                                                             │
+│ [2] "/Users/username/Desktop"                                              │
+│     Configuration Level: User Configurable ▼                               │
+│     ☐ Default Team Locked (Recommended: Unlocked for personal paths)       │
+│     Schema: Directory Path, Required: Yes, Min: 1, Max: 10                 │
+│                                                                             │
+│ [+] Add team-configurable argument                                          │
+│ [+] Add user-configurable argument                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Environment Variables Categorization Interface
+```
+Extracted Environment Variables from Claude Desktop Config:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TEAM_TOKEN: "my-team-token"                                                 │
+│ Configuration Level: Team Configurable ▼                                   │
+│ ├─ Type: Secret ▼                                                          │
+│ ├─ Required: ✓                                                             │
+│ ├─ Description: Team authentication token                                   │
+│ ├─ ✓ Default Team Locked (Users cannot modify)                             │
+│ └─ ☐ Visible to Users (Recommended: Hidden for secrets)                  │
+│                                                                             │
+│ USER_TOKEN: "my-user-token"                                                 │
+│ Configuration Level: User Configurable ▼                                   │
+│ ├─ Type: Secret ▼                                                          │
+│ ├─ Required: ☐                                                             │
+│ ├─ Description: Personal user authentication token                          │
+│ └─ ☐ Default Team Locked (Recommended: Unlocked for user control)        │
+│                                                                             │
+│ [+] Add team-configurable environment variable                              │
+│ [+] Add user-configurable environment variable                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Lock/Unlock Control Matrix
+
+Your categorization decisions create a sophisticated control matrix across all three tiers:
+
+| Configuration Element | Global Admin Control | Team Admin Control | User Access |
+|-----------------------|---------------------|---------------------|-------------|
+| Template Args (Locked) | Define & Lock Forever | ❌ Cannot Change | ❌ Cannot Change |
+| Template Env (Locked) | Define & Lock Forever | ❌ Cannot Change | ❌ Cannot Change |
+| Team Args Schema | Define Schema & Defaults | Set Values & Lock/Unlock | Access if Unlocked |
+| Team Env Schema | Define Schema & Defaults | Set Values & Lock/Unlock | Access if Unlocked |
+| User Args Schema | Define Schema & Defaults | ✓ Always Available | ✓ Always Available |
+| User Env Schema | Define Schema & Defaults | ✓ Always Available | ✓ Always Available |
+| Additional Team Config | Define Limits | Add Custom Config | ❌ Cannot Change |
+| Additional User Config | Define Limits | ✓ Allow/Disallow | Add Personal Config |
+
+This matrix shows how your schema categorization creates precise boundaries for configuration control.
+
+## What Happens Next
+
+After you complete the sophisticated schema categorization:
+
+1. **Schema Generation** - System creates the complete three-tier schema structure with lock/unlock metadata
+2. **Catalog Addition** - MCP server is added to the global catalog with precise configuration boundaries
+3. **Team Access** - Teams can install and configure only the elements you designated as team-configurable
+4. **User Experience** - Users see only the elements you made available, with lock/unlock states controlled by teams
+
+Your categorization and lock/unlock decisions directly shape how teams and users interact with the MCP server across the entire three-tier system.
+
+## Security Validation
+
+The system automatically validates your sophisticated schema categorization:
+
+**Security Checks:**
+- ✅ Secrets properly categorized as team/user level with appropriate visibility controls
+- ✅ System commands locked at template level to prevent tampering
+- ⚠️ Warns if secrets might be visible inappropriately or unlocked by default
+- ✅ Validates lock inheritance logic across all three tiers
+
+**Schema Validation:**
+- ✅ All extracted elements are properly categorized
+- ✅ Required fields have appropriate defaults and validation rules
+- ✅ Lock/unlock inheritance makes logical sense across tiers
+- ✅ Data types and constraints are properly defined
+
+**Preview Capabilities:**
+- See exactly what team administrators will configure during installation
+- Preview what users will be able to customize based on team lock/unlock decisions
+- Understand the complete configuration flow from admin → team → user
+- Validate the security model with real-world scenarios
+
+## Key Benefits
+
+Your sophisticated schema categorization provides:
+
+**Security** - Sensitive data properly protected at the right tier with appropriate visibility controls
+**Precision** - Users see only what they can configure, teams control exactly what they need
+**Flexibility** - Teams can lock/unlock elements based on their specific organizational needs
+**Consistency** - Predictable configuration experience across all MCP servers in the catalog
+**Governance** - Complete audit trail and control over configuration inheritance across all tiers
+
+## Related Documentation
+
+For understanding how your sophisticated schemas are used across the three-tier system:
+
+- [MCP Configuration System](/mcp-configuration) - Overview of the three-tier system your schemas enable
+- [Team Installation](/mcp-team-installation) - How teams use your schemas to configure installations
+- [User Configuration](/mcp-user-configuration) - How users interact with the boundaries you define
+- [MCP Catalog](/mcp-catalog) - Where your categorized schemas are stored and managed
+
+The sophisticated schema creation workflow is the foundation that enables secure, flexible MCP server configuration with precise control over configuration inheritance across all teams and users.
