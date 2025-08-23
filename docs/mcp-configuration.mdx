@@ -14,9 +14,9 @@ The system separates configuration into three distinct layers:
 
 1. **Template Level** - Global schemas and locked elements defined by administrators
 2. **Team Level** - Shared team configurations with lock/unlock controls  
-3. **User Level** - Personal configurations within team-defined boundaries
+3. **User Level** - Personal configurations within team-defined boundaries **per device**
 
-This architecture enables teams to share common settings like API keys while allowing individual members to customize personal settings like local file paths.
+This architecture enables teams to share common settings like API keys while allowing individual members to customize personal settings like local file paths across multiple devices. Each user can have different configurations on different devices while maintaining team security and standards.
 
 ## How It Works
 
@@ -42,11 +42,12 @@ This architecture enables teams to share common settings like API keys while all
                                         │
                                         ▼
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│ TIER 3: USER (Individual)                                                      │
+│ TIER 3: USER (Individual) - Device-Aware                                      │
 │ ┌─────────────────────────────────────────────────────────────────────────────┐ │
-│ │ 🔓 Personal Settings: Local paths, preferences                             │ │
-│ │ 💻 Multi-Device: Different configs per device                              │ │
-│ │ 🔗 Automatic Inheritance: Use team credentials seamlessly                  │ │
+│ │ 🔓 Personal Settings: Local paths, preferences (per device)                │ │
+│ │ 💻 Multi-Device: Different configs per device with automatic registration   │ │
+│ │ 🔗 Automatic Inheritance: Use team credentials seamlessly across devices    │ │
+│ │ 🛡️ Device Security: Hardware fingerprinting and secure registration        │ │
 │ └─────────────────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────────┘
                                         │
@@ -75,9 +76,10 @@ The heart of the system is sophisticated lock/unlock controls with precise categ
 
 **User Access:**
 - **Personal Customization** - Modify only unlocked elements within boundaries set by global admin categorization
-- **Device-Specific Settings** - Configure personal settings across multiple devices
+- **Device-Specific Settings** - Configure personal settings across multiple devices with automatic device registration
 - **Secure Experience** - No access to locked configuration, team secrets, or template elements
 - **Focused Interface** - See only configuration elements designated as personally configurable
+- **Multi-Device Workflow** - Seamlessly work across different devices with device-specific configurations
 
 ## User Journey Workflows
 
@@ -118,7 +120,7 @@ Here's how the three tiers combine into a final runtime configuration:
 }
 ```
 
-**User (Individual):**
+**User (Individual - i.e.: your MacBook Pro):**
 ```json
 {
   "args": ["/Users/alice/Development", "/Users/alice/Projects"],
@@ -164,12 +166,34 @@ Here's how the three tiers combine into a final runtime configuration:
 
 **Support Teams:** Share customer service API keys while allowing personal workspace customization
 
+## Device-Aware Architecture Benefits
+
+**🏢 Enterprise Governance**
+- Complete visibility into device usage across the organization
+- Device-specific audit trails for compliance and security
+- Centralized device management with trust-based access control
+
+**👥 Team Collaboration**
+- Team administrators can see device usage patterns and optimize configurations
+- Device-specific insights help teams understand productivity patterns
+- Seamless collaboration across different device types and environments
+
+**🔒 Enhanced Security**
+- Hardware fingerprinting prevents device spoofing
+- Automatic device registration during secure OAuth2 login
+- Device trust management and access revocation capabilities
+- No separate device registration endpoints (security by design)
+
+For comprehensive device management details, see [Device Management](/device-management).
+
 ## Related Documentation
 
 For complete system understanding:
 
+- [Device Management](/device-management) - Comprehensive device management and security
 - [MCP Catalog](/mcp-catalog) - Browse and discover available MCP servers
 - [Teams](/teams) - Team structure and membership management
 - [MCP Installation](/mcp-installation) - Basic MCP server installation concepts
+- [Security and Privacy](/security) - Platform security including device security
 
-The three-tier configuration system provides secure, scalable MCP server management that grows from individual developers to enterprise teams while maintaining simplicity and security at every level. Global administrators have sophisticated control over configuration boundaries through schema categorization, ensuring appropriate access and customization at each tier.
+The three-tier configuration system provides secure, scalable MCP server management that grows from individual developers to enterprise teams while maintaining simplicity and security at every level. Global administrators have sophisticated control over configuration boundaries through schema categorization, ensuring appropriate access and customization at each tier. The device-aware architecture enables seamless multi-device workflows while maintaining enterprise-grade security and governance.
