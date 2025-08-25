@@ -59,15 +59,52 @@ The temporary callback server:
 - Displays a success or error page to the user
 - Automatically shuts down after receiving the callback
 
-### 4. Token Exchange
+### 4. Token Exchange with Device Registration
 
 After receiving the authorization code, the CLI:
 
+- Detects device information (hostname, OS, hardware fingerprint)
 - Exchanges the code for access and refresh tokens
 - Includes the PKCE code verifier for verification
+- **Automatically registers the device** during token exchange
 - Validates the token response from the backend
 - Fetches user information using the new access token
 - Stores credentials securely for future use
+
+#### Automatic Device Registration
+
+During the token exchange process, the gateway automatically registers the current device with the backend for security and management purposes:
+
+**Device Information Collected:**
+- `device_name`: User-friendly name (defaults to hostname)
+- `hostname`: System hostname
+- `hardware_id`: Unique hardware fingerprint based on MAC addresses and system info
+- `os_type`: Operating system (macOS, Windows, Linux)
+- `os_version`: OS version string
+- `arch`: System architecture (x64, arm64, etc.)
+- `node_version`: Node.js version for compatibility tracking
+- `user_agent`: CLI version and platform information
+
+**Security Benefits:**
+- Device registration happens only during authenticated login sessions
+- **No separate device registration endpoints exist** - this prevents unauthorized device registration and enhances security
+- Hardware fingerprinting provides unique device identification
+- Enables device management and access control in the backend
+- Eliminates the need for manual device registration API calls
+
+**Process Flow:**
+1. Gateway detects current device information using system APIs
+2. Device info is included in the OAuth2 token request
+3. Backend validates the token request and registers the device
+4. Device information is returned in the token response
+5. Gateway logs successful device registration to the user (e.g., "📱 Device registered: MacBook-Pro.local")
+
+**Error Handling:**
+If device registration fails during token exchange:
+- The OAuth2 login process continues successfully
+- User authentication is not affected
+- Device context may be limited for some features
+- Error is logged but doesn't break the login flow
 
 ## PKCE Security Implementation
 
@@ -198,6 +235,67 @@ The gateway OAuth client integrates with the [backend OAuth2 server](/developmen
 - **Token Format**: Handles backend's custom JWT-like token format
 - **Error Responses**: Processes standard OAuth2 error responses
 - **Endpoint Discovery**: Uses standard OAuth2 endpoint paths
+- **Device Registration**: Automatic device registration during token exchange
+
+### Device Management Integration
+
+The gateway's device registration integrates seamlessly with the backend's device management system:
+
+**Backend Integration Points:**
+- **OAuth2 Token Endpoint**: Extended to accept optional `device_info` in token requests
+- **Device Service**: Uses existing `DeviceService.registerOrUpdateDevice()` method
+- **Database Storage**: Device information stored in the `devices` table
+- **User Association**: Devices automatically linked to the authenticated user
+
+**Token Request Enhancement:**
+The gateway includes device information in the OAuth2 token request:
+```json
+{
+  "grant_type": "authorization_code",
+  "code": "authorization_code_here",
+  "redirect_uri": "http://localhost:8976/oauth/callback",
+  "client_id": "deploystack-gateway-cli",
+  "code_verifier": "pkce_verifier_here",
+  "device_info": {
+    "device_name": "MacBook-Pro.local",
+    "hostname": "MacBook-Pro.local",
+    "hardware_id": "a1b2c3d4e5f6789012345678901234ab",
+    "os_type": "macOS",
+    "os_version": "14.2.1",
+    "arch": "arm64",
+    "node_version": "v20.10.0",
+    "user_agent": "DeployStack-CLI/1.0.0 (darwin; arm64)"
+  }
+}
+```
+
+**Token Response Enhancement:**
+When device registration succeeds, the backend includes device information in the token response:
+```json
+{
+  "access_token": "...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "...",
+  "scope": "mcp:read account:read...",
+  "device": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "device_name": "MacBook-Pro.local",
+    "is_active": true,
+    "is_trusted": true,
+    "created_at": "2025-08-23T10:20:30Z"
+  }
+}
+```
+
+**Security Design:**
+- Device registration only occurs during authenticated OAuth2 flows
+- **No separate device creation endpoints exist** - this architectural decision prevents unauthorized device registration and eliminates potential security vulnerabilities
+- Hardware fingerprinting ensures unique device identification across multiple login sessions
+- Device information is validated using JSON schema before processing
+- Gateway automatically handles device lookup using hardware fingerprints without requiring manual registration
+
+For comprehensive information about device management and hardware fingerprinting, see the [Device Management Documentation](/device-management).
 
 ## Security Considerations
 

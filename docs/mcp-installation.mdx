@@ -1,12 +1,14 @@
 ---
 title: MCP Server Installation
-description: Learn how to install and manage MCP servers within your team workspace, including credentials, configuration, and team-scoped access.
+description: Learn how to install and manage MCP servers within your team workspace and understand the relationship between catalog, installations, and user configurations.
 sidebar: MCP Installation
 ---
 
 # MCP Server Installation
 
-MCP server installations are how your team actually uses MCP servers from the catalog. Think of the MCP catalog as a "store" where you browse available servers, and installations as the "purchased items" that your team can actually use with your own credentials and settings.
+MCP server installations are how your team actually uses MCP servers from the catalog. Think of the MCP catalog as a "store" where you browse available servers, and installations as the "purchased items" that your team can actually use with your own configurations.
+
+Installations represent the team layer in DeployStack's three-tier configuration system, where teams configure shared settings that all team members use. For complete details about how arguments, environment variables, and credentials work, see the [MCP Configuration System](/mcp-configuration) documentation.
 
 ## Understanding the Connection
 
@@ -38,22 +40,23 @@ graph TD
 **Every MCP server installation belongs to a specific team.** This is a fundamental principle of DeployStack:
 
 - **Team Ownership**: Each installation is owned by one team and isolated from other teams
-- **Team Credentials**: Your team provides and manages its own API keys, tokens, and configuration
-- **Team Configuration**: Customize server settings specific to your team's needs
+- **Team Configuration**: Teams manage the shared configuration layer that all team members inherit
 - **Team Privacy**: Other teams cannot see or access your installations
+
+For detailed information about how team configurations work within the three-tier system, see [MCP Configuration System](/mcp-configuration).
 
 ### Why Team-Scoped?
 
 This design provides several important benefits:
 
 #### Security Isolation
-- **Credential Separation**: Your team's API keys are completely separate from other teams
+- **Configuration Separation**: Your team's settings and credentials are completely separate from other teams
 - **Access Control**: Only your team members can use your team's installations
 - **Data Privacy**: No cross-team access to configurations or usage data
 
 #### Flexibility
 - **Custom Names**: Give installations meaningful names for your team context
-- **Team-Specific Settings**: Configure servers differently for your team's workflow
+- **Team-Specific Settings**: Configure shared team settings while allowing individual member customization
 - **Independent Updates**: Update or modify installations without affecting other teams
 
 #### Organization
@@ -69,15 +72,14 @@ Your team's MCP server installations are part of your complete team workspace:
 
 #### Team Resources
 - **MCP Installations**: Configured MCP servers ready to use
-- **Cloud Credentials**: Authentication for deployment platforms
-- **Environment Variables**: Global team settings
-- **Team Members**: Users who can access these resources
+- **Shared Configuration**: Team-level settings that all members inherit
+- **Team Members**: Users who can access these resources and create personal configurations
 
 #### Workspace Benefits
 - **Unified Management**: All team resources in one place
 - **Consistent Access**: Same permissions across all installations
-- **Shared Configuration**: Common settings available to all installations
-- **Team Collaboration**: All team members work with the same tools
+- **Configuration Hierarchy**: Team settings combined with personal user settings
+- **Team Collaboration**: All team members work with shared team configurations
 
 ### Database Storage
 
@@ -85,7 +87,7 @@ Behind the scenes, your team's installations are stored securely:
 
 #### Team-Level Storage
 - **Team Workspace**: All installations belong to your team's workspace
-- **Encrypted Credentials**: Your API keys and tokens are encrypted at rest
+- **Secure Configuration**: Team settings and credentials are encrypted at rest
 - **Access Control**: Only your team members can access the data
 - **Audit Trail**: Complete history of installation changes
 
@@ -102,8 +104,8 @@ Behind the scenes, your team's installations are stored securely:
 
 - **Your Environment**: Runs in your team's deployment environment
 - **Direct Control**: Full control over the server instance
-- **Custom Configuration**: Unlimited customization options
-- **Team Credentials**: Uses your team's API keys and authentication
+- **Flexible Configuration**: Team-level and user-level configuration options
+- **Secure Setup**: Uses DeployStack's three-tier configuration system
 
 ### Cloud Installations (Future)
 
@@ -112,26 +114,30 @@ Behind the scenes, your team's installations are stored securely:
 - **Managed Service**: DeployStack handles the infrastructure
 - **Simplified Setup**: Easier installation and maintenance
 - **Automatic Updates**: Managed updates and scaling
-- **Team Isolation**: Still team-scoped with your credentials
+- **Team Isolation**: Still team-scoped with the same configuration hierarchy
 
 ## Security Considerations
 
-### Credential Protection
+### Configuration Security
 
-Your team's installation credentials are protected through multiple layers:
+Your team's installation configurations are protected through multiple layers:
 
-- **Encryption at Rest**: All credentials are encrypted in the database
-- **Access Control**: Only team members can access credentials
-- **Secure Transmission**: Credentials are encrypted during transmission
-- **Audit Logging**: All credential access is logged for security
+- **Encryption at Rest**: All team configurations and credentials are encrypted in the database
+- **Access Control**: Only team members can access team configurations
+- **Secure Transmission**: All configuration data is encrypted during transmission
+- **Audit Logging**: All configuration access is logged for security
 
 ### Team Boundaries
 
 The team-scoped installation system provides strong security boundaries:
 
 - **Complete Isolation**: Teams cannot access each other's installations
-- **Separate Credentials**: Each team uses completely separate authentication
-- **Independent Configuration**: No shared configuration between teams
+- **Separate Configuration**: Each team uses completely separate settings and credentials
+- **Independent Setup**: No shared configuration between teams
 - **Secure Defaults**: Installations use secure default settings
 
-MCP server installations provide the bridge between the global catalog of available servers and your team's actual working environment. By understanding how installations work within your team workspace, you can effectively manage your team's MCP server landscape while maintaining security and organization.
+For comprehensive details about DeployStack's security model for configurations, see [MCP Configuration System](/mcp-configuration).
+
+MCP server installations provide the bridge between the global catalog of available servers and your team's actual working environment. They represent the team layer in DeployStack's three-tier configuration system, managing shared settings that all team members inherit while allowing individual customization.
+
+For complete understanding of how installations fit into the broader configuration architecture, see the [MCP Configuration System](/mcp-configuration) documentation.

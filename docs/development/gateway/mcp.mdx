@@ -20,11 +20,19 @@ The Gateway implements a sophisticated MCP configuration system that:
 
 ## API Integration
 
-### Endpoint
-The Gateway fetches MCP installations from:
+### Legacy Team-Based Endpoint
+The Gateway can fetch MCP installations from the legacy team-based endpoint:
 ```
 GET /api/teams/{teamId}/mcp/installations
 ```
+
+### Modern Three-Tier Gateway Endpoint
+For optimal performance and device-specific configurations, the Gateway uses the modern three-tier endpoint:
+```
+GET /api/gateway/me/mcp-configurations?hardware_id={hardwareId}
+```
+
+This endpoint automatically merges Template + Team + User configurations and returns ready-to-use server configurations with device-specific user arguments and environment variables. For detailed information about this endpoint, see the [Backend API Documentation](/development/backend/api).
 
 ### Response Structure
 The API returns team MCP installations with this interface:

@@ -1,19 +1,19 @@
 ---
 title: Teams Structure in DeployStack
-description: Organize your MCP server management with teams - your workspace for managing servers, credentials, and environment variables in DeployStack.
+description: Organize your MCP server management with teams - your workspace for managing servers and configurations in DeployStack.
 sidebar: Teams
 ---
 
 # Teams
 
-Teams are the organizational foundation of DeployStack, serving as dedicated workspaces where you manage all your MCP server configurations, cloud provider credentials, and environment variables. Think of teams as isolated containers that keep your team resources organized and secure.
+Teams are the organizational foundation of DeployStack, serving as dedicated workspaces where you manage all your MCP server configurations and settings. Think of teams as isolated containers that keep your team resources organized and secure.
 
 ## Overview
 
 In DeployStack, teams provide:
 
 - **Isolated Workspaces**: Each team maintains its own separate environment for MCP server management
-- **Resource Organization**: All your MCP servers, credentials, and settings are organized within teams
+- **Resource Organization**: All your MCP servers and configurations are organized within teams
 - **Access Control**: Team-based permissions ensure secure access to your team resources
 - **Multi-Project Support**: Create multiple teams to organize different projects or environments
 - **Team Collaboration**: Teams support multiple members with role-based access control
@@ -51,16 +51,12 @@ Teams serve as comprehensive containers for all your team resources:
 - **Custom Configurations**: Team-specific server settings and parameters
 - **Process History**: Complete logs and monitoring data for team MCP servers
 
-### MCP Server Credentials
-- **API Keys and Tokens**: Secure storage for MCP server authentication
-- **Service Credentials**: Authentication tokens for various MCP server integrations
+### MCP Server Configuration
+- **Arguments and Environment Variables**: Teams manage the shared configuration layer in DeployStack's three-tier configuration system
+- **Credentials Management**: Secure storage and sharing of API keys and authentication tokens
+- **Team-Scoped Settings**: Configuration that applies to all team members
 
-### Global Environment Variables
-- **Node.js Environment Variables**: Custom env vars for Node.js-based MCP servers
-- **Reusable Variables**: Environment variables that can be applied across multiple servers
-- **Secure Storage**: All environment variables are encrypted and securely stored
-
-These global environment variables allow you to define common settings once and apply them to multiple MCP servers within the same team, streamlining your MCP server management.
+For complete details on how DeployStack handles arguments, environment variables, and credentials, see the [MCP Configuration System](/mcp-configuration) documentation.
 
 ## Team Management
 
@@ -232,10 +228,11 @@ These restrictions ensure that every user always has a personal, private team fo
 
 Each team maintains complete isolation:
 
-- **Separate Credentials**: MCP server credentials are team-specific
+- **Configuration Isolation**: All MCP server configurations are team-specific
 - **Independent Servers**: MCP servers in one team don't affect others
-- **Isolated Variables**: Environment variables are scoped to individual teams
-- **Secure Boundaries**: No cross-team access to resources
+- **Secure Boundaries**: No cross-team access to resources or credentials
+
+For detailed information about configuration isolation, see [MCP Configuration System](/mcp-configuration).
 
 ## Working with Teams
 
@@ -284,8 +281,7 @@ For each team, you can:
 
 - **Update Team Name**: Modify the display name
 - **Edit Description**: Change or add team descriptions
-- **Manage Credentials**: Add, update, or remove MCP server credentials
-- **Configure Variables**: Set up global environment variables
+- **Manage Configurations**: Configure team-level settings, credentials, and environment variables (see [MCP Configuration System](/mcp-configuration))
 - **Monitor MCP Servers**: View all MCP servers and their status
 
 ### Understanding Team Slugs
@@ -332,8 +328,7 @@ To delete a non-default team, you must:
 When you delete a team, you lose **everything** associated with it:
 
 - **All MCP Server Settings**: Complete server configurations and process history
-- **All MCP Server Credentials**: Stored API keys, tokens, and authentication data
-- **All Global Environment Variables**: Custom environment settings and variables
+- **All MCP Server Configurations**: Team-level settings, credentials, and environment variables
 - **Complete Process History**: Logs, monitoring data, and historical information
 
 ### No Recovery Options
@@ -369,8 +364,7 @@ Your team role affects your ability to:
 
 - Configure new MCP servers
 - Modify server configurations
-- Manage MCP server credentials
-- Set up environment variables
+- Manage team-level MCP server settings (see [MCP Configuration System](/mcp-configuration))
 - Monitor MCP server status
 - Access process logs
 
@@ -387,8 +381,7 @@ Consider creating separate teams for:
 Within each team:
 
 - **Group Related Servers**: Configure related MCP servers in the same team
-- **Shared Credentials**: Use the same MCP server credentials across servers
-- **Common Variables**: Leverage global environment variables for consistency
+- **Shared Configuration**: Use team-level credentials and settings across servers (see [MCP Configuration System](/mcp-configuration))
 - **Logical Organization**: Use descriptive names and descriptions
 
 Teams provide the foundation for organized, secure, and efficient MCP server management in DeployStack. By understanding how teams work, you can effectively manage your team resources and maintain clean separation between different projects and environments.
