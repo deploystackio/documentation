@@ -419,6 +419,33 @@ async initialize(app: FastifyInstance, db: AnyDatabase | null) {
 }
 ```
 
+### Event Listeners
+
+Plugins can listen to system events and react to core application changes:
+
+```typescript
+import { EVENT_NAMES, type EventListeners } from '../events';
+
+class MyPlugin implements Plugin {
+  eventListeners: EventListeners = {
+    [EVENT_NAMES.USER_REGISTERED]: this.handleUserRegistered.bind(this),
+    [EVENT_NAMES.TEAM_CREATED]: this.handleTeamCreated.bind(this)
+  };
+
+  private async handleUserRegistered(eventData, context) {
+    // React to user registration
+    context.logger.info(`New user: ${eventData.data.user.email}`);
+  }
+
+  private async handleTeamCreated(eventData, context) {
+    // React to team creation
+    await this.setupTeamResources(eventData.data.team);
+  }
+}
+```
+
+For complete event documentation, see the [Global Event Bus](./events) guide.
+
 ### Access to Core Services
 
 Plugins receive access to:
@@ -428,6 +455,7 @@ Plugins receive access to:
 - **Logger** (`logger`) - For structured logging with plugin context
 - **Schema Access** - Access to the generated database schema including your tables
 - **Global Settings** - Plugins can define and access their own global settings
+- **Event System** - Listen to and react to core application events
 
 ## Plugin Lifecycle
 

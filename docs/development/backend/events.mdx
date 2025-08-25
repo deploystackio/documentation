@@ -1,0 +1,90 @@
+---
+title: Global Event Bus
+description: Type-safe event system for decoupled communication between core systems and plugins in DeployStack.
+---
+
+# Global Event Bus
+
+The Global Event Bus enables decoupled communication between core systems and plugins through a type-safe event system. Core systems emit events when important actions occur, and plugins can react without direct coupling to business logic.
+
+## Overview
+
+Key features:
+- **Type Safety**: Full TypeScript integration with strongly-typed event data
+- **Plugin Isolation**: Secure event listener registration with error isolation
+- **Performance**: Fire-and-forget event processing
+- **Security**: Events cannot be intercepted or modified by plugins
+
+## Event Naming Convention
+
+Events follow the `domain.action` pattern, aligned with the permission structure:
+
+- `user.registered`, `user.login`, `user.logout`, `user.updated`, `user.deleted`
+- `team.created`, `team.updated`, `team.member_added`, `team.member_removed`
+- `settings.updated`, `settings.smtp_configured`, `settings.github_configured`
+- `mcp.server_installed`, `mcp.server_uninstalled`, `mcp.server_configured`
+
+## Event Data Structure
+
+```typescript
+interface EventData<T = any> {
+  userId?: string;
+  teamId?: string;
+  data: T;
+}
+
+interface EventContext {
+  db: AnyDatabase | null;
+  logger: FastifyBaseLogger;
+  user?: { id: string; email: string; roleId: string; };
+  request?: { ip: string; userAgent?: string; requestId: string; };
+  timestamp: Date;
+}
+```
+
+## Event Constants
+
+```typescript
+import { EVENT_NAMES } from '../events';
+
+EVENT_NAMES.USER_REGISTERED    // 'user.registered'
+EVENT_NAMES.TEAM_CREATED       // 'team.created'
+EVENT_NAMES.SETTINGS_UPDATED   // 'settings.updated'
+```
+
+## Usage in Core Routes
+
+Emit events after successful operations:
+
+```typescript
+// After successful user registration
+server.eventBus?.emitWithContext(
+  EVENT_NAMES.USER_REGISTERED,
+  { userId: newUser.id, data: { user: newUser, source: 'email_registration' } },
+  eventContext
+);
+```
+
+## Plugin Event Listeners
+
+Plugins register event listeners in their configuration:
+
+```typescript
+class EmailNotificationPlugin implements Plugin {
+  eventListeners: EventListeners = {
+    [EVENT_NAMES.USER_REGISTERED]: this.handleUserRegistered.bind(this)
+  };
+
+  private async handleUserRegistered(eventData: EventData, context: EventContext) {
+    await this.sendWelcomeEmail(eventData.data.user);
+  }
+}
+```
+
+For detailed plugin event listener examples, see the [Plugin System Documentation](/development/backend/plugins).
+
+## Available Events
+
+Events are emitted for user lifecycle (`user.*`), team management (`team.*`), settings changes (`settings.*`), and MCP operations (`mcp.*`). Each event includes relevant data and context.
+
+For complete event schemas and data structures, see the [event type definitions](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/events/types.ts).
