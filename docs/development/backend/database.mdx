@@ -147,6 +147,29 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { drizzle } from 'drizzle-orm/libsql';
 ```
 
+### Database Connection Patterns
+
+When accessing the database in route handlers, always use `getDb()` to obtain the database connection dynamically:
+
+```typescript
+import { getDb } from '../../../db';
+import { YourService } from '../../../services/yourService';
+
+export default async function yourRoute(server: FastifyInstance) {
+  const db = getDb();
+  const yourService = new YourService(db);
+  // ... rest of route handler
+}
+```
+
+**Why this pattern is required:**
+- `server.db` may be `null` during certain initialization states
+- `getDb()` always returns the active database connection
+- This ensures consistent behavior across all endpoints
+- Other working endpoints already follow this pattern
+
+**Avoid:** Direct usage of `server.db` as it can cause "Cannot read properties of null" errors.
+
 ## Database Structure
 
 The database schema is defined in `src/db/schema.sqlite.ts`. This is the **single source of truth** for all database schema definitions and works across all supported database types.

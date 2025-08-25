@@ -87,9 +87,10 @@ During the token exchange process, the gateway automatically registers the curre
 
 **Security Benefits:**
 - Device registration happens only during authenticated login sessions
-- No separate device registration endpoints (enhanced security)
+- **No separate device registration endpoints exist** - this prevents unauthorized device registration and enhances security
 - Hardware fingerprinting provides unique device identification
 - Enables device management and access control in the backend
+- Eliminates the need for manual device registration API calls
 
 **Process Flow:**
 1. Gateway detects current device information using system APIs
@@ -289,9 +290,12 @@ When device registration succeeds, the backend includes device information in th
 
 **Security Design:**
 - Device registration only occurs during authenticated OAuth2 flows
-- No separate device creation endpoints exist (prevents unauthorized device registration)
-- Hardware fingerprinting ensures unique device identification
+- **No separate device creation endpoints exist** - this architectural decision prevents unauthorized device registration and eliminates potential security vulnerabilities
+- Hardware fingerprinting ensures unique device identification across multiple login sessions
 - Device information is validated using JSON schema before processing
+- Gateway automatically handles device lookup using hardware fingerprints without requiring manual registration
+
+For comprehensive information about device management and hardware fingerprinting, see the [Device Management Documentation](/device-management).
 
 ## Security Considerations
 
