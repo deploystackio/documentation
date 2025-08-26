@@ -61,6 +61,8 @@ This architecture enables teams to share common settings like API keys while all
 
 The heart of the system is sophisticated lock/unlock controls with precise categorization:
 
+**Secret Type Support:** Configuration values marked as `type: "secret"` in schemas are automatically encrypted for security. For complete details on secret encryption, masking, and security, see [Security and Privacy](/security).
+
 **Global Administrator Controls:**
 - **Sophisticated Categorization** - Categorize every configuration element into Template/Team/User tiers
 - **Granular Lock/Unlock Controls** - Set default lock states and visibility controls for each element
@@ -116,7 +118,7 @@ Here's how the three tiers combine into a final runtime configuration:
 ```json
 {
   "args": [],
-  "env": {"SHARED_API_KEY": "team-secret-12345"}
+  "env": {"SHARED_API_KEY": "••••• (encrypted secret)"}
 }
 ```
 
@@ -140,11 +142,13 @@ Here's how the three tiers combine into a final runtime configuration:
   ],
   "env": {
     "PROTOCOL_VERSION": "1.0",
-    "SHARED_API_KEY": "team-secret-12345", 
+    "SHARED_API_KEY": "decrypted-secret-for-runtime", 
     "DEBUG": "true"
   }
 }
 ```
+
+*Note: Secret values are automatically decrypted only for runtime execution. In all other contexts (API responses, user interfaces), secrets appear masked as `*****`.*
 
 ## Key Benefits
 

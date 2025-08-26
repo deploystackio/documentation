@@ -70,7 +70,7 @@ Template Configuration (Set by Global Admin, Cannot Change):
 ├─ System Flag: "-y" (🔒 Locked Forever)
 
 Team Configuration (You Control):
-├─ GIT_ACCESS_TOKEN: "team-git-token-xyz" (🔒 Locked, Hidden)
+├─ GIT_ACCESS_TOKEN: "••••• (encrypted secret)" (🔒 Locked)
 ├─ SHARED_PROJECT_ROOT: "/company/projects" (🔒 Locked)
 
 User Controls (You Decide Lock/Unlock):
@@ -88,8 +88,10 @@ User Controls (You Decide Lock/Unlock):
 - Team members can use credentials but may not see actual values
 
 **Credential Visibility:**
-- **Hidden Credentials** - Users use them automatically but can't see values (for API keys)
-- **Visible Credentials** - Users can see values (for service URLs)
+- **Secret Fields** - Users see `*****` and use them automatically (for API keys, tokens)
+- **Visible Fields** - Users can see actual values (for service URLs, non-sensitive settings)
+
+For complete details on how secret fields are encrypted and protected, see [Security and Privacy](/security).
 
 **Updates:**
 - Update credentials without affecting user configurations
