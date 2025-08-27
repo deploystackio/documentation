@@ -41,8 +41,46 @@ To ensure account security:
 
 ## Data Protection
 
-### Sensitive Settings
-Your configuration data is protected with encryption:
+### MCP Configuration Security
+
+DeployStack automatically protects sensitive MCP configuration values through a selective encryption system:
+
+**Secret Type Implementation:**
+- **Schema-Based Detection**: Fields marked as `type: "secret"` in MCP schemas are automatically identified for encryption
+- **AES-256-GCM Encryption**: Secret values are encrypted using the same industry-standard encryption as global settings
+- **Selective Processing**: Only secret-type fields are encrypted; regular configuration values remain as plaintext for performance
+- **Encrypted Storage**: Secret values are stored encrypted in the database and never saved as plaintext
+
+**API Response Protection:**
+- **Automatic Masking**: All API responses automatically mask secret values as `*****`
+- **No Secret Exposure**: Secret values never appear in API responses, logs, or user interfaces
+- **Runtime Decryption**: Only authorized operations (like gateway configuration generation) can decrypt secrets for actual use
+
+**Three-Tier Secret Management:**
+- **Template Level**: Global administrators define which fields are secret types in schemas
+- **Team Level**: Team administrators configure secret values (API keys, tokens) that all team members inherit
+- **User Level**: Users see masked values (`*****`) and cannot access actual secret content
+
+**What Gets Encrypted:**
+- API keys and authentication tokens
+- Database passwords and connection strings
+- Service credentials and access keys
+- Any configuration field marked as `type: "secret"` in the schema
+
+**What Doesn't Get Encrypted:**
+- Debug flags and boolean settings
+- File paths and directory names
+- Public configuration values
+- Regular string, number, and boolean fields
+
+**Security Benefits:**
+- **Zero Secret Exposure**: Impossible for secrets to leak through API responses
+- **Database Protection**: Even database access doesn't reveal plaintext secrets
+- **Audit Safe**: Logs and interfaces never contain actual secret values
+- **Team Security**: Team members use secrets without seeing actual values
+
+### Global Settings Encryption
+Your global configuration data is protected with encryption:
 
 - **Encrypted storage**: Sensitive settings like passwords and API keys are encrypted
 - **Secure keys**: Encryption uses industry-standard methods

@@ -63,7 +63,7 @@ Debug Settings:
 
 TEAM-MANAGED SETTINGS (You inherit these automatically)
 
-✓ Team credentials configured
+✓ Team API credentials: ••••• (encrypted, see Security)
 ✓ Shared project access: /company/projects
 ✓ Team backup settings: Enabled
 
@@ -157,7 +157,7 @@ Template (System):
 └─ System flags: "-y"
 
 + Team (Shared):
-├─ Team API Key: "team-secret-12345" (hidden from you)
+├─ Team API Key: "••••• (encrypted secret, hidden from you)"
 ├─ Shared directory: "/company/projects"
 └─ Backup enabled: true
 
@@ -170,7 +170,7 @@ Template (System):
 Command: npx -y @modelcontextprotocol/server-filesystem 
          /Users/alice/Development /Users/alice/Projects
 Environment: {
-  "TEAM_API_KEY": "team-secret-12345",
+  "TEAM_API_KEY": "decrypted-for-runtime-only",
   "SHARED_DIR": "/company/projects", 
   "BACKUP_ENABLED": "true",
   "DEBUG": "true",
