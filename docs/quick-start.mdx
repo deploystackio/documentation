@@ -43,54 +43,12 @@ By the end of this guide, you'll have:
   <Step>
     **Explore Your Dashboard**
     
-    Once logged in, you'll see:
-    - **Teams**: Your personal default team (automatically created)
-    - **MCP Catalog**: Browse available MCP servers
-    - **Team Settings**: Manage your team and credentials
+    Once logged in, you'll see preinstalled MCP servers in your dashboard.
+    We have preinstalled popular MCP servers like Sequential Thinking. You can add more whenever you want to.
   </Step>
 </Steps>
 
-## Step 2: Configure Your First MCP Server
-
-Let's set up a popular MCP server to get you started quickly.
-
-<Steps>
-  <Step>
-    **Browse the MCP Catalog**
-    
-    1. Navigate to the **MCP Catalog** in your dashboard
-    2. Browse available MCP servers (GitHub, BrightData, Weather, etc.)
-    3. Click on a server that interests you to see its details
-  </Step>
-  
-  <Step>
-    **Add an MCP Server to Your Team**
-    
-    For this example, let's add the GitHub MCP server:
-    
-    1. Find "GitHub MCP Server" in the catalog
-    2. Click **"Add to Team"**
-    3. Select your default team
-    4. You'll be prompted to add credentials
-  </Step>
-  
-  <Step>
-    **Configure Credentials**
-    
-    Add your GitHub token securely:
-    
-    1. **Create a GitHub Token**: Go to [GitHub Settings > Personal Access Tokens](https://github.com/settings/tokens)
-    2. **Generate a new token** with appropriate permissions
-    3. **Add to DeployStack**: Paste the token in the credentials field
-    4. **Save**: Your credentials are encrypted and stored securely
-  </Step>
-</Steps>
-
-<Callout type="info">
-  **Security Note**: Your credentials are encrypted and never exposed to your local environment. The DeployStack Gateway injects them securely at runtime.
-</Callout>
-
-## Step 3: Install and Configure the Gateway
+## Step 2: Install and Configure the Gateway
 
 The DeployStack Gateway runs locally and connects your development tools to your team's MCP servers.
 
@@ -102,12 +60,6 @@ The DeployStack Gateway runs locally and connects your development tools to your
     
     ```bash
     npm install -g @deploystack/gateway
-    ```
-    
-    Verify the installation:
-    
-    ```bash
-    deploystack --version
     ```
   </Step>
   
@@ -124,21 +76,8 @@ The DeployStack Gateway runs locally and connects your development tools to your
     - Open a browser window for authentication
     - Download your team's MCP server configurations
     - Set up secure credential access
-  </Step>
-  
-  <Step>
-    **Start the Gateway**
-    
-    Start the gateway to begin using your MCP servers:
-    
-    ```bash
-    deploystack start
-    ```
-    
-    The gateway will:
-    - Start all your configured MCP servers as background processes
-    - Expose them at `http://localhost:9095/sse`
-    - Inject credentials securely without exposing them to you
+
+    Login command will pull your MCP configurations and credentials from the cloud.deploystack.io and start the DeployStack gateway.
   </Step>
   
   <Step>
@@ -157,7 +96,7 @@ The DeployStack Gateway runs locally and connects your development tools to your
   </Step>
 </Steps>
 
-## Step 4: Connect Your Development Environment
+## Step 3: Connect Your Development Environment
 
 Now connect VS Code or Cursor to use your team's MCP servers.
 
@@ -170,6 +109,7 @@ Now connect VS Code or Cursor to use your team's MCP servers.
     **Location**: `.vscode/settings.json` or global VS Code settings
     
     **Before** (manual MCP server management):
+
     ```json
     {
       "mcpServers": {
@@ -185,6 +125,7 @@ Now connect VS Code or Cursor to use your team's MCP servers.
     ```
     
     **After** (DeployStack Gateway):
+
     ```json
     {
       "mcpServers": {
@@ -208,7 +149,7 @@ Now connect VS Code or Cursor to use your team's MCP servers.
   </Step>
 </Steps>
 
-## Step 5: Explore Your Setup
+## Step 4: Explore Your Setup
 
 Now that everything is connected, explore what you can do:
 
@@ -242,8 +183,6 @@ Now that everything is connected, explore what you can do:
     
     Back in the [DeployStack dashboard](https://cloud.deploystack.io):
     - Add more MCP servers to your team
-    - Invite team members (if you have a team)
-    - Monitor usage and activity
     - Manage credentials securely
   </Step>
 </Steps>
@@ -272,7 +211,7 @@ deploystack logs
 deploystack mcp
 
 # Update configurations from cloud
-deploystack sync
+deploystack refresh
 
 # Switch teams (if you have multiple)
 deploystack teams
