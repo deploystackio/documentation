@@ -62,6 +62,31 @@ The Gateway's process management system operates on a **persistent background pr
   </Card>
 </Cards>
 
+## Selective Restart Capability
+
+The Gateway supports **selective restart** functionality, allowing individual MCP servers to be managed without requiring a full gateway restart. This feature dramatically improves configuration update performance and eliminates downtime for unchanged servers.
+
+### Key Features
+
+- **Individual Server Control**: Add, remove, or restart specific MCP servers via HTTP API
+- **Change Detection**: Automatically detects added, removed, and modified server configurations
+- **Fallback Safety**: Falls back to full restart if selective operations fail
+- **Zero Downtime**: Unchanged servers continue running during configuration updates
+
+### API Endpoints
+
+The Gateway exposes HTTP endpoints for selective server management:
+
+- `POST /api/mcp/servers` - Add new MCP servers to running gateway
+- `DELETE /api/mcp/servers/:serverName` - Remove specific servers
+- `POST /api/mcp/servers/:serverName/restart` - Restart individual servers
+
+### Implementation Services
+
+- **Selective Restart Service**: Handles HTTP communication with running gateway processes
+- **Configuration Change Service**: Detects configuration differences and orchestrates selective operations
+- **Process Manager Integration**: Provides individual server lifecycle control capabilities
+
 ## Process Lifecycle
 
 ### Gateway Startup Phase

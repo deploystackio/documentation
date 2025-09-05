@@ -14,21 +14,22 @@ The DeployStack Gateway is the local secure proxy that connects developers to th
 
 ## Architecture Overview
 
-The Gateway implements a sophisticated Control Plane / Data Plane architecture with dual transport support:
+The Gateway implements a sophisticated Control Plane / Data Plane architecture with comprehensive transport support:
 
 - **Control Plane**: Authenticates with `cloud.deploystack.io` to download team configurations and access policies
-- **Data Plane**: Manages local MCP server processes with both stdio and SSE transport protocols
+- **Data Plane**: Manages local MCP server processes with stdio, SSE, and Streamable HTTP transport protocols
 - **Security Layer**: Injects credentials securely into process environments without exposing them to developers
 - **Session Management**: Handles secure SSE connections with cryptographic session IDs for VS Code compatibility
+- **Transport Layer**: Supports both legacy SSE transport and modern Streamable HTTP transport for maximum client compatibility
 
 ## Core Features
 
 <Cards>
   <Card 
     icon={<Terminal />} 
-    title="Dual Transport Support"
+    title="Triple Transport Support"
   >
-    Supports both stdio transport for CLI tools and SSE transport for VS Code compatibility
+    Supports stdio transport for CLI tools, SSE transport for VS Code compatibility, and Streamable HTTP for modern MCP clients
   </Card>
   
   <Card 
@@ -118,9 +119,11 @@ Manages the lifecycle of MCP server processes, including:
 - Environment variable injection
 
 ### HTTP Proxy Server
-Exposes dual endpoints for different client types:
-- **GET /sse**: SSE connection establishment for VS Code
+Exposes multiple endpoints for different client types:
+- **GET /sse**: SSE connection establishment for VS Code and legacy clients
 - **POST /message**: Session-based JSON-RPC for SSE clients
+- **POST /mcp**: Streamable HTTP endpoint for modern MCP clients
+- **GET /health**: Health check endpoint for monitoring
 
 ### Session Manager
 Handles secure SSE connections with:
@@ -163,11 +166,16 @@ The Gateway works with MCP server configurations in this format:
 1. **Authentication**: Gateway authenticates with cloud control plane
 2. **Config Download**: Downloads team's MCP server configurations
 3. **Persistent Process Startup**: Starts all configured MCP servers as background processes when gateway launches
-4. **HTTP Server**: Starts local HTTP server with SSE endpoints immediately available (default: `localhost:9095/sse`)
-5. **Request Handling**: Receives MCP requests from development tools and routes to already-running processes
+4. **HTTP Server**: Starts local HTTP server with multiple endpoints immediately available:
+   - SSE endpoint: `localhost:9095/sse` (for VS Code and legacy clients)
+   - Messages endpoint: `localhost:9095/message` (for session-based JSON-RPC)
+   - MCP endpoint: `localhost:9095/mcp` (for modern Streamable HTTP clients)
+   - Health endpoint: `localhost:9095/health` (for monitoring)
+5. **Request Handling**: Receives MCP requests from development tools and intelligently routes to appropriate transport
 6. **Process Management**: Maintains persistent background processes as described in [Gateway Process Management](/development/gateway/process-management).
 7. **Credential Injection**: Securely injects environment variables into running processes at startup
 8. **Tool Routing**: Routes namespaced tool calls to persistent MCP servers via stdio transport
+9. **Transport Selection**: Automatically detects client capabilities and uses appropriate transport (SSE or Streamable HTTP)
 
 For detailed information about the caching system, see [Gateway Caching System](/development/gateway/caching-system).
 
@@ -207,10 +215,3 @@ The Gateway is actively under development. Key areas for contribution:
 - **Performance**: Optimizing stdio communication
 - **Platform Support**: Adding Windows/Linux compatibility
 - **Error Handling**: Robust error recovery
-
-## Roadmap
-
-- **Phase 2**: Enhanced process lifecycle management
-- **Phase 3**: Support for remote MCP servers (HTTP transport)
-- **Phase 4**: Advanced monitoring and analytics
-- **Future**: Plugin system for custom MCP server types
