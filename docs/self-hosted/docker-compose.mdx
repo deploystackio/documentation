@@ -26,26 +26,11 @@ This guide provides step-by-step instructions to install and configure DeploySta
 
 - **RAM**: Ensure your environment has at least 4GB of RAM. Insufficient memory can cause processes to crash.
 - **Docker & Docker Compose**: Make sure both are installed and up-to-date.
-- **Storage**: At least 20GB of available disk space for images and persistent data.
-- **Network**: Stable internet connection for pulling Docker images.
+- **Storage**: At least 2GB of available disk space for images and persistent data.
 
-## Option 1: One-line Setup
+## Beggining the setup for Docker Compose
 
-Deploy DeployStack with a single command:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/deploystackio/deploystack/main/scripts/install.sh | bash
-```
-
-This script will:
-1. Download the docker-compose.yml file
-2. Generate a secure encryption secret
-3. Start all services
-4. Display access information
-
-## Option 2: Manual Setup
-
-Follow these steps for a manual setup with full control.
+Follow these steps for a setup with docker compsoe
 
 ### Step 1: Download Docker Compose File
 
@@ -258,54 +243,13 @@ docker-compose logs backend
 docker-compose logs frontend
 ```
 
-#### Port Conflicts
-
-If ports 3000 or 8080 are already in use:
-
-```bash
-# Update .env file
-FRONTEND_PORT=8081
-BACKEND_PORT=3001
-
-# Restart services
-docker-compose down
-docker-compose up -d
-```
-
-#### Permission Issues
-
-```bash
-# Fix volume permissions
-sudo chown -R $USER:$USER $(docker volume inspect deploystack_backend_persistent --format '{{ .Mountpoint }}')
-```
-
-#### Memory Issues
-
-```bash
-# Check available memory
-free -h
-
-# Monitor container resource usage
-docker stats
-```
-
 ### Getting Help
 
 If you encounter issues not covered here:
 
-1. Check the [Troubleshooting](/troubleshooting) guide
-2. Search existing [GitHub Issues](https://github.com/deploystackio/deploystack/issues)
-3. Join our [Discord community](https://discord.gg/UjFWwByB)
-4. Create a new issue with detailed logs and system information
-
-## Next Steps
-
-Once DeployStack is running:
-
-1. **Create your first workspace** through the web interface
-2. **Configure global settings** for email and authentication
-3. **Set up user roles** and team permissions
-4. **Deploy your first MCP server** from the catalog
+1. Search existing [GitHub Issues](https://github.com/deploystackio/deploystack/issues)
+2. Join our [Discord community](https://discord.gg/42Ce3S7b3b)
+3. Create a new issue with detailed logs and system information
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: Session Management
-description: Cryptographically secure session lifecycle management for SSE connections
+description: Cryptographically secure session lifecycle management for SSE and Streamable HTTP connections
 sidebar: Session Management
 icon: Key
 ---
@@ -10,14 +10,16 @@ import { Key, Clock, Shield, Trash2 } from 'lucide-react';
 
 # Session Management
 
-The DeployStack Gateway implements a robust session management system that provides cryptographically secure session handling for persistent SSE connections while ensuring automatic cleanup and resource management.
+The DeployStack Gateway implements a robust session management system that provides cryptographically secure session handling for both persistent SSE connections and optional Streamable HTTP sessions while ensuring automatic cleanup and resource management.
 
 ## Architecture Overview
 
-The session management system consists of two primary components working together to provide secure, persistent connections:
+The session management system consists of multiple components working together to provide secure connections across different transport protocols:
 
 - **SessionManager**: Handles session lifecycle, validation, and SSE stream management
 - **SSEHandler**: Manages Server-Sent Events connections and message routing
+- **StreamableHTTPHandler**: Manages Streamable HTTP connections with optional session support
+- **Transport Layer**: Intelligent routing between SSE and Streamable HTTP based on client capabilities
 
 ## Core Components
 
@@ -78,14 +80,16 @@ private validateSessionId(sessionId: string): boolean {
 ## Session Lifecycle
 
 ### 1. Creation Phase
-**Trigger**: SSE connection establishment via `GET /sse`
+**Triggers**: 
+- SSE connection establishment via `GET /sse`
+- Optional session creation for Streamable HTTP via `POST /mcp` with session headers
 
 **Process:**
 1. Generate cryptographically secure session ID
 2. Create session object with metadata
-3. Associate with SSE stream
+3. Associate with SSE stream (for SSE transport) or track session state (for Streamable HTTP)
 4. Schedule automatic cleanup timer
-5. Send endpoint event to client
+5. Send endpoint event to client (SSE) or return session headers (Streamable HTTP)
 
 **Session Object:**
 ```typescript
@@ -219,6 +223,24 @@ getStatus() {
 - **Cleanup Events**: Cleanup reasons and timing logged
 - **Error Conditions**: Detailed error logging for troubleshooting
 
+## Transport-Specific Session Handling
+
+### SSE Transport Sessions
+SSE transport requires persistent sessions for connection management:
+
+- **Mandatory Sessions**: All SSE connections must have associated sessions
+- **Stream Binding**: Sessions are bound to specific SSE streams
+- **Real-time Communication**: Messages sent via SSE events in real-time
+- **Connection Lifecycle**: Session lifecycle tied to SSE connection state
+
+### Streamable HTTP Transport Sessions
+Streamable HTTP transport supports optional sessions for enhanced functionality:
+
+- **Optional Sessions**: Sessions can be used but are not required
+- **Stateless Operation**: Supports both stateless and session-based operation
+- **Header-Based**: Session IDs passed via `Mcp-Session-Id` header
+- **Flexible Lifecycle**: Sessions can span multiple HTTP requests
+
 ## Integration Points
 
 ### SSE Handler Integration
@@ -235,21 +257,44 @@ this.sseHandler.sendMessage(sessionId, response);
 this.sseHandler.sendError(sessionId, errorResponse);
 ```
 
-### HTTP Proxy Integration
-Session validation in the HTTP proxy:
+### Streamable HTTP Handler Integration
+The session manager provides optional session support for Streamable HTTP:
 
 ```typescript
-// Session validation on each request
-const session = this.sessionManager.getSession(sessionId);
-if (!session) {
-  // Handle invalid session
+// Optional session validation for Streamable HTTP
+const sessionId = request.headers['mcp-session-id'];
+if (sessionId) {
+  const session = this.sessionManager.getSession(sessionId);
+  if (session) {
+    this.sessionManager.updateActivity(sessionId);
+  }
 }
 
-// Activity tracking
-this.sessionManager.updateActivity(sessionId);
+// Stateless operation when no session provided
+if (!sessionId) {
+  // Handle request without session context
+}
+```
 
-// Error counting
-this.sessionManager.incrementErrorCount(sessionId);
+### HTTP Proxy Integration
+Session validation across both transports in the HTTP proxy:
+
+```typescript
+// Transport-aware session handling
+if (isSSETransport) {
+  // SSE requires session validation
+  const session = this.sessionManager.getSession(sessionId);
+  if (!session) {
+    throw new Error('Invalid session for SSE transport');
+  }
+  this.sessionManager.updateActivity(sessionId);
+} else if (isStreamableHTTP && sessionId) {
+  // Streamable HTTP optional session support
+  const session = this.sessionManager.getSession(sessionId);
+  if (session) {
+    this.sessionManager.updateActivity(sessionId);
+  }
+}
 ```
 
 ## Best Practices
