@@ -1,303 +1,139 @@
 ---
-title: Device Management
-description: Understand how DeployStack manages devices across your organization for security, compliance, and seamless multi-device MCP configuration workflows.
-sidebar: Device Management
+title: Device Management (Legacy)
+description: Documentation for the legacy device management system that has been removed as part of DeployStack's strategic pivot to Satellite Service.
+sidebar: Device Management (Legacy)
 icon: Monitor
 ---
 
-# Device Management
+# Device Management (Legacy)
 
-DeployStack automatically tracks and manages devices across your organization to enable secure multi-device MCP configurations, enterprise governance, and seamless user experiences. Every device that accesses DeployStack is registered and managed through our comprehensive device management system.
+**⚠️ DEPRECATED:** This feature has been removed as part of DeployStack's strategic pivot to Satellite Service. Users now simply add URLs to VS Code instead of installing CLI software, eliminating the need for device tracking.
 
-## Why Device Management Matters
+## Strategic Context
 
-Device management is essential for DeployStack's three-tier MCP configuration system and enterprise security:
+As documented in [ADR-000: Strategic Decision - Gateway to Satellite](/adr/strategic-decision-gateway-to-satellite), DeployStack has evolved from a CLI-based gateway solution to a **MCP-as-a-Service platform**. This change eliminated the need for device management because:
 
-**🏢 Enterprise Governance**
-- **Visibility**: Administrators can see which devices access which MCP servers across the organization
-- **Compliance**: Complete audit trails for regulatory requirements and security policies
-- **Access Control**: Ability to manage and revoke device access when needed
-- **Risk Management**: Identify and respond to unauthorized or compromised devices
+- **Zero Installation Required**: Users add URLs instead of installing CLI software
+- **No Local Processes**: Satellite infrastructure handles MCP servers remotely
+- **Simplified Security Model**: Standard HTTPS authentication replaces device fingerprinting
+- **Better User Experience**: "Just add a URL" vs. complex device registration
 
-**👥 Team Collaboration**
-- **Multi-Device Workflows**: Users seamlessly work across laptops, desktops, and cloud workstations
-- **Device-Specific Configurations**: Different MCP settings for different environments (development vs. production machines)
-- **Team Visibility**: Team administrators can see device usage patterns and optimize configurations
+## What Was Removed
 
-**🔒 Security & Trust**
-- **Device Authentication**: Each device is uniquely identified and authenticated
-- **Hardware Fingerprinting**: Secure device identification based on system characteristics
-- **Trust Management**: Mark devices as trusted or untrusted based on organizational policies
-- **Automatic Registration**: Devices are registered securely during OAuth2 login flow
+The following device management features were removed:
 
-## How Device Registration Works
+- **Device Registration**: Automatic device detection during OAuth2 login
+- **Device Tracking**: Hardware fingerprinting and device metadata collection
+- **Device Management APIs**: CRUD operations for device lifecycle
+- **Device-Specific Configurations**: Per-device MCP server settings
+- **Enterprise Device Analytics**: Device usage monitoring and reporting
 
-Device registration happens automatically and securely during the CLI login process:
+## Migration to Satellite Service
 
-### Automatic Registration Process
+For users migrating from the old device-based system:
 
-1. **User Initiates Login**: User runs `deploystack login` command
-2. **OAuth2 Flow Begins**: Standard OAuth2 authorization with PKCE security
-3. **Device Detection**: Gateway automatically detects device information:
-   - Device name (hostname)
-   - Hardware fingerprint (unique identifier based on MAC addresses and system info)
-   - Operating system and version
-   - System architecture
-   - Node.js version for compatibility
-4. **Secure Registration**: Device info is included in OAuth2 token exchange
-5. **Backend Processing**: Device is registered or updated in the database
-6. **User Confirmation**: User sees "📱 Device registered: [device-name]" message
-
-### Security Benefits of Integrated Registration
-
-- **No Separate Endpoints**: Device registration only happens during authenticated login sessions
-- **OAuth2 Security**: Leverages existing OAuth2 security with PKCE
-- **Hardware Fingerprinting**: Unique device identification without user input
-- **Automatic Process**: No manual device management required
-
-For technical details on the OAuth2 integration, see [Gateway OAuth Implementation](/development/gateway/oauth#automatic-device-registration).
-
-## Device Information Collected
-
-DeployStack collects minimal device information necessary for identification and configuration management:
-
-**🔍 Device Identification**
-- **Device Name**: User-friendly name (defaults to hostname, can be customized)
-- **Hardware ID**: Unique fingerprint based on MAC addresses and system characteristics
-- **Hostname**: System hostname for identification
-
-**💻 System Information**
-- **Operating System**: Type and version (macOS, Windows, Linux)
-- **Architecture**: System architecture (x64, arm64, etc.)
-- **Node.js Version**: For compatibility tracking and troubleshooting
-- **User Agent**: CLI version and platform information
-
-**📊 Usage Metadata**
-- **Last Login**: When the device was last used for authentication
-- **Last Activity**: Most recent MCP server interaction
-- **Trust Status**: Whether the device is marked as trusted
-- **Active Status**: Whether the device is currently active
-
-## Multi-Device User Experience
-
-Users can seamlessly work across multiple devices with device-specific configurations:
-
-### Device-Specific MCP Configurations
-
-Each device maintains its own personal MCP configuration while inheriting team settings:
-
-**Example: Filesystem MCP Server**
-- **MacBook Pro**: `/Users/alice/Development`, `/Users/alice/Projects`
-- **Work Desktop**: `C:\Users\alice\Projects`, `C:\Company\Shared`
-- **Cloud Workstation**: `/home/alice/workspace`, `/data/projects`
-
-**Shared Team Settings** (inherited on all devices):
-- Team API keys and credentials
-- Shared project directories
-- Team-wide configuration standards
-
-### Device Management Interface
-
-Users can manage their devices through the DeployStack interface:
-
-```
-Your Devices
-
-📱 MacBook Pro (Current Device)
-   ├─ Last Login: 2 minutes ago
-   ├─ Status: Active, Trusted
-   ├─ MCP Configurations: 5 active
-   └─ [Configure] [View Details]
-
-🖥️ Work Desktop
-   ├─ Last Login: Yesterday
-   ├─ Status: Active, Trusted
-   ├─ MCP Configurations: 3 active
-   └─ [Configure] [View Details]
-
-☁️ Cloud Workstation
-   ├─ Last Login: 3 days ago
-   ├─ Status: Inactive
-   ├─ MCP Configurations: 2 configured
-   └─ [Configure] [Reactivate]
+### Before (Gateway CLI with Device Management)
+```bash
+# Complex device-aware workflow
+deploystack login  # Device registered automatically
+deploystack start  # Local process management
+# VS Code: http://localhost:9095/sse
 ```
 
-## Administrator Perspective
-
-### Enterprise Device Visibility
-
-Administrators have comprehensive visibility into device usage across the organization:
-
-**📊 Device Analytics Dashboard**
-- Total devices across all teams
-- Active vs. inactive device counts
-- Device types and operating systems
-- MCP server usage by device
-- Security alerts and untrusted devices
-
-**🔍 Device Search and Filtering**
-- Search by user, team, or device name
-- Filter by operating system, trust status, or activity
-- View device-specific MCP configurations
-- Export device reports for compliance
-
-### Security Management
-
-**🛡️ Device Trust Management**
-- Mark devices as trusted or untrusted
-- Automatically trust devices from known networks
-- Require manual approval for new devices
-- Bulk trust management for organizational devices
-
-**🚨 Security Monitoring**
-- Detect unusual device activity patterns
-- Alert on new device registrations
-- Monitor for potential security threats
-- Track device access to sensitive MCP servers
-
-**⚙️ Device Policies**
-- Set maximum devices per user
-- Require device naming conventions
-- Enforce device trust requirements
-- Configure automatic device cleanup policies
-
-## Team Administrator Perspective
-
-### Team Device Overview
-
-Team administrators can monitor device usage within their teams:
-
-**👥 Team Device Dashboard**
-- All devices used by team members
-- Device-specific MCP configuration usage
-- Team member device patterns
-- Device compliance with team policies
-
-**📈 Usage Analytics**
-- Which MCP servers are used on which devices
-- Device-specific configuration patterns
-- Team productivity insights
-- Resource utilization by device type
-
-### Device-Aware Configuration Management
-
-Team administrators can optimize configurations based on device usage:
-
-**💡 Configuration Insights**
-- See how team members configure MCP servers across different devices
-- Identify common device-specific patterns
-- Optimize team configurations for different device types
-- Provide device-specific guidance and templates
-
-## Security & Governance
-
-### Compliance Benefits
-
-**📋 Audit Trails**
-- Complete history of device access to MCP servers
-- Track configuration changes by device
-- Monitor team member device usage patterns
-- Generate compliance reports for auditors
-
-**🔐 Access Control**
-- Revoke access for lost or stolen devices
-- Temporarily disable suspicious devices
-- Enforce device trust requirements
-- Control device access to sensitive MCP servers
-
-### Data Protection
-
-**🛡️ Device Security**
-- Hardware fingerprinting prevents device spoofing
-- Encrypted device information storage
-- Secure device authentication
-- Protection against unauthorized device access
-
-**🔒 Privacy Controls**
-- Minimal device information collection
-- User control over device naming
-- Secure storage of device metadata
-- Clear data retention policies
-
-For platform-level device security details, see [Security and Privacy](/security#device-security).
-
-## Device Lifecycle Management
-
-### Device States
-
-**✅ Active Devices**
-- Recently used for MCP server access
-- Receiving configuration updates
-- Included in team analytics
-- Full access to team MCP installations
-
-**⏸️ Inactive Devices**
-- Not used recently (configurable threshold)
-- Configurations preserved but not updated
-- Excluded from active analytics
-- Can be reactivated by user login
-
-**🚫 Disabled Devices**
-- Manually disabled by administrators
-- No access to MCP servers
-- Configurations preserved for potential reactivation
-- Requires administrator action to re-enable
-
-**🗑️ Removed Devices**
-- Permanently removed from the system
-- All configurations deleted
-- Cannot be recovered
-- Audit trail preserved for compliance
-
-### Automatic Cleanup
-
-**⏰ Inactive Device Management**
-- Automatically mark devices inactive after configurable period
-- Send notifications before marking devices inactive
-- Preserve configurations for potential reactivation
-- Clean up truly abandoned devices
-
-**🧹 Data Retention**
-- Remove device data after extended inactivity
-- Preserve audit trails for compliance requirements
-- User notification before permanent deletion
-- Administrator override for important devices
-
-## Integration with MCP Configuration System
-
-Device management is deeply integrated with DeployStack's three-tier MCP configuration system:
-
-### Device-Specific User Configurations
-
-The user tier of the configuration system is inherently device-aware:
-
-- **Template Level**: Global admin defines what can be configured (device-independent)
-- **Team Level**: Team admin sets shared settings (inherited by all user devices)
-- **User Level**: Individual users configure personal settings **per device**
-
-For complete details on the three-tier system, see [MCP Configuration System](/mcp-configuration).
-
-### Configuration Assembly by Device
-
-When a user accesses MCP servers, configurations are assembled per device:
-
-```
-Final Configuration = Template + Team + User (This Device)
-
-Template (Global): Command, package, system flags
-+ Team (Shared): API keys, shared directories, team standards
-+ User Device (Personal): Device-specific paths, preferences, debug settings
-= Runtime Configuration for This Device
+### After (Satellite Service)
+```bash
+# Simple URL-based workflow
+# 1. Register at cloud.deploystack.io
+# 2. Copy JWT token
+# 3. VS Code: https://satellite.deploystack.io/mcp
 ```
 
-## Related Documentation
+### Configuration Changes
 
-For complete understanding of device management in context:
+**Device-Specific Settings (Removed)**:
+- Per-device MCP server configurations
+- Device-specific environment variables
+- Hardware-based access control
 
-- [MCP Configuration System](/mcp-configuration) - How device-specific configurations work within the three-tier system
-- [MCP User Configuration](/mcp-user-configuration) - User experience for multi-device configuration
-- [Security and Privacy](/security) - Platform-level device security implementation
-- [Gateway OAuth Implementation](/development/gateway/oauth) - Technical details of device registration during login
-- [Teams](/teams) - Team structure and device visibility for team administrators
+**Satellite Configurations (New)**:
+- User-level MCP settings (not device-specific)
+- JWT token-based authentication
+- Team-shared configurations
 
-Device management enables DeployStack to provide secure, scalable, and user-friendly MCP server management across any number of devices while maintaining enterprise-grade governance and compliance capabilities.
+## Remaining User Configuration System
+
+While device management was removed, DeployStack still supports user-specific configurations through the three-tier system:
+
+1. **Template Level**: Global admin defines MCP server capabilities
+2. **Team Level**: Team settings shared across all team members
+3. **User Level**: Individual user preferences (no longer device-specific)
+
+For details, see [MCP Configuration System](/mcp-configuration).
+
+## Alternative Solutions
+
+For organizations that previously relied on device management features:
+
+### Instead of Device Tracking
+- **Use JWT Tokens**: Standard OAuth2 authentication
+- **Monitor at User Level**: Track usage by user, not device
+- **Team-Based Analytics**: Focus on team productivity metrics
+
+### Instead of Device-Specific Configurations
+- **User Preferences**: Configure settings per user (applies across all their devices)
+- **Team Satellites**: Deploy on-premise satellites for internal resources
+- **Environment-Based Settings**: Configure by environment (dev/staging/prod)
+
+### Instead of Device Security
+- **OAuth2 + PKCE**: Industry-standard authentication flow
+- **JWT Token Management**: Short-lived access tokens with refresh capability
+- **Team Access Control**: Manage permissions at team level
+
+## Technical Implementation Notes
+
+The device management removal involved:
+
+### Database Schema Changes
+- Removed `devices` table entirely
+- Updated `mcpUserConfigurations` to remove device foreign key
+- Added optional `device_name` field for basic identification
+
+### OAuth2 Flow Simplification
+- Removed device registration from token exchange
+- Simplified request/response schemas
+- Eliminated device-related API endpoints
+
+### Service Layer Cleanup
+- Removed `DeviceService` and `DeviceActivityService`
+- Removed device management routes
+- Updated OAuth2 token handler
+
+## Benefits of the Removal
+
+Removing device management aligns with DeployStack's strategic goals:
+
+### For Users
+- **Simpler Onboarding**: No device registration steps
+- **Faster Setup**: URL configuration in under 3 minutes
+- **Cross-Platform Consistency**: Same experience on all devices
+- **No Installation Friction**: Works immediately without local software
+
+### For DeployStack
+- **Reduced Complexity**: Simpler architecture and codebase
+- **Better Scalability**: Satellite infrastructure scales independently
+- **Market Differentiation**: "First MCP-as-a-Service" positioning
+- **Viral Growth**: "Just add this URL" sharing model
+
+## Historical Context
+
+Device management was essential for the Gateway CLI approach because:
+- Local CLI installations required device tracking
+- Process management needed device-specific state
+- Enterprise features demanded device visibility
+- Multi-device workflows required device coordination
+
+With Satellite Service, these requirements disappeared because the infrastructure is managed remotely and accessed via standard web protocols.
+
+---
+
+**This documentation is preserved for historical reference and migration purposes. For current DeployStack features, see [Satellite Service Documentation](/satellite-service).**

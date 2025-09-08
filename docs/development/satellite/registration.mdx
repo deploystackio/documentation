@@ -1,0 +1,325 @@
+---
+title: Satellite Registration
+description: Complete guide to DeployStack Satellite registration process - environment variables, validation rules, upsert logic, and database integration.
+sidebar: Satellite Development
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Satellite Registration
+
+DeployStack Satellite implements automatic registration with the Backend during startup. This document covers the complete registration process, environment variable requirements, validation rules, and upsert logic for satellite restarts.
+
+## Registration Overview
+
+### Automatic Registration Flow
+
+Satellites register automatically during startup following this sequence:
+
+```
+Satellite Startup
+    │
+    ├── 1. Validate DEPLOYSTACK_SATELLITE_NAME
+    │   ├── Length: 10-32 characters
+    │   ├── Characters: a-z, 0-9, -, _
+    │   └── Fail-fast if invalid
+    │
+    ├── 2. Test Backend Connection
+    │   ├── GET /api/health (5s timeout)
+    │   └── Exit if unreachable
+    │
+    ├── 3. Register with Backend
+    │   ├── POST /api/satellites/register
+    │   ├── Upsert logic (create or update)
+    │   └── Receive API key
+    │
+    └── 4. Start MCP Transport Services
+        ├── SSE Handler
+        ├── Streamable HTTP Handler
+        └── Session Manager
+```
+
+### Upsert Registration Logic
+
+The registration endpoint implements **upsert behavior** to handle satellite restarts:
+
+- **First Registration**: Creates new satellite record in database
+- **Re-Registration**: Updates existing satellite record with new API key and system info
+- **No Conflicts**: Satellite restarts work seamlessly without 409 errors
+
+## Environment Variables
+
+### Required Configuration
+
+```bash
+# Mandatory satellite identity
+DEPLOYSTACK_SATELLITE_NAME=dev-satellite-001
+
+# Backend connection
+DEPLOYSTACK_BACKEND_URL=http://localhost:3000
+```
+
+### Security Model
+
+All satellites register with secure defaults controlled by the backend:
+
+- **Satellite Type**: Always `global` (backend-controlled)
+- **Status**: Always `inactive` (requires admin activation)
+- **Team Assignment**: Always `null` (admin-controlled via backend interface)
+
+## Satellite Name Validation
+
+### Validation Rules
+
+The `DEPLOYSTACK_SATELLITE_NAME` environment variable must meet strict requirements:
+
+**Length Constraints:**
+- Minimum: 10 characters
+- Maximum: 32 characters
+
+**Character Constraints:**
+- Allowed: lowercase letters (a-z), numbers (0-9), hyphens (-), underscores (_)
+- Forbidden: uppercase letters, spaces, special characters
+
+**Valid Examples:**
+```bash
+dev-satellite-001
+production_worker_main
+team-europe-01
+staging_mcp_server
+```
+
+**Invalid Examples:**
+```bash
+Dev-Satellite-001        # Uppercase letters
+dev satellite 001        # Spaces
+dev@satellite#001        # Special characters
+dev-sat                  # Too short (< 10 chars)
+very-long-satellite-name-that-exceeds-limit  # Too long (> 32 chars)
+```
+
+### Fail-Fast Validation
+
+Satellite validates the name **before any other operations** and exits immediately with clear German error messages:
+
+```bash
+❌ FATAL ERROR: DEPLOYSTACK_SATELLITE_NAME ist erforderlich
+   Bitte setze die Environment Variable DEPLOYSTACK_SATELLITE_NAME
+   Beispiel: DEPLOYSTACK_SATELLITE_NAME=dev-satellite-001
+
+❌ FATAL ERROR: Satellite Name zu kurz
+   Aktuell: "dev-sat" (7 Zeichen)
+   Minimum: 10 Zeichen erforderlich
+
+❌ FATAL ERROR: Ungültiger Satellite Name
+   Aktuell: "Dev-Satellite-001"
+   Erlaubt: Nur lowercase Buchstaben (a-z), Zahlen (0-9), - und _
+   Keine Leerzeichen oder Großbuchstaben erlaubt
+```
+
+## Registration Data Structure
+
+### System Information Collection
+
+Satellites automatically collect and send system information during registration:
+
+```typescript
+interface SatelliteRegistrationData {
+  name: string;                    // From DEPLOYSTACK_SATELLITE_NAME
+  capabilities: string[];         // ['stdio', 'http', 'sse']
+  system_info: {
+    os: string;                   // e.g., "darwin arm64"
+    arch: string;                 // e.g., "arm64"
+    node_version: string;         // e.g., "v18.17.0"
+    memory_mb: number;            // Total system memory
+  };
+}
+```
+
+**Backend-Controlled Fields:**
+- `satellite_type`: Always set to `'global'` by backend
+- `team_id`: Always set to `null` by backend (admin can change later)
+- `status`: Always set to `'inactive'` by backend (requires admin activation)
+
+### MCP Server Capabilities
+
+Satellites report their supported MCP server types:
+
+- **stdio**: Local MCP servers as child processes
+- **http**: HTTP MCP servers (planned)
+- **sse**: SSE MCP servers (planned)
+
+## Database Integration
+
+### Satellite Tables
+
+The Backend maintains satellite state across five database tables:
+
+- **satellites**: Core satellite registry and configuration
+- **satelliteCommands**: Command queue for satellite management
+- **satelliteProcesses**: MCP server process tracking
+- **satelliteUsageLogs**: Usage analytics and audit trails
+- **satelliteHeartbeats**: Health monitoring and status updates
+
+See `services/backend/src/db/schema.sqlite.ts` for complete schema definitions.
+
+### Registration Database Operations
+
+**New Satellite Registration:**
+```sql
+INSERT INTO satellites (
+  id, name, satellite_type, team_id, status,
+  capabilities, api_key_hash, system_info,
+  created_by, created_at, updated_at
+) VALUES (
+  ?, ?, 'global', NULL, 'inactive',
+  ?, ?, ?, ?, ?, ?
+);
+```
+
+**Satellite Re-Registration (Upsert):**
+```sql
+UPDATE satellites SET
+  satellite_type = 'global',
+  team_id = NULL,
+  status = 'inactive',
+  api_key_hash = ?,
+  system_info = ?,
+  capabilities = ?,
+  updated_at = ?
+WHERE name = ?;
+```
+
+**Security Notes:**
+- All satellites are created with `satellite_type='global'`, `team_id=NULL`, `status='inactive'`
+- Admin activation required before satellite can be used
+- Team assignment controlled via backend admin interface
+
+## Development Setup
+
+### Local Registration Testing
+
+```bash
+# Clone and setup
+git clone https://github.com/deploystackio/deploystack.git
+cd deploystack/services/satellite
+npm install
+
+# Configure satellite identity
+cp .env.example .env
+echo "DEPLOYSTACK_SATELLITE_NAME=dev-satellite-001" >> .env
+echo "DEPLOYSTACK_BACKEND_URL=http://localhost:3000" >> .env
+
+# Start satellite (will auto-register)
+npm run dev
+```
+
+### Expected Registration Output
+
+```bash
+🔍 Validating satellite configuration...
+✅ Satellite Name validiert: "dev-satellite-001"
+[INFO] 🔗 Connecting to backend - required for satellite operation...
+[INFO] ✅ Backend connection successful (49ms)
+[INFO] 📡 Registering satellite with backend...
+[INFO] ✅ Satellite registered successfully: dev-satellite-001 (k6hm1j7sy2radj8)
+[INFO] 🔑 API key received and ready for authenticated communication
+```
+
+### Testing Satellite Restarts
+
+To verify upsert registration logic:
+
+```bash
+# Start satellite
+npm run dev
+# Wait for successful registration
+
+# Stop satellite (Ctrl+C)
+# Start again
+npm run dev
+# Should see "re-registered successfully" instead of conflict error
+```
+
+## Security Considerations
+
+### API Key Management
+
+- **Generation**: 32-byte cryptographically secure random keys
+- **Storage**: Backend stores argon2 hash, satellite receives plain key
+- **Rotation**: New API key generated on every registration
+- **Scope**: API keys are scoped to satellite type (global vs team)
+
+### Centralized Security Model
+
+**All Satellites are Global:**
+- Name uniqueness enforced globally across all satellites
+- All satellites start as `inactive` and require admin activation
+- Team assignment controlled exclusively by backend administrators
+- No client-side configuration of security-sensitive parameters
+
+**Admin-Controlled Team Assignment:**
+- Satellites can be assigned to teams via backend admin interface
+- Team assignment changes satellite behavior and resource access
+- Resource isolation enforced at runtime based on team assignment
+
+## Troubleshooting
+
+### Common Registration Issues
+
+**Missing Environment Variable:**
+```bash
+❌ FATAL ERROR: DEPLOYSTACK_SATELLITE_NAME ist erforderlich
+```
+**Solution:** Set the required environment variable
+
+**Invalid Satellite Name:**
+```bash
+❌ FATAL ERROR: Ungültiger Satellite Name
+```
+**Solution:** Follow naming rules (10-32 chars, lowercase only)
+
+**Backend Unreachable:**
+```bash
+❌ FATAL ERROR: Cannot reach DeployStack Backend
+```
+**Solution:** Verify DEPLOYSTACK_BACKEND_URL and ensure backend is running
+
+### Debug Endpoints
+
+Use these endpoints to troubleshoot registration issues:
+
+```bash
+# Check backend connection status
+curl http://localhost:3001/api/status/backend
+
+# View satellite API documentation
+open http://localhost:3001/documentation
+```
+
+## Implementation Status
+
+**Current Implementation:**
+- ✅ Automatic registration during startup
+- ✅ Mandatory DEPLOYSTACK_SATELLITE_NAME validation
+- ✅ Upsert registration logic for restarts
+- ✅ System information collection
+- ✅ API key generation and management
+- ✅ Database integration with 5 satellite tables
+- ✅ Fail-fast validation with clear error messages
+- ✅ Centralized security model (no client-controlled type/team assignment)
+- ✅ Default inactive status requiring admin activation
+
+**Security Improvements:**
+- ✅ All satellites register as `global` and `inactive` by default
+- ✅ Team assignment controlled exclusively by backend administrators
+
+**Planned Features:**
+- 🚧 Bearer token authentication for Backend communication
+- 🚧 API key rotation and renewal
+- 🚧 Registration status monitoring and alerts
+- 🚧 Admin interface for satellite activation and team assignment
+
+<Callout type="info">
+The satellite registration system is production-ready and handles both initial registration and restart scenarios seamlessly. The upsert logic ensures satellites can restart without manual intervention while maintaining security through API key rotation.
+</Callout>
