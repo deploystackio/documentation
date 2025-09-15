@@ -35,48 +35,6 @@ The new team member needs to complete these steps first:
     - Complete email verification if required
     - Complete the initial account setup
   </Step>
-  
-  <Step>
-    **Install DeployStack Gateway**
-    
-    Install the gateway globally via npm:
-    
-    ```bash
-    # Install the DeployStack Gateway globally
-    npm install -g @deploystack/gateway
-    
-    # Verify installation
-    deploystack --version
-    ```
-  </Step>
-  
-  <Step>
-    **Login to DeployStack**
-    
-    Authenticate with your DeployStack account:
-    
-    ```bash
-    # Login to DeployStack
-    deploystack login
-    
-    # This will open a browser window for authentication
-    # Follow the prompts to complete login
-    ```
-  </Step>
-  
-  <Step>
-    **Start the Gateway**
-    
-    Start the gateway to initialize your environment:
-    
-    ```bash
-    # Start the gateway
-    deploystack start
-    
-    # Verify gateway is running
-    deploystack status
-    ```
-  </Step>
 </Steps>
 
 ## Step 2: Invite Team Member
@@ -104,26 +62,23 @@ After the team invitation is accepted, the new member needs to:
   </Step>
   
   <Step>
-    **Switch to Team Context**
+    **Create OAuth Credentials**
     
-    Join your team and access shared MCP servers:
+    Configure satellite access for the team:
     
-    ```bash
-    # List available teams
-    deploystack teams
-    
-    # Switch to your team (replace with actual team number)
-    deploystack teams --switch 2
-    
-    # Verify team context
-    deploystack status
-    ```
+    1. Navigate to the **Satellite** section in the dashboard
+    2. Select the appropriate team from the team selector
+    3. Click **Create MCP Client Credentials**
+    4. Enter a name for the client (e.g., "VS Code", "Claude Desktop")
+    5. Copy the generated OAuth credentials:
+       - **Client ID**: `deploystack_mcp_client_abc123def456ghi789`
+       - **Client Secret**: `deploystack_mcp_secret_xyz789abc123def456ghi789jkl012`
   </Step>
   
   <Step>
     **Update MCP Configuration**
     
-    Replace your VS Code MCP configuration with the DeployStack Gateway:
+    Replace your VS Code MCP configuration with the DeployStack Satellite:
     
     **Before (Individual MCP Servers):**
     ```json
@@ -147,14 +102,14 @@ After the team invitation is accepted, the new member needs to:
     }
     ```
     
-    **After (DeployStack Gateway):**
+    **After (DeployStack Satellite):**
     ```json
     {
       "mcpServers": {
         "deploystack": {
-          "url": "http://localhost:9095/sse",
-          "name": "DeployStack Gateway",
-          "description": "Enterprise MCP Gateway with team-based access control"
+          "url": "https://satellite.deploystack.io/mcp",
+          "name": "DeployStack Satellite",
+          "description": "MCP-as-a-Service with zero installation"
         }
       }
     }
@@ -166,13 +121,10 @@ After the team invitation is accepted, the new member needs to:
 
 ### Test MCP Tool Access
 
-```bash
-# List all available team MCP tools
-deploystack mcp
-
-# Verify gateway status with team context
-deploystack status --verbose
-```
+1. **Restart VS Code**: Restart VS Code to load the new satellite configuration
+2. **Test MCP Connection**: Use Claude or MCP-compatible tools to verify access
+3. **Verify Available Tools**: All team MCP tools should be instantly available
+4. **Test Functionality**: Confirm tools work without any manual credential setup
 
 ## Step 5: Test Team Access
 
@@ -188,7 +140,7 @@ deploystack status --verbose
 - **Team MCP Servers**: Access to all configured team servers
 - **Shared Credentials**: Automatic credential injection (no manual setup required)
 - **Team Environment Variables**: Access to team-wide environment settings
-- **Process History**: View team's MCP server process logs
+- **Instant Access**: All tools immediately available through satellite infrastructure
 
 ## Step 6: Team Orientation
 
@@ -206,8 +158,9 @@ deploystack status --verbose
 
 **Security Guidelines:**
 - Never manually manage API credentials (handled by DeployStack)
-- Always use the DeployStack Gateway for MCP access
+- Always use the DeployStack Satellite for MCP access
 - Report any authentication or access issues immediately
+- Keep OAuth client credentials secure (don't share or commit to version control)
 
 ## Next Steps
 
@@ -217,4 +170,4 @@ Once new team members are successfully onboarded:
 - **Schedule Training**: Consider hands-on training for complex MCP workflows
 - **Gather Feedback**: Collect feedback on the onboarding process for improvements
 
-New team members should now have secure, credential-free access to all team MCP servers through the DeployStack Gateway, enabling them to be productive immediately without complex setup or credential management.
+New team members should now have secure, credential-free access to all team MCP servers through the DeployStack Satellite, enabling them to be productive immediately without any installations or complex credential management.
