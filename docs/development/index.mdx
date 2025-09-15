@@ -1,25 +1,25 @@
 ---
 title: Development Guide
-description: Complete development documentation for DeployStack - covering frontend, backend, and contribution guidelines for the MCP server management platform.
+description: Complete development documentation for DeployStack - the first MCP-as-a-Service platform with satellite infrastructure and cloud control plane.
 icon: FileCode
 ---
 
 import { Card, Cards } from 'fumadocs-ui/components/card';
-import { Code2, Server, GitBranch, Users, Shield } from 'lucide-react';
+import { Code2, Server, Cloud, Users } from 'lucide-react';
 
 # DeployStack Development
 
-Welcome to the DeployStack development documentation! DeployStack is a comprehensive enterprise platform for managing Model Context Protocol (MCP) servers, featuring a cloud control plane, local gateway proxy, and modern web interface for team-based MCP server orchestration.
+Welcome to the DeployStack development documentation! DeployStack eliminates MCP adoption friction by transforming complex installations into simple URL configurations through managed satellite infrastructure.
 
 ## Architecture Overview
 
-DeployStack implements a sophisticated Control Plane / Data Plane architecture for enterprise MCP server management:
+DeployStack implements an MCP-as-a-Service architecture that eliminates installation friction:
 
-- **Frontend**: Vue 3 + TypeScript web application providing the management interface for MCP server configurations
-- **Backend**: Fastify-based cloud control plane handling authentication, team management, and configuration distribution
-- **Gateway**: Local secure proxy that runs on developer machines, managing MCP server processes and credential injection
+- **Frontend**: Vue 3 + TypeScript web application (cloud.deploystack.io) for team management and configuration
+- **Backend**: Fastify-based cloud control plane handling authentication, teams, and satellite coordination  
+- **Satellite Infrastructure**: Managed MCP servers accessible via HTTPS URLs - no installation required
 - **Shared**: Common utilities and TypeScript types used across all services
-- **Dual Transport**: Supports both stdio (CLI tools) and SSE (VS Code) protocols for maximum compatibility
+- **Dual Deployment**: Global satellites (DeployStack-managed) and team satellites (customer-deployed)
 
 ## Development Areas
 
@@ -29,7 +29,7 @@ DeployStack implements a sophisticated Control Plane / Data Plane architecture f
     href="/development/frontend" 
     title="Frontend Development"
   >
-    Vue 3 web application with TypeScript, Vite, and shadcn-vue components. Direct fetch API patterns, SFC components, and internationalization.
+    Vue 3 web application with TypeScript, Vite, and shadcn-vue components. Team management interface for satellite configuration and usage analytics.
   </Card>
   
   <Card 
@@ -37,15 +37,15 @@ DeployStack implements a sophisticated Control Plane / Data Plane architecture f
     href="/development/backend" 
     title="Backend Development"
   >
-    Fastify cloud control plane with Drizzle ORM, plugin architecture, role-based access control, and OpenAPI documentation generation.
+    Fastify cloud control plane with Drizzle ORM, JWT authentication, team management, and satellite coordination APIs.
   </Card>
   
   <Card 
-    icon={<Shield />} 
-    href="/development/gateway" 
-    title="Gateway Development"
+    icon={<Cloud />} 
+    href="/development/satellite" 
+    title="Satellite Development"
   >
-    Local secure proxy managing MCP server processes, credential injection, dual transport protocols (stdio/SSE), and team-based access control.
+    MCP-as-a-Service infrastructure with global satellites, team satellites, zero-installation access, and enterprise-grade security.
   </Card>
 </Cards>
 
@@ -56,7 +56,7 @@ DeployStack implements a sophisticated Control Plane / Data Plane architecture f
 - Node.js 18 or higher
 - npm 8 or higher
 - Git for version control
-- DeployStack account at [cloud.deploystack.io](https://cloud.deploystack.io) (for gateway development)
+- DeployStack account at [cloud.deploystack.io](https://cloud.deploystack.io) (for satellite testing)
 
 ### Quick Setup
 
@@ -68,7 +68,7 @@ cd deploystack
 # Install dependencies for all services
 cd services/frontend && npm install
 cd ../backend && npm install
-cd ../gateway && npm install
+cd ../satellite && npm install
 
 # Start development servers (in separate terminals)
 # Terminal 1 - Backend
@@ -77,16 +77,16 @@ cd services/backend && npm run dev  # http://localhost:3000
 # Terminal 2 - Frontend
 cd services/frontend && npm run dev  # http://localhost:5173
 
-# Terminal 3 - Gateway (optional, for local MCP testing)
-cd services/gateway && npm run dev   # http://localhost:9095
+# Terminal 3 - Satellite (for local satellite testing)
+cd services/satellite && npm run dev   # http://localhost:9095
 ```
 
 ## Development Workflow
 
-1. **Choose Your Service**: Select frontend, backend, or gateway based on your contribution area
+1. **Choose Your Service**: Select frontend, backend, or satellite based on your contribution area
 2. **Set Up Environment**: Follow the specific setup guides for your chosen service
-3. **Understand Architecture**: Review how services interact (Frontend ↔ Backend ↔ Gateway)
-4. **Make Changes**: Implement features following established patterns (Vue SFC for frontend, plugins for backend, process management for gateway)
+3. **Understand Architecture**: Review how services interact (Frontend ↔ Backend ↔ Satellite)
+4. **Make Changes**: Implement features following established patterns (Vue SFC for frontend, plugins for backend, managed services for satellite)
 5. **Test**: Run comprehensive test suites for your service
 6. **Submit**: Create pull requests following our contribution guidelines
 
@@ -103,7 +103,7 @@ deploystack/
 │   │   ├── src/
 │   │   ├── plugins/
 │   │   └── package.json
-│   ├── gateway/            # API Gateway service
+│   ├── satellite/          # Satellite edge worker (like GitHub Actions runner)
 │   │   ├── src/
 │   │   ├── config/
 │   │   └── package.json
@@ -131,24 +131,23 @@ deploystack/
 - **Plugin System** with isolated routes (`/api/plugin/<id>/`)
 - **Role-Based Access Control** with session management
 
-### Gateway Stack
-- **Node.js** process management runtime
-- **Dual Transport** stdio for CLI tools, SSE for VS Code
-- **Secure Credential Injection** without developer exposure
-- **Process Manager** for persistent MCP server processes
-- **Session Management** with cryptographic security
-- **Team-Based Caching** for instant startup and tool discovery
+### Satellite Stack
+- **Node.js** edge worker runtime (like GitHub Actions runner)
+- **HTTP Proxy + stdio Communication** for dual MCP server deployment (external HTTP endpoints and local subprocesses)
+- **OAuth 2.1 Resource Server** with Backend token introspection
+- **Team Isolation** using Linux namespaces, cgroups, and resource jailing
+- **Dual Deployment Model** global satellites (DeployStack-managed) and team satellites (customer-deployed)
+- **Process Management** with automatic cleanup, selective restart, and lifecycle management
 
 ## Development Philosophy
 
-### Enterprise MCP Management
-DeployStack provides enterprise-grade MCP server orchestration through:
+### MCP-as-a-Service Platform
+DeployStack provides managed MCP infrastructure through:
 
-- **Control Plane Architecture**: Cloud-based configuration management with local gateway execution
-- **Security-First Design**: Credential injection without exposure, team-based access control
-- **Universal Compatibility**: Supports MCP servers in any language (Node.js, Python, Go, Rust)
-- **Developer Experience**: Seamless integration with VS Code, CLI tools, and development workflows
-- **Process Persistence**: MCP servers run as managed background services with automatic lifecycle management
+- **Zero Installation Friction**: Transform complex MCP setup into simple URL configuration
+- **Managed Satellite Infrastructure**: Global satellites and enterprise team satellites
+- **Enterprise Progression**: Freemium satellites → paid tiers → team satellites
+- **Universal Compatibility**: Supports MCP servers in any language via managed infrastructure
 
 ### Code Quality
 - **Type Safety**: TypeScript throughout the stack
@@ -160,12 +159,12 @@ DeployStack provides enterprise-grade MCP server orchestration through:
 
 We welcome contributions to DeployStack! Key areas include:
 
-- **Frontend**: Vue components, UI/UX improvements, new management features
-- **Backend**: API endpoints, plugin development, database optimizations
-- **Gateway**: Process management, transport protocols, credential handling
+- **Frontend**: Vue components, UI/UX improvements, satellite management features
+- **Backend**: API endpoints, satellite coordination, JWT authentication
+- **Satellite**: Managed infrastructure, team isolation, deployment patterns
 - **Documentation**: Guides, examples, API documentation
-- **MCP Servers**: Support for new MCP server types and configurations
-- **Security**: Enhanced credential management, access control improvements
+- **MCP Servers**: New satellite-hosted MCP server integrations
+- **Security**: Enhanced team isolation, enterprise deployment features
 
 ## Community
 

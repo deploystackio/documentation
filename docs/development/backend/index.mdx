@@ -9,7 +9,7 @@ import { Database, Shield, Plug, Settings, Mail, TestTube, Wrench, BookOpen, Ter
 
 # DeployStack Backend Development
 
-The DeployStack backend is a modern, high-performance Node.js application built with **Fastify**, **TypeScript**, and **Drizzle ORM**. It's specifically designed for managing MCP (Model Context Protocol) server configurations with enterprise-grade features including authentication, role-based access control, and an extensible plugin system.
+The DeployStack backend is a modern, high-performance Node.js application built with **Fastify**, **TypeScript**, and **Drizzle ORM**. It serves as the central control plane managing MCP server catalogs, team configurations, satellite orchestration, and user authentication with enterprise-grade features.
 
 ## Technology Stack
 
@@ -18,7 +18,7 @@ The DeployStack backend is a modern, high-performance Node.js application built 
 - **Database**: SQLite (default) or PostgreSQL with Drizzle ORM
 - **Validation**: Zod for request/response validation and OpenAPI generation
 - **Plugin System**: Extensible architecture with security isolation
-- **Authentication**: Cookie-based sessions with role-based access control
+- **Authentication**: Dual authentication system - cookie-based sessions for frontend and OAuth 2.1 for satellite access
 
 ## Quick Start
 
@@ -99,10 +99,10 @@ The development server starts at `http://localhost:3000` with API documentation 
   
   <Card 
     icon={<Terminal />} 
-    href="/deploystack/development/backend/gateway-client-config" 
-    title="Gateway Client Configuration"
+    href="/deploystack/development/backend/satellite-communication" 
+    title="Satellite Communication"
   >
-    API endpoint for generating client-specific gateway configuration files with dual authentication support.
+    API endpoints for satellite registration, configuration management, and command orchestration with polling-based communication.
   </Card>
 </Cards>
 

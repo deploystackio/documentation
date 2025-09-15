@@ -1,0 +1,477 @@
+---
+title: Satellite Architecture Design
+description: Complete architectural overview of DeployStack Satellite - from current MCP transport implementation to full enterprise MCP management platform.
+sidebar: Satellite Development
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# DeployStack Satellite Architecture
+
+DeployStack Satellite is an edge worker service that manages MCP servers with dual deployment support: HTTP proxy for external endpoints and stdio subprocess for local MCP servers. This document covers both the current MCP transport implementation and the planned full architecture.
+
+## Technical Overview
+
+### Edge Worker Pattern
+
+Satellites operate as edge workers similar to GitHub Actions runners, providing:
+
+- **MCP Transport Protocols**: SSE, Streamable HTTP, Direct HTTP communication
+- **Dual MCP Server Management**: HTTP proxy + stdio subprocess support (planned)
+- **Team Isolation**: Linux namespaces, cgroups v2, resource jailing (planned)
+- **OAuth 2.1 Resource Server**: Token introspection with Backend (planned)
+- **Backend Polling Communication**: Outbound-only, firewall-friendly (implemented)
+- **Process Lifecycle Management**: Spawn, monitor, terminate MCP servers (planned)
+
+## Current Implementation Architecture
+
+### Phase 1: MCP Transport Layer (Implemented)
+
+The current satellite implementation provides complete MCP client interface support:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        MCP Transport Implementation                             │
+│                                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐           │
+│  │  SSE Transport  │    │ SSE Messaging   │    │ Streamable HTTP │           │
+│  │                 │    │                 │    │                 │           │
+│  │ • GET /sse      │    │ • POST /message │    │ • GET/POST /mcp │           │
+│  │ • Session Mgmt  │    │ • JSON-RPC 2.0  │    │ • Optional SSE  │           │
+│  │ • 30min timeout │    │ • Session-based │    │ • CORS Support  │           │
+│  └─────────────────┘    └─────────────────┘    └─────────────────┘           │
+│                                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐           │
+│  │ Session Manager │    │   SSE Handler   │    │ Streamable HTTP │           │
+│  │                 │    │                 │    │    Handler      │           │
+│  │ • 32-byte IDs   │    │ • Connection    │    │ • Dual Response │           │
+│  │ • Activity      │    │   Management    │    │ • Session Aware │           │
+│  │ • Auto Cleanup  │    │ • Message Send  │    │ • Error Handle  │           │
+│  └─────────────────┘    └─────────────────┘    └─────────────────┘           │
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                    Foundation Infrastructure                            │   │
+│  │                                                                         │   │
+│  │  • Fastify HTTP Server with JSON Schema validation                     │   │
+│  │  • Pino structured logging with operation tracking                     │   │
+│  │  • TypeScript + Webpack build system                                   │   │
+│  │  • Environment configuration with .env support                        │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Current MCP Transport Endpoints
+
+**Implemented Endpoints:**
+- `GET /sse` - Establish SSE connection with session management
+- `POST /message?session={id}` - Send JSON-RPC messages via SSE sessions
+- `GET /mcp` - Establish SSE stream for Streamable HTTP transport
+- `POST /mcp` - Send JSON-RPC messages via Streamable HTTP
+- `OPTIONS /mcp` - CORS preflight handling
+
+**Transport Protocol Support:**
+```
+MCP Client                    Satellite
+    │                            │
+    │──── GET /sse ─────────────▶│  (Establish SSE session)
+    │                            │
+    │◀─── Session URL ──────────│  (Return session endpoint)
+    │                            │
+    │──── POST /message ────────▶│  (Send JSON-RPC via session)
+    │                            │
+    │◀─── Response via SSE ─────│  (Stream response back)
+```
+
+### Core Components (Implemented)
+
+**Session Manager:**
+- Cryptographically secure 32-byte base64url session IDs
+- 30-minute session timeout with automatic cleanup
+- Activity tracking and session state management
+- Client info storage and MCP initialization tracking
+
+**SSE Handler:**
+- Server-Sent Events connection establishment
+- Message sending with error handling
+- Heartbeat and endpoint event management
+- Connection lifecycle management
+
+**Streamable HTTP Handler:**
+- Dual response mode (JSON and SSE streaming)
+- Optional session-based communication
+- CORS preflight handling
+- Error counting and session management
+
+### JSON-RPC 2.0 Protocol Implementation
+
+**Supported MCP Methods:**
+- `initialize` - MCP session initialization
+- `notifications/initialized` - Client initialization complete
+- `tools/list` - List available tools from remote MCP servers
+- `tools/call` - Execute tools on remote MCP servers
+- `resources/list` - List available resources (returns empty array)
+- `resources/templates/list` - List resource templates (returns empty array)
+- `prompts/list` - List available prompts (returns empty array)
+
+For detailed information about tool discovery and execution, see [Tool Discovery Implementation](/development/satellite/tool-discovery).
+
+**Error Handling:**
+- JSON-RPC 2.0 compliant error responses
+- HTTP status code mapping
+- Structured error logging
+- Session validation and error reporting
+
+## Planned Full Architecture
+
+### Three-Tier System Design
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        MCP Client Layer                                        │
+│                     (VS Code, Claude, etc.)                                    │
+│                                                                                 │
+│  Connects via: SSE, Streamable HTTP, Direct HTTP Tools                        │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                      Satellite Layer                                           │
+│                   (Edge Processing)                                            │
+│                                                                                 │
+│  ┌─────────────────────────────────────────┐                                   │
+│  │        Global Satellite                 │                                   │
+│  │  (Operated by DeployStack Team)         │                                   │
+│  │      (Serves All Teams)                 │                                   │
+│  └─────────────────────────────────────────┘                                   │
+│                                                                                 │
+│  ┌─────────────────────────────────────────┐                                   │
+│  │        Team Satellite                   │                                   │
+│  │   (Customer-Deployed)                   │                                   │
+│  │   (Serves Single Team)                  │                                   │
+│  └─────────────────────────────────────────┘                                   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                       Backend Layer                                            │
+│                  (Central Management)                                          │
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                    DeployStack Backend                                  │   │
+│  │                  (cloud.deploystack.io)                                │   │
+│  │                                                                         │   │
+│  │  • Command orchestration    • Configuration management                 │   │
+│  │  • Status monitoring        • Team & role management                   │   │
+│  │  • Usage analytics          • Security & compliance                    │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Satellite Internal Architecture (Planned)
+
+Each satellite instance will contain five core components:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Satellite Instance                           │
+│                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐                   │
+│  │  HTTP Proxy     │    │  MCP Server     │                   │
+│  │    Router       │    │    Manager      │                   │
+│  │                 │    │                 │                   │
+│  │ • Team-aware    │    │ • Process       │                   │
+│  │ • OAuth 2.1     │    │   Lifecycle     │                   │
+│  │ • Load Balance  │    │ • stdio Comm    │                   │
+│  └─────────────────┘    └─────────────────┘                   │
+│                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐                   │
+│  │  Team Resource  │    │   Backend       │                   │
+│  │    Manager      │    │ Communicator    │                   │
+│  │                 │    │                 │                   │
+│  │ • Namespaces    │    │ • HTTP Polling  │                   │
+│  │ • cgroups       │    │ • Config Sync   │                   │
+│  │ • Isolation     │    │ • Status Report │                   │
+│  └─────────────────┘    └─────────────────┘                   │
+│                                                                 │
+│  ┌─────────────────────────────────────────┐                   │
+│  │        Communication Manager            │                   │
+│  │                                         │                   │
+│  │ • JSON-RPC stdio    • HTTP Proxy       │                   │
+│  │ • Process IPC       • Client Routing   │                   │
+│  └─────────────────────────────────────────┘                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Deployment Models
+
+### Global Satellites
+
+**Operated by DeployStack Team:**
+- **Infrastructure**: Cloud-hosted (AWS, GCP, Azure)
+- **Scope**: Serve all teams with resource isolation
+- **Scaling**: Auto-scaling based on demand
+- **Management**: Centralized by DeployStack operations
+- **Use Case**: Teams wanting shared infrastructure
+
+**Architecture Benefits:**
+- **Zero Installation**: URL-based configuration
+- **Instant Availability**: No setup or deployment required
+- **Automatic Updates**: Invisible to users
+- **Global Scale**: Multi-region deployment
+
+### Team Satellites
+
+**Customer-Deployed:**
+- **Infrastructure**: Customer's corporate networks
+- **Scope**: Single team exclusive access
+- **Scaling**: Customer-controlled resources
+- **Management**: Team administrators
+- **Use Case**: Internal resource access, compliance requirements
+
+**Architecture Benefits:**
+- **Internal Access**: Company databases, APIs, file systems
+- **Data Sovereignty**: Data never leaves corporate network
+- **Complete Control**: Customer owns infrastructure
+- **Compliance Ready**: Meets enterprise security requirements
+
+## Communication Patterns
+
+### Client-to-Satellite Communication (Implemented)
+
+**Multiple Transport Protocols:**
+- **SSE (Server-Sent Events)**: Real-time streaming with session management
+- **Streamable HTTP**: Chunked responses with optional sessions
+- **Direct HTTP Tools**: Standard REST API calls
+
+**Current Implementation:**
+```
+MCP Client                    Satellite
+    │                            │
+    │──── GET /sse ─────────────▶│  (Establish SSE connection)
+    │                            │
+    │◀─── event: endpoint ──────│  (Session URL + heartbeat)
+    │                            │
+    │──── POST /message ────────▶│  (JSON-RPC via session)
+    │                            │
+    │◀─── Response via SSE ─────│  (Stream JSON-RPC response)
+```
+
+**Session Management:**
+- **Session ID**: 32-byte cryptographically secure identifier
+- **Timeout**: 30-minute automatic cleanup
+- **Activity Tracking**: Updated on each message
+- **State Management**: Client info and initialization status
+
+### Satellite-to-Backend Communication (Implemented)
+
+**HTTP Polling Pattern:**
+```
+Satellite                    Backend
+   │                           │
+   │──── GET /api/satellites/{id}/commands ──▶│  (Poll for commands)
+   │                           │
+   │◀─── Commands Response ────│  (Configuration, tasks)
+   │                           │
+   │──── POST /api/satellites/{id}/heartbeat ─▶│  (Report status, metrics)
+   │                           │
+   │◀─── Acknowledgment ───────│  (Confirm receipt)
+```
+
+**Communication Features:**
+- **Outbound Only**: Firewall-friendly
+- **Priority-Based Polling**: Four modes (immediate/high/normal/slow) with automatic transitions
+- **Command Queue**: Priority-based task processing with expiration and correlation IDs
+- **Status Reporting**: Real-time health and metrics every 30 seconds
+- **Configuration Sync**: Dynamic MCP server configuration updates
+- **Error Recovery**: Exponential backoff with maximum 5-minute intervals
+- **3-Second Response Time**: Immediate priority commands enable near real-time responses
+
+For complete implementation details, see [Backend Polling Implementation](/development/satellite/polling).
+
+## Security Architecture
+
+### Current Security (No Authentication)
+
+**Session-Based Isolation:**
+- **Cryptographic Session IDs**: 32-byte secure identifiers
+- **Session Timeout**: 30-minute automatic cleanup
+- **Activity Tracking**: Prevents session hijacking
+- **Error Handling**: Secure error responses
+
+### Planned Security Features
+
+**Team Isolation:**
+- **Linux Namespaces**: PID, network, filesystem isolation
+- **Process Groups**: Separate process trees per team
+- **User Isolation**: Dedicated system users per team
+
+**Resource Management:**
+- **cgroups v2**: CPU and memory limits
+- **Resource Quotas**: 0.1 CPU cores, 100MB RAM per process
+- **Automatic Cleanup**: 5-minute idle timeout
+
+**Authentication & Authorization:**
+- **OAuth 2.1 Resource Server**: Backend token validation
+- **Scope-Based Access**: Fine-grained permissions
+- **Team Context**: Automatic team resolution from tokens
+
+## MCP Server Management (Planned)
+
+### Dual MCP Server Support
+
+**stdio Subprocess Servers:**
+- **Local Execution**: MCP servers as child processes
+- **JSON-RPC Communication**: Standard MCP protocol
+- **Process Lifecycle**: Spawn, monitor, terminate
+- **Team Isolation**: Processes isolated per team
+
+**HTTP Proxy Servers:**
+- **External Endpoints**: Proxy to remote MCP servers
+- **Load Balancing**: Distribute requests across instances
+- **Health Monitoring**: Endpoint availability checks
+- **Caching**: Response caching for performance
+
+### Process Management
+
+**Lifecycle Operations:**
+```
+Configuration → Spawn → Monitor → Health Check → Restart/Terminate
+      │           │        │          │              │
+      │           │        │          │              │
+   Backend     Child     Metrics   Failure      Cleanup
+   Command    Process   Collection Detection   Resources
+```
+
+**Health Monitoring:**
+- **Process Health**: CPU, memory, responsiveness
+- **MCP Protocol**: Tool availability, response times
+- **Automatic Recovery**: Restart failed processes
+- **Resource Limits**: Enforce team quotas
+
+## Development Roadmap
+
+### Phase 1: MCP Transport Implementation ✅ COMPLETED
+- **SSE Transport**: Server-Sent Events with session management
+- **SSE Messaging**: JSON-RPC message sending via sessions
+- **Streamable HTTP**: Direct HTTP communication with optional streaming
+- **Session Management**: Cryptographically secure session handling
+- **JSON-RPC 2.0**: Full protocol compliance with error handling
+
+### Phase 2: MCP Server Process Management (Next)
+- **Process Lifecycle**: Spawn, monitor, terminate MCP servers
+- **stdio Communication**: JSON-RPC with local processes
+- **Basic Health Monitoring**: Process health checks
+- **Simple Configuration**: Static MCP server definitions
+
+### Phase 3: Team Isolation
+- **Resource Boundaries**: CPU and memory limits
+- **Process Isolation**: Namespaces and process groups
+- **Filesystem Isolation**: Team-specific directories
+- **Credential Management**: Secure environment injection
+
+### Phase 4: Backend Integration ✅ COMPLETED
+- **HTTP Polling**: Communication with DeployStack Backend
+- **Configuration Sync**: Dynamic configuration updates
+- **Status Reporting**: Real-time metrics and health
+- **Command Processing**: Execute Backend commands
+
+For detailed information about the polling implementation, see [Backend Polling Implementation](/development/satellite/polling).
+
+### Phase 5: Enterprise Features
+- **OAuth 2.1 Authentication**: Full authentication server
+- **HTTP Proxy**: External MCP server proxying
+- **Advanced Monitoring**: Comprehensive observability
+- **Multi-Region Support**: Global deployment
+
+## Technical Implementation Details
+
+### Current Implementation Specifications
+- **Session ID Length**: 32 bytes base64url encoded
+- **Session Timeout**: 30 minutes of inactivity
+- **JSON-RPC Version**: 2.0 strict compliance
+- **HTTP Framework**: Fastify with JSON Schema validation
+- **Logging**: Pino structured logging with operation tracking
+- **Error Handling**: Comprehensive HTTP status code mapping
+
+### Planned Resource Jailing Specifications
+- **CPU Limit**: 0.1 cores per MCP server process
+- **Memory Limit**: 100MB RAM per MCP server process
+- **Process Timeout**: 5-minute idle timeout for automatic cleanup
+- **Isolation Method**: Linux namespaces + cgroups v2
+
+### Technology Stack
+- **HTTP Framework**: Fastify with @fastify/http-proxy (planned)
+- **Process Communication**: stdio JSON-RPC for local MCP servers (planned)
+- **Authentication**: OAuth 2.1 Resource Server with token introspection (planned)
+- **Logging**: Pino structured logging
+- **Build System**: TypeScript + Webpack
+
+### Development Setup
+
+**Clone and Setup:**
+```bash
+git clone https://github.com/deploystackio/deploystack.git
+cd deploystack/services/satellite
+npm install
+cp .env.example .env
+npm run dev
+```
+
+**Test MCP Transport:**
+```bash
+# Test SSE connection
+curl -N -H "Accept: text/event-stream" http://localhost:3001/sse
+
+# Send JSON-RPC message (replace SESSION_ID)
+curl -X POST "http://localhost:3001/message?session=SESSION_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{}}'
+
+# Direct HTTP transport
+curl -X POST http://localhost:3001/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/list","params":{}}'
+```
+
+**MCP Client Configuration:**
+```json
+{
+  "mcpServers": {
+    "deploystack-satellite": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-fetch"],
+      "env": {
+        "MCP_SERVER_URL": "http://localhost:3001/sse"
+      }
+    }
+  }
+}
+```
+
+## Implementation Status
+
+The satellite service has completed **Phase 1: MCP Transport Implementation** and **Phase 4: Backend Integration**. Current implementation provides:
+
+**Phase 1 - MCP Transport Layer:**
+- **Complete MCP Transport Layer**: SSE, SSE Messaging, Streamable HTTP
+- **Session Management**: Cryptographically secure with automatic cleanup
+- **JSON-RPC 2.0 Compliance**: Full protocol support with error handling
+
+**Phase 4 - Backend Integration:**
+- **Command Polling Service**: Adaptive polling with three modes (normal/immediate/error)
+- **Dynamic Configuration Management**: Replaces hardcoded MCP server configurations
+- **Command Processing**: HTTP MCP server management (spawn/kill/restart/health_check)
+- **Heartbeat Service**: Process status reporting and system metrics
+- **Configuration Sync**: Real-time MCP server configuration updates
+
+**Foundation Infrastructure:**
+- **HTTP Server**: Fastify with Swagger documentation
+- **Logging System**: Pino with structured logging
+- **Build Pipeline**: TypeScript compilation and bundling
+- **Development Workflow**: Hot reload and code quality tools
+
+Next milestone: **Phase 2 - MCP Server Process Management** with stdio JSON-RPC communication.
+
+<Callout type="info">
+**Current Status**: The satellite service has completed Phase 1 (MCP Transport Implementation) and Phase 4 (Backend Integration). It provides full external client interface support and complete backend communication including command orchestration, configuration management, and status reporting. The next major milestone is implementing MCP server process management (Phase 2) to enable actual MCP server hosting.
+</Callout>

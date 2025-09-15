@@ -234,6 +234,10 @@ requireOwnershipOrAdmin(getUserIdFromRequest) // User owns resource OR is admin
 // Dual authentication (Cookie + OAuth2)
 requireAuthenticationAny()                    // Accept either cookie or OAuth2 Bearer token
 requireOAuthScope('scope.name')               // Enforce OAuth2 scope requirements
+
+// Satellite authentication (API key-based)
+requireSatelliteAuth()                        // Validates satellite API keys using argon2
+requireUserOrSatelliteAuth()                  // Accept either user auth or satellite API key
 ```
 
 ### Dual Authentication Support
@@ -264,6 +268,79 @@ export default async function dualAuthRoute(server: FastifyInstance) {
 ```
 
 For detailed OAuth2 implementation, see the [Backend OAuth Implementation Guide](/development/backend/oauth-providers) and [Backend Security Policy](/development/backend/security#oauth2-server-security).
+
+### Satellite Authentication
+
+For endpoints that need to authenticate DeployStack Satellite instances, use the satellite authentication middleware. Satellites use API key-based authentication with argon2 hash verification.
+
+```typescript
+import { requireSatelliteAuth, requireUserOrSatelliteAuth } from '../../middleware/satelliteAuthMiddleware';
+
+export default async function satelliteRoute(server: FastifyInstance) {
+  // Satellite-only endpoint
+  server.post('/satellites/:satelliteId/heartbeat', {
+    preValidation: [requireSatelliteAuth()], // Only satellites can access
+    schema: {
+      security: [{ bearerAuth: [] }] // API key via Bearer token
+    }
+  }, async (request, reply) => {
+    // Access satellite context
+    const satellite = request.satellite!;
+    const satelliteId = satellite.id;
+    const satelliteType = satellite.satellite_type; // 'global' or 'team'
+  });
+
+  // Hybrid endpoint (users OR satellites)
+  server.get('/satellites/:satelliteId/status', {
+    preValidation: [requireUserOrSatelliteAuth()], // Accept either auth method
+    schema: {
+      security: [
+        { cookieAuth: [] },    // User authentication
+        { bearerAuth: [] }     // Satellite API key
+      ]
+    }
+  }, async (request, reply) => {
+    // Check authentication type
+    if (request.satellite) {
+      // Authenticated as satellite
+      const satelliteId = request.satellite.id;
+    } else if (request.user) {
+      // Authenticated as user
+      const userId = request.user.id;
+    }
+  });
+}
+```
+
+#### Satellite Authentication Flow
+
+The satellite authentication middleware performs these steps:
+
+1. **Bearer Token Extraction**: Extracts API key from Authorization header
+2. **Database Lookup**: Retrieves all satellite records from database
+3. **Hash Verification**: Uses argon2.verify() to validate API key against stored hashes
+4. **Context Setting**: Sets satellite information on request object for route handlers
+
+#### Satellite Context Object
+
+When satellite authentication succeeds, the middleware sets `request.satellite` with:
+
+```typescript
+interface SatelliteContext {
+  id: string;                                    // Satellite unique identifier
+  name: string;                                  // Human-readable satellite name
+  satellite_type: 'global' | 'team';           // Deployment type
+  team_id: string | null;                       // Associated team (null for global)
+  status: 'active' | 'inactive' | 'maintenance' | 'error'; // Current status
+}
+```
+
+#### Security Considerations
+
+- **API Key Storage**: Satellite API keys are stored as argon2 hashes in the database
+- **Key Generation**: 32-byte cryptographically secure random keys (base64url encoded)
+- **Key Rotation**: New API key generated on each satellite registration
+- **Scope Isolation**: Satellites can only access their own resources and endpoints
 
 ### Team-Aware Permission System
 

@@ -1,0 +1,411 @@
+---
+title: Tool Discovery Implementation
+description: Technical implementation of remote MCP server tool discovery in DeployStack Satellite - architecture, components, and development patterns.
+sidebar: Satellite Development
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Tool Discovery Implementation
+
+DeployStack Satellite implements automatic tool discovery from remote HTTP MCP servers, providing dynamic tool availability without manual configuration. This system enables MCP clients to discover and execute tools from external MCP servers through the satellite's proxy layer.
+
+For information about the overall satellite architecture, see [Satellite Architecture Design](/development/satellite/architecture). For details about the MCP transport protocols that expose discovered tools, see [MCP Transport Protocols](/development/satellite/mcp-transport).
+
+## Technical Overview
+
+### Discovery Architecture
+
+Tool discovery operates as a startup-time process that queries configured remote MCP servers, caches discovered tools in memory, and exposes them through the satellite's MCP transport layer:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        Tool Discovery Architecture                              │
+│                                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐           │
+│  │ Remote Tool     │    │ HTTP Proxy      │    │ MCP Protocol    │           │
+│  │ Discovery Mgr   │    │ Manager         │    │ Handler         │           │
+│  │                 │    │                 │    │                 │           │
+│  │ • Startup Query │    │ • Server Config │    │ • tools/list    │           │
+│  │ • In-Memory     │    │ • SSE Parsing   │    │ • tools/call    │           │
+│  │   Cache         │    │ • Header Mgmt   │    │ • Namespacing   │           │
+│  │ • Tool Mapping  │    │ • Error Handle  │    │ • Route Proxy   │           │
+│  └─────────────────┘    └─────────────────┘    └─────────────────┘           │
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                    Discovery Data Flow                                  │   │
+│  │                                                                         │   │
+│  │  Startup → Query Servers → Parse Tools → Cache → Namespace → Expose    │   │
+│  │     │           │             │           │         │          │       │   │
+│  │  Config     HTTP POST     SSE Parse   Memory    Prefix     MCP API     │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Core Components
+
+**RemoteToolDiscoveryManager:**
+- Queries remote MCP servers during satellite startup
+- Parses Server-Sent Events responses from external servers
+- Maintains in-memory cache of discovered tools with metadata
+- Provides namespaced tool access for conflict resolution
+
+**HTTP Proxy Manager:**
+- Manages HTTP connections to external MCP servers
+- Handles server-specific headers and authentication
+- Processes both JSON and SSE response formats
+- Routes tool execution requests to appropriate servers
+
+**MCP Protocol Handler:**
+- Integrates cached tools into MCP transport layer
+- Handles tools/list requests with discovered tool metadata
+- Routes tools/call requests to correct remote servers
+- Manages tool name parsing and server resolution
+
+## Discovery Process
+
+### Startup Sequence
+
+Tool discovery executes during satellite initialization after HTTP Proxy Manager setup:
+
+```
+Server Start → Backend Connect → HTTP Proxy Init → Tool Discovery → Route Registration
+     │              │                │                  │              │
+  Validate       Test Conn        Server Config      Query Tools    MCP Endpoints
+  Config         Required         Load Enabled       Parse Cache    Ready to Serve
+```
+
+**Initialization Steps:**
+1. **HTTP Proxy Manager** loads server configurations from `mcp-servers.ts`
+2. **RemoteToolDiscoveryManager** queries each enabled server with `tools/list`
+3. **SSE Response Parsing** extracts tool definitions from Server-Sent Events
+4. **In-Memory Caching** stores tools with server association and namespacing
+5. **MCP Integration** exposes cached tools through transport endpoints
+
+### Server Configuration
+
+Remote MCP servers are configured in `services/satellite/src/config/mcp-servers.ts`:
+
+```typescript
+servers: {
+  'context7': {
+    name: 'context7',
+    type: 'http',
+    url: 'https://mcp.context7.com/mcp',
+    enabled: true,
+    headers: {
+      'Accept': 'application/json, text/event-stream'
+    }
+  }
+}
+```
+
+**Configuration Properties:**
+- **name**: Server identifier for namespacing and routing
+- **type**: Transport type (currently 'http' only)
+- **url**: Remote MCP server endpoint URL
+- **enabled**: Boolean flag for server activation
+- **headers**: Custom HTTP headers for server compatibility
+
+### Discovery Query Process
+
+The discovery manager queries each enabled server using standard MCP protocol:
+
+```
+Discovery Manager              Remote MCP Server
+       │                             │
+       │──── POST /mcp ─────────────▶│  (tools/list request)
+       │                             │
+       │◀─── SSE Response ──────────│  (Tool definitions)
+       │                             │
+       │──── Parse Tools ───────────│  (Extract metadata)
+       │                             │
+       │──── Cache Results ─────────│  (Store in memory)
+```
+
+**Query Specifications:**
+- **Method**: HTTP POST with JSON-RPC 2.0 payload
+- **Headers**: Server-specific headers from configuration
+- **Timeout**: 45 seconds for documentation servers
+- **Response**: Server-Sent Events or JSON format
+- **Error Handling**: Graceful failure with logging
+
+## Tool Caching Strategy
+
+### In-Memory Cache Design
+
+Tools are cached in memory during startup for performance and reliability:
+
+```typescript
+interface CachedTool {
+  serverName: string;           // Source server identifier
+  originalName: string;         // Tool name from server
+  namespacedName: string;       // Prefixed name (server-toolname)
+  description: string;          // Tool description
+  inputSchema: object;          // JSON Schema for parameters
+}
+```
+
+**Cache Characteristics:**
+- **Startup Population**: Tools loaded once during initialization
+- **Memory Storage**: No persistent storage or database dependency
+- **Namespace Prefixing**: Prevents tool name conflicts between servers
+- **Metadata Preservation**: Complete tool definitions with schemas
+
+### Namespacing Strategy
+
+Tools are namespaced using server_slug for user-friendly names:
+
+```
+Original Tool Name: "resolve-library-id"
+Server Slug: "context7"
+Namespaced Name: "context7-resolve-library-id"
+Internal Server: "context7-john-R36no6FGoMFEZO9nWJJLT"
+```
+
+**Namespacing Rules:**
+- **Format**: `{server_slug}-{originalToolName}`
+- **Separator**: Single hyphen character
+- **User Display**: Friendly names using server_slug from configuration
+- **Internal Routing**: Uses full server name for team isolation
+- **Uniqueness**: Guaranteed unique names across all servers
+
+For team-based server resolution, see [Team Isolation Implementation](/development/satellite/team-isolation).
+
+## SSE Response Processing
+
+### Server-Sent Events Parsing
+
+Many MCP servers return responses in SSE format requiring specialized parsing:
+
+```
+HTTP Response:
+Content-Type: text/event-stream
+
+event: message
+data: {"jsonrpc":"2.0","id":"1","result":{"tools":[...]}}
+
+```
+
+**Parsing Implementation:**
+- **Line Processing**: Split response by newlines
+- **Data Extraction**: Extract content after `data: ` prefix
+- **JSON Parsing**: Parse extracted data as JSON-RPC response
+- **Error Handling**: Graceful failure for malformed responses
+
+### Response Format Handling
+
+The HTTP Proxy Manager handles both JSON and SSE response formats:
+
+```typescript
+const contentType = response.headers.get('content-type') || '';
+
+if (contentType.includes('text/event-stream')) {
+  const sseText = await response.text();
+  responseData = this.parseSSEResponse(sseText);
+} else {
+  responseData = await response.json();
+}
+```
+
+**Format Detection:**
+- **Content-Type Header**: Determines response format
+- **SSE Processing**: Custom parser for event-stream responses
+- **JSON Fallback**: Standard JSON parsing for regular responses
+- **Error Recovery**: Handles parsing failures gracefully
+
+## Tool Execution Flow
+
+### Request Routing
+
+Tool execution requests are routed through the discovery system:
+
+```
+MCP Client                    Satellite                    Remote Server
+    │                           │                             │
+    │──── tools/call ──────────▶│                             │
+    │   (context7-resolve...)    │                             │
+    │                           │──── Parse Name ────────────│
+    │                           │   (server: context7)        │
+    │                           │   (tool: resolve...)         │
+    │                           │                             │
+    │                           │──── POST /mcp ─────────────▶│
+    │                           │   (resolve-library-id)      │
+    │                           │                             │
+    │                           │◀─── SSE Response ──────────│
+    │                           │                             │
+    │◀─── JSON Response ───────│                             │
+```
+
+**Routing Process:**
+1. **Name Parsing**: Extract server name and tool name from namespaced request
+2. **Server Resolution**: Locate target server configuration
+3. **Request Translation**: Convert namespaced call to original tool name
+4. **Proxy Execution**: Forward request to remote server
+5. **Response Processing**: Parse SSE response and return to client
+
+### Tool Name Resolution
+
+The MCP Protocol Handler parses namespaced tool names for routing:
+
+```typescript
+const dashIndex = namespacedToolName.indexOf('-');
+const serverName = namespacedToolName.substring(0, dashIndex);
+const originalToolName = namespacedToolName.substring(dashIndex + 1);
+```
+
+**Resolution Logic:**
+- **First Hyphen**: Separates server name from tool name
+- **Server Lookup**: Validates server exists and is enabled
+- **Tool Validation**: Confirms tool exists in cache
+- **Error Handling**: Returns descriptive errors for invalid requests
+
+## Error Handling & Recovery
+
+### Discovery Failures
+
+Tool discovery implements graceful failure handling:
+
+```
+Server Unreachable → Log Warning → Continue with Other Servers
+Parse Error → Log Details → Skip Malformed Tools
+Timeout → Log Timeout → Mark Server as Failed
+```
+
+**Failure Scenarios:**
+- **Network Errors**: Server unreachable or connection timeout
+- **Protocol Errors**: Invalid JSON-RPC responses or malformed data
+- **Parsing Errors**: SSE format issues or JSON parsing failures
+- **Configuration Errors**: Invalid server URLs or missing headers
+
+### Runtime Error Recovery
+
+During tool execution, errors are handled at multiple levels:
+
+**HTTP Proxy Level:**
+- Connection failures with retry logic
+- Response parsing errors with fallback
+- Timeout handling with configurable limits
+
+**MCP Protocol Level:**
+- Invalid tool names with descriptive errors
+- Server resolution failures with available tool lists
+- JSON-RPC error propagation from remote servers
+
+## Development Considerations
+
+### Configuration Management
+
+Server configurations support environment variable substitution:
+
+```typescript
+headers: {
+  'Authorization': 'Bearer ${API_TOKEN}',
+  'Accept': 'application/json, text/event-stream'
+}
+```
+
+**Environment Processing:**
+- **Variable Substitution**: `${VAR_NAME}` replaced with environment values
+- **Missing Variables**: Warnings logged for undefined variables
+- **Security**: Sensitive tokens loaded from environment
+
+### Debugging Support
+
+Comprehensive logging supports development and troubleshooting:
+
+```
+[2025-09-10 16:04:40.695] INFO: Returning 2 cached tools from remote MCP servers
+  component: "McpProtocolHandler"
+  operation: "mcp_tools_list_success"
+  tool_count: 2
+  tools: ["context7-resolve-library-id", "context7-get-library-docs"]
+```
+
+**Logging Categories:**
+- **Discovery Operations**: Server queries and tool caching
+- **Request Routing**: Tool name parsing and server resolution
+- **Response Processing**: SSE parsing and error handling
+- **Performance Metrics**: Response times and cache statistics
+
+### Testing Strategies
+
+Tool discovery can be tested at multiple levels:
+
+**Unit Testing:**
+- SSE response parsing with various formats
+- Tool namespacing and name resolution logic
+- Configuration loading and validation
+
+**Integration Testing:**
+- End-to-end tool discovery with mock servers
+- MCP protocol compliance with real clients
+- Error handling with network failures
+
+**Manual Testing:**
+```bash
+# Test tool discovery
+curl -X POST http://localhost:3001/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/list","params":{}}'
+
+# Test tool execution
+curl -X POST http://localhost:3001/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"2","method":"tools/call","params":{"name":"context7-resolve-library-id","arguments":{"libraryName":"react"}}}'
+```
+
+## Performance Characteristics
+
+### Startup Performance
+
+Tool discovery adds minimal startup overhead:
+
+- **Discovery Time**: 2-5 seconds for typical server configurations
+- **Memory Usage**: ~1KB per discovered tool in cache
+- **Network Overhead**: Single HTTP request per configured server
+- **Failure Impact**: Individual server failures don't block startup
+
+### Runtime Performance
+
+Cached tools provide optimal runtime performance:
+
+- **Tool Listing**: O(1) memory lookup for tools/list requests
+- **Tool Execution**: Single HTTP proxy request to remote server
+- **No Database**: Eliminates database queries for tool metadata
+- **Memory Efficiency**: Minimal memory footprint for tool cache
+
+### Scalability Considerations
+
+The current implementation scales well for typical usage:
+
+- **Server Limit**: No hard limit on configured servers
+- **Tool Limit**: Memory-bound by available system RAM
+- **Concurrent Requests**: Limited by HTTP proxy connection pool
+- **Cache Invalidation**: Requires restart for configuration changes
+
+<Callout type="info">
+**Implementation Status**: Tool discovery is fully implemented and operational. The system successfully discovers tools from remote HTTP MCP servers, caches them in memory, and exposes them through both standard HTTP and SSE streaming transport protocols.
+</Callout>
+
+## Future Enhancements
+
+### Dynamic Discovery
+
+Planned enhancements for production deployment:
+
+- **Runtime Refresh**: Periodic tool discovery without restart
+- **Configuration Hot-Reload**: Dynamic server configuration updates
+- **Health Monitoring**: Automatic server availability checking
+- **Cache Persistence**: Optional disk-based cache for faster startup
+
+### Advanced Features
+
+Additional capabilities under consideration:
+
+- **Tool Versioning**: Support for versioned tool definitions
+- **Load Balancing**: Distribute requests across multiple server instances
+- **Circuit Breakers**: Automatic failure detection and recovery
+- **Metrics Collection**: Detailed usage and performance analytics
+
+The tool discovery implementation provides a solid foundation for dynamic MCP server integration while maintaining simplicity and reliability for development and production use.

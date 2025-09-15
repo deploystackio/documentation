@@ -1,0 +1,303 @@
+---
+title: Satellite Development
+description: Complete guide to developing and contributing to DeployStack Satellite - edge workers that manage MCP servers with team isolation and enterprise security.
+sidebar: Getting Started
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Cloud, Shield, Plug, Settings, Network, TestTube, Wrench, BookOpen, Terminal, Users } from 'lucide-react';
+
+# DeployStack Satellite Development
+
+DeployStack Satellites are **edge workers** (similar to GitHub Actions runners) that manage MCP servers with enterprise-grade team isolation and security. This service represents DeployStack's strategic pivot from local CLI gateway to cloud-native MCP-as-a-Service platform.
+
+## Current Implementation Status
+
+The satellite service has completed **Phase 1: MCP Transport Implementation** with working external client interfaces:
+
+- ✅ **Fastify HTTP Server** with Swagger API documentation
+- ✅ **Pino Logging System** identical to backend configuration
+- ✅ **MCP Transport Protocols** - SSE, SSE Messaging, Streamable HTTP
+- ✅ **Session Management** with cryptographically secure session IDs
+- ✅ **JSON-RPC 2.0 Protocol** compliance for MCP communication
+- ✅ **TypeScript + Webpack** build system with full type safety
+- ✅ **Development Workflow** with hot reload and linting
+- 🚧 **MCP Server Process Management** (planned)
+- 🚧 **Team Isolation** (planned)
+- 🚧 **Backend Communication** (planned)
+
+## Architecture Vision
+
+Satellites implement a hybrid edge worker pattern with five core internal components:
+
+- **HTTP Proxy Router**: Team-aware request routing with OAuth 2.1 authentication
+- **Dual MCP Server Manager**: Manages both external HTTP endpoints and stdio subprocess MCP servers
+- **Team Resource Manager**: Linux namespaces, cgroups, and resource jailing (0.1 CPU, 100MB RAM per process)
+- **Communication Manager**: Handles stdio JSON-RPC and HTTP proxy communication
+- **Backend Communicator**: Integration with DeployStack Backend for configuration and monitoring
+
+## Deployment Models (Planned)
+
+Satellites will support two deployment patterns:
+
+- **Global Satellites**: DeployStack-operated cloud infrastructure serving all teams with resource isolation
+- **Team Satellites**: Customer-deployed within corporate networks for internal resource access
+- **Dual MCP Server Support**: Both HTTP proxy (external endpoints) and stdio subprocess (local) MCP servers
+
+## Technology Stack
+
+- **Runtime**: Node.js with TypeScript
+- **HTTP Framework**: Fastify with native JSON Schema validation
+- **Logging**: Pino logger with structured logging
+- **MCP Transport**: SSE, Streamable HTTP, Direct HTTP protocols
+- **Session Management**: Cryptographically secure 32-byte session IDs
+- **Authentication**: OAuth 2.1 Resource Server (planned)
+- **Process Management**: stdio subprocess management (planned)
+- **Team Isolation**: Linux namespaces and cgroups (planned)
+- **Build System**: TypeScript + Webpack
+- **Development**: Nodemon with hot reload
+
+## Quick Start
+
+### Current Development Setup
+
+```bash
+# Clone and setup
+cd services/satellite
+npm install
+
+# Configure environment
+cp .env.example .env
+# Edit LOG_LEVEL, PORT as needed
+
+# Start development server
+npm run dev
+# Server runs on http://localhost:3001
+# API docs: http://localhost:3001/documentation
+```
+
+### Available Scripts
+
+```bash
+npm run dev      # Development server with hot reload
+npm run build    # Production build
+npm run start    # Start production server
+npm run lint     # ESLint with auto-fix
+npm run release  # Release management
+```
+
+### Current MCP Transport Endpoints
+
+- **GET** `/sse` - Establish SSE connection with session management
+- **POST** `/message?session={id}` - Send JSON-RPC messages via SSE sessions
+- **GET/POST** `/mcp` - Streamable HTTP transport with optional sessions
+- **OPTIONS** `/mcp` - CORS preflight handling
+
+### Testing MCP Transport
+
+```bash
+# Test SSE connection
+curl -N -H "Accept: text/event-stream" http://localhost:3001/sse
+
+# Send JSON-RPC message (replace SESSION_ID)
+curl -X POST "http://localhost:3001/message?session=SESSION_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{}}'
+
+# Direct HTTP transport
+curl -X POST http://localhost:3001/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/list","params":{}}'
+```
+
+## Development Guides
+
+<Cards>
+  <Card 
+    icon={<BookOpen />} 
+    href="/development/satellite/architecture" 
+    title="Architecture Design"
+  >
+    Learn the satellite system architecture, current implementation, and planned features.
+  </Card>
+  
+  <Card 
+    icon={<Network />} 
+    href="/development/satellite/mcp-transport" 
+    title="MCP Transport Protocols"
+  >
+    External communication endpoints for MCP client integration - SSE, Streamable HTTP, and Direct HTTP.
+  </Card>
+  
+  <Card 
+    icon={<Terminal />} 
+    href="/development/satellite/logging" 
+    title="Logging & Configuration"
+  >
+    Pino logging setup, log levels, environment configuration, and development patterns.
+  </Card>
+  
+  <Card 
+    icon={<Cloud />} 
+    href="/development/satellite/global-satellites" 
+    title="Global Satellites"
+  >
+    Managed satellite infrastructure, auto-scaling, multi-region deployment, and freemium model.
+  </Card>
+  
+  <Card 
+    icon={<Users />} 
+    href="/development/satellite/team-satellites" 
+    title="Team Satellites"
+  >
+    Enterprise on-premise deployment, internal resource access, and complete team isolation.
+  </Card>
+  
+  <Card 
+    icon={<Shield />} 
+    href="/development/satellite/security" 
+    title="Security & Isolation"
+  >
+    Resource jailing, team isolation, credential management, and enterprise security features.
+  </Card>
+  
+  <Card 
+    icon={<Plug />} 
+    href="/development/satellite/mcp-servers" 
+    title="MCP Server Management"
+  >
+    Satellite-hosted MCP servers, process management, and tool availability.
+  </Card>
+  
+  <Card 
+    icon={<Settings />} 
+    href="/development/satellite/configuration" 
+    title="Configuration Management"
+  >
+    Satellite configuration, team settings, and deployment parameters.
+  </Card>
+  
+  <Card 
+    icon={<TestTube />} 
+    href="/development/satellite/testing" 
+    title="Testing Strategy"
+  >
+    Testing satellite infrastructure, deployment validation, and integration testing.
+  </Card>
+  
+  <Card 
+    icon={<Wrench />} 
+    href="/development/satellite/deployment" 
+    title="Deployment & Operations"
+  >
+    Satellite deployment patterns, monitoring, scaling, and operational considerations.
+  </Card>
+</Cards>
+
+## Current Features
+
+### MCP Transport Layer (Implemented)
+- **SSE Transport**: Server-Sent Events with session management
+- **SSE Messaging**: JSON-RPC message sending via established sessions
+- **Streamable HTTP**: Direct HTTP communication with optional streaming
+- **Session Management**: 32-byte cryptographically secure session IDs
+- **JSON-RPC 2.0**: Full protocol compliance with error handling
+- **CORS Support**: Cross-origin request handling
+
+### Foundation Infrastructure
+- **Fastify HTTP Server**: High-performance server with automatic request validation
+- **Swagger Documentation**: Auto-generated API documentation at `/documentation`
+- **Environment Configuration**: `.env` file support with LOG_LEVEL control
+- **Structured Logging**: Pino logger with development and production modes
+- **TypeScript Support**: Full type safety with hot reload development
+
+### Development Workflow
+- **Hot Reload**: Automatic server restart on code changes
+- **Linting**: ESLint with auto-fix for code quality
+- **Build System**: TypeScript compilation with Webpack bundling
+- **Release Management**: Conventional changelog with release-it
+
+## Planned Features (Roadmap)
+
+### Phase 2: MCP Server Process Management
+- **Process Lifecycle**: Spawn, monitor, and terminate MCP server processes
+- **stdio Communication**: JSON-RPC communication with local MCP servers
+- **HTTP Proxy**: Reverse proxy for external MCP server endpoints
+- **Health Monitoring**: Process health checks and automatic restart
+
+### Phase 3: Team Isolation
+- **Resource Boundaries**: CPU and memory limits per team
+- **Process Isolation**: Separate process groups and namespaces
+- **Filesystem Isolation**: Team-specific directories and permissions
+- **Credential Management**: Secure team credential injection
+
+### Phase 4: Backend Integration
+- **HTTP Polling**: Outbound communication with DeployStack Backend
+- **Configuration Sync**: Dynamic configuration updates from Backend
+- **Status Reporting**: Real-time satellite health and usage metrics
+- **Command Processing**: Execute Backend commands with acknowledgment
+
+### Phase 5: Enterprise Features
+- **OAuth 2.1 Authentication**: Resource server with token introspection
+- **Audit Logging**: Complete audit trails for compliance
+- **Multi-Region Support**: Global satellite deployment
+- **Auto-Scaling**: Dynamic resource allocation based on demand
+
+## Development Patterns
+
+### MCP Transport Development
+Follow established patterns when working with MCP transport:
+
+1. Use manual JSON serialization with `JSON.stringify()`
+2. Implement comprehensive error handling with proper HTTP status codes
+3. Include structured logging with operation tracking
+4. Handle session management and activity tracking
+5. Support both streaming and standard response modes
+
+### API Route Development
+Follow established patterns when adding new routes:
+
+1. Create route files in `src/routes/` directories
+2. Use reusable JSON Schema constants for validation
+3. Implement TypeScript interfaces for type safety
+4. Use manual JSON serialization with `JSON.stringify()`
+5. Register routes in `src/routes/index.ts`
+
+### Logging Best Practices
+- Use structured logging with context objects
+- Pass logger instances as parameters to services
+- Include operation identifiers for traceability
+- Use appropriate log levels (debug, info, warn, error)
+- Avoid console.log statements in favor of Pino logger
+
+### Configuration Management
+- Use environment variables for configuration
+- Provide sensible defaults for development
+- Document all configuration options
+- Support both development and production modes
+
+## Strategic Context
+
+The satellite service represents DeployStack's evolution from a developer tool into a comprehensive enterprise MCP management platform. This strategic pivot addresses:
+
+- **Adoption Friction**: Eliminates CLI installation barriers (12x better conversion)
+- **Market Differentiation**: Creates new "MCP-as-a-Service" category
+- **Enterprise Requirements**: Provides team isolation and compliance features
+- **Scalability**: Enables horizontal scaling and global deployment
+
+## Contributing
+
+When contributing to satellite development:
+
+1. **Follow Backend Patterns**: Use identical logging, validation, and error handling
+2. **Maintain Type Safety**: Leverage TypeScript for compile-time validation
+3. **Document Changes**: Update relevant documentation for new features
+4. **Test Thoroughly**: Ensure changes work in both development and production
+5. **Consider Enterprise**: Design features with team isolation and security in mind
+6. **MCP Compliance**: Ensure JSON-RPC 2.0 protocol compliance
+
+## Next Steps
+
+The satellite service has completed Phase 1 (MCP Transport Implementation) and is ready for Phase 2 development. The next major milestone is implementing MCP server process management, which will enable the core satellite functionality of managing MCP servers on behalf of teams.
+
+For detailed implementation guidance, see the architecture and MCP transport documentation linked above.

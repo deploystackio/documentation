@@ -39,6 +39,6 @@
     "development/index",
     "development/frontend",
     "development/backend",
-    "development/gateway"
+    "development/satellite"
   ]
 }

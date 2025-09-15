@@ -1,6 +1,6 @@
 ---
 title: Quick Start
-description: Get started with DeployStack in minutes - create your free account, set up MCP servers, and install the gateway locally.
+description: Get started with DeployStack in minutes - create your free account, configure MCP servers, and connect instantly with just a URL.
 sidebar: Quick Start
 icon: Zap
 ---
@@ -11,21 +11,21 @@ import { Steps, Step } from 'fumadocs-ui/components/steps';
 
 # Quick Start
 
-Get started with DeployStack in minutes. This guide walks you through creating a free account, configuring your first MCP server, and connecting your development environment.
+Get started with DeployStack in minutes. This guide walks you through creating a free account, configuring your first MCP server, and connecting your development environment with zero installation.
 
 ## What You'll Accomplish
 
 By the end of this guide, you'll have:
 - A free DeployStack account with team management
 - Your first MCP server configured with secure credentials
-- The DeployStack Gateway running locally
+- Instant access to MCP tools via satellite URL
 - VS Code connected to your team's MCP tools
 
 ## Prerequisites
 
-- **Node.js**: [Install Node.js](https://nodejs.org/) (v18 or higher)
 - **VS Code or Cursor**: For MCP tool integration
-- **A few minutes**: This entire setup takes less than 5 minutes
+- **A few minutes**: This entire setup takes less than 3 minutes
+- **No installations required**: Zero local dependencies
 
 ## Step 1: Create Your Free Account
 
@@ -48,63 +48,36 @@ By the end of this guide, you'll have:
   </Step>
 </Steps>
 
-## Step 2: Install and Configure the Gateway
+## Step 2: Get Your OAuth Credentials
 
-The DeployStack Gateway runs locally and connects your development tools to your team's MCP servers.
+DeployStack Satellite provides instant MCP access through managed infrastructure - no installation required.
 
 <Steps>
   <Step>
-    **Install the Gateway**
+    **Create OAuth Client Credentials**
     
-    Install the DeployStack Gateway globally via npm:
+    In your DeployStack dashboard:
     
-    ```bash
-    npm install -g @deploystack/gateway
-    ```
-  </Step>
-  
-  <Step>
-    **Login to DeployStack**
+    1. Navigate to the **Satellite** section
+    2. Click **Create MCP Client Credentials**
+    3. Enter a name for your client (e.g., "VS Code", "Claude Desktop")
+    4. Copy the generated OAuth credentials:
+       - **Client ID**: `deploystack_mcp_client_abc123def456ghi789`
+       - **Client Secret**: `deploystack_mcp_secret_xyz789abc123def456ghi789jkl012`
     
-    Authenticate with your DeployStack account:
-    
-    ```bash
-    deploystack login
-    ```
-    
-    This will:
-    - Open a browser window for authentication
-    - Download your team's MCP server configurations
-    - Set up secure credential access
-
-    Login command will pull your MCP configurations and credentials from the cloud.deploystack.io and start the DeployStack gateway.
-  </Step>
-  
-  <Step>
-    **Verify Gateway Status**
-    
-    Check that everything is working:
-    
-    ```bash
-    deploystack status
-    ```
-    
-    You should see:
-    - Gateway status: Running
-    - Your team name
-    - List of available MCP servers
+    These OAuth credentials provide secure access to your team's MCP servers through standard OAuth Bearer Token authentication.
   </Step>
 </Steps>
 
 ## Step 3: Connect Your Development Environment
 
-Now connect VS Code or Cursor to use your team's MCP servers.
+Now connect VS Code or Cursor to use your team's MCP servers via satellite.
 
 <Steps>
   <Step>
     **Configure VS Code MCP Settings**
     
-    Open your VS Code settings and configure MCP to use the DeployStack Gateway.
+    Open your VS Code settings and configure MCP to use the DeployStack Satellite.
     
     **Location**: `.vscode/settings.json` or global VS Code settings
     
@@ -124,15 +97,19 @@ Now connect VS Code or Cursor to use your team's MCP servers.
     }
     ```
     
-    **After** (DeployStack Gateway):
+    **After** (DeployStack Satellite):
 
     ```json
     {
       "mcpServers": {
         "deploystack": {
-          "url": "http://localhost:9095/sse",
-          "name": "DeployStack Gateway",
-          "description": "Enterprise MCP Gateway with team-based access control"
+          "url": "https://satellite.deploystack.io/mcp",
+          "oauth": {
+            "client_id": "deploystack_mcp_client_abc123def456ghi789",
+            "client_secret": "deploystack_mcp_secret_xyz789abc123def456ghi789jkl012"
+          },
+          "name": "DeployStack Satellite",
+          "description": "MCP-as-a-Service with zero installation"
         }
       }
     }
@@ -145,7 +122,7 @@ Now connect VS Code or Cursor to use your team's MCP servers.
     1. **Restart VS Code** to load the new MCP configuration
     2. **Open Claude or compatible MCP client**
     3. **Test a tool**: Try using one of your configured MCP servers
-    4. **Verify**: Tools should work without any manual credential setup
+    4. **Verify**: Tools should work instantly without any local setup
   </Step>
 </Steps>
 
@@ -155,27 +132,21 @@ Now that everything is connected, explore what you can do:
 
 <Steps>
   <Step>
-    **List Available Tools**
+    **Test Available Tools**
     
-    See all MCP tools available through your gateway:
-    
-    ```bash
-    deploystack mcp
-    ```
-    
-    This shows all tools from your team's MCP servers with their descriptions.
+    In your VS Code MCP client:
+    - All configured MCP tools are instantly available
+    - No local processes or installations required
+    - Tools automatically include your team's credentials
   </Step>
   
   <Step>
-    **Monitor Gateway Activity**
+    **Monitor Usage**
     
-    View real-time logs and activity:
-    
-    ```bash
-    deploystack logs
-    ```
-    
-    This shows MCP server activity, tool usage, and any issues.
+    View activity in your [DeployStack dashboard](https://cloud.deploystack.io):
+    - Real-time MCP tool usage
+    - Team activity and analytics
+    - Satellite performance metrics
   </Step>
   
   <Step>
@@ -184,59 +155,33 @@ Now that everything is connected, explore what you can do:
     Back in the [DeployStack dashboard](https://cloud.deploystack.io):
     - Add more MCP servers to your team
     - Manage credentials securely
+    - Monitor satellite usage
   </Step>
 </Steps>
 
-## Common Gateway Commands
+## Managing Your Satellite Connection
 
-Here are the essential commands you'll use regularly:
+With DeployStack Satellite, management is done through the web dashboard:
 
-```bash
-# Check gateway status
-deploystack status
-
-# Start the gateway
-deploystack start
-
-# Stop the gateway
-deploystack stop
-
-# Restart the gateway
-deploystack restart
-
-# View logs
-deploystack logs
-
-# List available MCP tools
-deploystack mcp
-
-# Update configurations from cloud
-deploystack refresh
-
-# Switch teams (if you have multiple)
-deploystack teams
-```
+- **Configuration**: All changes made in [cloud.deploystack.io](https://cloud.deploystack.io)
+- **Instant Updates**: Changes take effect immediately, no local updates needed
+- **Team Switching**: Change teams in the dashboard, regenerate token if needed
+- **Monitoring**: View real-time usage and performance metrics
+- **Zero Maintenance**: No local processes to start, stop, or restart
 
 ## Multiple Teams
 
 If you're part of multiple teams or create additional teams:
 
-```bash
-# List your teams
-deploystack teams
+1. **Switch Teams**: Use the team selector in your [DeployStack dashboard](https://cloud.deploystack.io)
+2. **Generate New OAuth Credentials**: Each team requires separate OAuth client credentials for security
+3. **Update VS Code**: Replace the oauth client_id and client_secret with the new team's credentials
+4. **Instant Access**: New team's MCP tools are immediately available
 
-# Switch to a specific team
-deploystack teams --switch 2
-
-# Check current team context
-deploystack status
-```
-
-When you switch teams, the gateway automatically:
-- Downloads new team configurations
-- Starts the new team's MCP servers
-- Stops the previous team's servers
-- Updates available tools
+When you switch teams:
+- New team's MCP servers become available instantly
+- Previous team's tools are no longer accessible (security isolation)
+- All team-specific credentials are automatically applied
 
 ## What's Next?
 
@@ -257,33 +202,30 @@ If you're working with a team:
 
 ## Troubleshooting
 
-### Gateway Won't Start
+### Satellite Connection Issues
 
-```bash
-# Check if you're logged in
-deploystack status
+1. **Check OAuth credentials**:
+   - Verify your client_id and client_secret are correct
+   - Regenerate OAuth credentials in dashboard if needed
 
-# Re-login if needed
-deploystack login
+2. **Verify VS Code configuration**:
+   - Ensure the satellite URL is `https://satellite.deploystack.io/mcp`
+   - Check oauth section has your current client_id and client_secret
+   - Restart VS Code after configuration changes
 
-# Check for port conflicts
-lsof -i :9095
-```
+3. **Test connection**:
+   ```bash
+   curl -X POST https://satellite.deploystack.io/mcp \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer YOUR_OAUTH_TOKEN" \
+        -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+   ```
 
 ### MCP Tools Not Working
 
-1. **Check gateway status**:
-   ```bash
-   deploystack status
-   ```
-
-2. **Verify VS Code configuration**:
-   - Ensure the MCP server URL is `http://localhost:9095/sse`
-   - Restart VS Code after configuration changes
-
-3. **Check credentials**:
-   - Verify credentials are properly configured in your dashboard
-   - Test credentials directly in the DeployStack interface
+1. **Check satellite status**: Visit your [dashboard](https://cloud.deploystack.io) for real-time status
+2. **Verify credentials**: Ensure OAuth credentials are properly configured for your team
+3. **Client permissions**: Confirm your OAuth client has access to the required MCP servers
 
 ### Need Help?
 
@@ -293,6 +235,6 @@ lsof -i :9095
 
 ---
 
-**🎉 Congratulations!** You now have DeployStack configured and running. Your development environment is connected to enterprise-grade MCP management with secure credential handling and team collaboration features.
+**🎉 Congratulations!** You now have DeployStack Satellite configured and running. Your development environment is connected to enterprise-grade MCP management with zero installation, secure credential handling, and instant team collaboration.
 
 **Next Steps**: Explore the [MCP Catalog](https://cloud.deploystack.io) to add more tools to your team, or invite colleagues to collaborate on your projects.
