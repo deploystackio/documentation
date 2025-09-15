@@ -72,7 +72,6 @@ PKCE provides security for public clients (like CLI tools and MCP clients):
 Manages the authorization flow:
 
 #### Client Validation
-- Validates static clients against whitelist (`deploystack-gateway-cli`)
 - Validates dynamic clients against database (`dynamic_oauth_clients` table)
 - Supports both pre-registered and dynamically registered clients
 - Extensible for additional client types
@@ -262,17 +261,6 @@ Scopes are enforced at the endpoint level:
 
 ## Client Types and Configuration
 
-### Static Clients (Pre-registered)
-
-**DeployStack Gateway CLI:**
-- **Client ID**: `deploystack-gateway-cli`
-- **Client Type**: Public (no secret)
-- **Redirect URIs**: 
-  - `http://localhost:8976/oauth/callback`
-  - `http://127.0.0.1:8976/oauth/callback`
-- **Required**: PKCE with SHA256
-- **Token Lifetime**: 1-hour access, 30-day refresh
-
 ### Dynamic Clients (RFC 7591)
 
 **VS Code MCP Extension:**
@@ -457,7 +445,6 @@ The backend validates OAuth scopes to control API access. Scope configuration mu
 
 For the current list of supported scopes, check the source code at:
 - **Backend validation**: `services/backend/src/services/oauth/authorizationService.ts` in the `validateScope()` method
-- **Gateway requests**: `services/gateway/src/utils/auth-config.ts` in the `scopes` array
 
 ### Adding New Scopes
 
@@ -519,18 +506,6 @@ server.get('/api/another-endpoint', {
 
 Always coordinate scope changes between backend and client implementations.
 
-## Gateway Integration
-
-The OAuth2 server integrates with the DeployStack Gateway:
-
-### Gateway OAuth Client
-
-See [Gateway OAuth Implementation](/development/gateway/oauth) for:
-- Client-side PKCE generation
-- Browser integration
-- Callback server
-- Token storage
-- Automatic refresh
 
 ## MCP Client Integration
 
@@ -576,7 +551,6 @@ The OAuth2 server supports MCP clients through dynamic registration:
 ## Related Documentation
 
 - [Backend Authentication System](/development/backend/auth) - Core authentication
-- [Gateway OAuth Implementation](/development/gateway/oauth) - Client-side OAuth
 - [Satellite OAuth Authentication](/development/satellite/oauth-authentication) - MCP client authentication
 - [Security Policy](/development/backend/security) - Security details
 - [API Documentation](/development/backend/api) - API reference
