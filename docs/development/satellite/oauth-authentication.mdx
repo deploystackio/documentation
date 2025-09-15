@@ -14,7 +14,7 @@ DeployStack Satellite implements OAuth 2.1 Resource Server functionality to auth
 
 ### OAuth 2.1 Resource Server Architecture
 
-The satellite operates as a multi-team OAuth 2.1 Resource Server that validates Bearer tokens via Backend introspection:
+The satellite operates as a multi-team OAuth 2.1 Resource Server that validates Bearer tokens via Backend introspection. The backend now uses database-backed storage for dynamic client registration, enabling persistent MCP client authentication:
 
 ```
 MCP Client                    Satellite                    Backend
@@ -22,6 +22,9 @@ MCP Client                    Satellite                    Backend
     │──── GET /sse ─────────────▶│                             │
     │                           │                             │
     │◀─── 401 + WWW-Auth ──────│                             │
+    │                           │                             │
+    │──── Dynamic Registration ─────────────────────────────▶│
+    │◀─── Client ID ───────────────────────────────────────│
     │                           │                             │
     │──── OAuth Flow ──────────────────────────────────────▶│
     │◀─── Bearer Token ────────────────────────────────────│
@@ -40,18 +43,28 @@ MCP Client                    Satellite                    Backend
 - Implements 5-minute token caching for performance
 - Supports multi-team authentication (any valid team)
 - Extracts team context from token validation response
+- Handles both static and dynamic client tokens
 
 **Authentication Middleware:**
 - `requireAuthentication()` - Validates Bearer tokens for any team
 - `requireScope()` - Enforces OAuth scope requirements
 - Proper WWW-Authenticate headers with OAuth 2.1 compliance
 - JSON-RPC 2.0 compliant error responses
+- Dynamic client registration guidance in error responses
 
 **Team-Aware MCP Handler:**
 - Filters tools based on team's MCP server installations
 - Team-aware `tools/list` - only shows tools from team's allowed servers
 - Team-aware `tools/call` - validates team access before execution
 - Integrates with existing tool discovery and configuration systems
+
+For detailed team isolation implementation, see [Team Isolation Implementation](./team-isolation).
+
+**Dynamic Client Support:**
+- Supports RFC 7591 dynamically registered clients
+- Handles VS Code MCP extension client caching
+- Supports Cursor, Claude.ai, and other MCP clients
+- Persistent client storage survives backend restarts
 
 ## Implementation Files
 
@@ -105,11 +118,60 @@ MCP Client                    Satellite                    Backend
 - Team context extracted from validated OAuth token
 - No hardcoded team configuration in satellite
 - Dynamic team filtering based on token validation response
+- Supports multiple teams per user
 
 **Tool Filtering:**
 - Tools filtered based on team's MCP server installations
 - Team-MCP server mappings from Backend database (`mcpServerInstallations` table)
 - Access control enforced before tool execution
+- Complete team isolation maintained
+
+## MCP Client Integration
+
+### Dynamic Client Registration Support
+
+The satellite now supports MCP clients that use RFC 7591 Dynamic Client Registration:
+
+**VS Code MCP Extension:**
+- Automatic client registration via Backend `/api/oauth2/register`
+- Client ID caching for improved user experience
+- Persistent storage survives VS Code restarts
+- Long-lived tokens (1-week access, 30-day refresh)
+
+**Cursor MCP Client:**
+- Dynamic registration with `cursor://` redirect URIs
+- Team-scoped tool access
+- Automatic token refresh handling
+
+**Claude.ai Custom Connector:**
+- Registration with `https://claude.ai/mcp/auth/callback`
+- OAuth 2.1 compliant authentication flow
+- Team-aware tool discovery
+
+**Cline MCP Client:**
+- VS Code extension integration
+- Shared client registration with VS Code patterns
+- Consistent authentication experience
+
+### Client Authentication Flow
+
+**First-Time Authentication:**
+1. MCP client attempts to connect to satellite
+2. Satellite returns 401 with registration guidance
+3. Client registers via Backend `/api/oauth2/register`
+4. Client receives unique client_id (e.g., `dyn_1757880447836_uvze3d0yc`)
+5. Client initiates OAuth flow with Backend
+6. User authorizes in browser with team selection
+7. Client receives Bearer token
+8. Client connects to satellite with token
+9. Satellite validates token and establishes SSE connection
+
+**Subsequent Authentications:**
+1. MCP client uses cached client_id
+2. Client uses stored refresh token if access token expired
+3. Client connects directly to satellite with valid token
+4. Satellite validates token via introspection (with caching)
+5. SSE connection established immediately
 
 ## Development Setup
 
@@ -328,7 +390,8 @@ function sendAuthenticationRequired(reply: FastifyReply) {
   
   const wwwAuthenticate = `Bearer realm="DeployStack MCP Satellite", ` +
     `authorizationUri="${backendUrl}/api/oauth2/auth", ` +
-    `tokenUri="${backendUrl}/api/oauth2/token"`;
+    `tokenUri="${backendUrl}/api/oauth2/token", ` +
+    `registrationUri="${backendUrl}/api/oauth2/register"`;
 
   const errorResponse = {
     jsonrpc: '2.0',
@@ -338,7 +401,9 @@ function sendAuthenticationRequired(reply: FastifyReply) {
       data: {
         message: 'Bearer token required for MCP access',
         authorization_uri: `${backendUrl}/api/oauth2/auth`,
-        token_uri: `${backendUrl}/api/oauth2/token`
+        token_uri: `${backendUrl}/api/oauth2/token`,
+        registration_uri: `${backendUrl}/api/oauth2/register`,
+        flow: 'Dynamic client registration available for MCP clients'
       }
     },
     id: null
@@ -364,7 +429,8 @@ function sendInsufficientScopeError(reply: FastifyReply, requiredScope: string) 
       message: 'Insufficient scope',
       data: {
         message: `Token missing required scope: ${requiredScope}`,
-        required_scope: requiredScope
+        required_scope: requiredScope,
+        available_scopes: ['mcp:read', 'mcp:tools:execute', 'offline_access']
       }
     },
     id: null
@@ -719,15 +785,28 @@ LOG_LEVEL=debug npm run dev
 - Authentication middleware with proper error handling
 - Integration with existing backend polling system
 - Swagger documentation with Bearer authentication
+- RFC 7591 Dynamic Client Registration support
+- Database-backed persistent client storage
+- VS Code MCP extension authentication (tested and working)
+- Support for Cursor, Claude.ai, and Cline MCP clients
 
 **Backend Integration:**
 - Uses existing satellite registration system
 - Leverages existing backend polling for team-MCP server mappings
 - Integrates with existing tool discovery and configuration systems
 - Maintains all existing MCP transport functionality
+- Database-backed client storage survives backend restarts
+- Supports both static and dynamic OAuth clients
 
-The OAuth authentication implementation provides enterprise-grade security with complete team isolation while maintaining the existing satellite architecture and performance characteristics.
+**Verified MCP Client Support:**
+- VS Code MCP Extension: Full OAuth flow tested and working
+- Dynamic client registration: RFC 7591 compliant implementation
+- Client ID caching: Persistent across client restarts
+- Token refresh: Long-lived access for MCP clients
+- Team isolation: Complete separation of team resources
+
+The OAuth authentication implementation provides enterprise-grade security with complete team isolation while maintaining the existing satellite architecture and performance characteristics. The database-backed storage ensures MCP clients can cache credentials and maintain persistent authentication across sessions.
 
 <Callout type="info">
-**Implementation Status**: OAuth authentication is fully implemented and operational. The system successfully authenticates MCP clients with team-aware access control, filters tools based on team permissions, and maintains complete team isolation while preserving all existing satellite functionality.
+**Implementation Status**: OAuth authentication is fully implemented and operational with database-backed dynamic client registration. The system successfully authenticates MCP clients (including VS Code, Cursor, Claude.ai, and Cline) with team-aware access control, filters tools based on team permissions, and maintains complete team isolation while preserving all existing satellite functionality. Dynamic client registration enables seamless MCP client integration with persistent authentication.
 </Callout>

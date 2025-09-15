@@ -9,17 +9,19 @@ This document describes the OAuth2 authorization server implementation in the De
 
 ## Overview
 
-The OAuth2 server provides RFC 6749 compliant authorization for programmatic API access. This enables the DeployStack Gateway CLI and other tools to authenticate users and access APIs on their behalf using Bearer tokens instead of cookies.
+The OAuth2 server provides RFC 6749 compliant authorization for programmatic API access with RFC 7591 Dynamic Client Registration support. This enables the DeployStack Gateway CLI, MCP clients (VS Code, Cursor, Claude.ai), and other tools to authenticate users and access APIs on their behalf using Bearer tokens instead of cookies.
 
 ## Architecture
 
 The OAuth2 server implementation includes:
 
 - **Authorization Server** - Handles OAuth2 authorization flow with PKCE
+- **Dynamic Client Registration** - RFC 7591 compliant client registration for MCP clients
 - **Token Management** - Issues and validates access/refresh tokens
 - **Consent System** - User authorization interface
 - **Dual Authentication** - Supports both cookies and Bearer tokens
 - **Scope-based Access** - Fine-grained permission control
+- **Database Storage** - Persistent client and token storage
 
 ## OAuth2 Flow
 
@@ -34,9 +36,19 @@ The implementation follows the OAuth2 Authorization Code flow enhanced with PKCE
 5. **Token exchange** - Client exchanges code for tokens
 6. **API access** - Client uses Bearer token for requests
 
+### Dynamic Client Registration Flow (RFC 7591)
+
+MCP clients can automatically register themselves:
+
+1. **Client registration** - POST to `/api/oauth2/register` with metadata
+2. **Client validation** - Server validates redirect URIs and grants
+3. **Client ID generation** - Server generates unique client_id (format: `dyn_<timestamp>_<random>`)
+4. **Database storage** - Client metadata stored in `dynamic_oauth_clients` table
+5. **OAuth flow** - Client proceeds with standard authorization flow
+
 ### PKCE Implementation
 
-PKCE provides security for public clients (like CLI tools):
+PKCE provides security for public clients (like CLI tools and MCP clients):
 
 #### Code Verifier
 - 128 random bytes encoded as base64url
@@ -60,34 +72,71 @@ PKCE provides security for public clients (like CLI tools):
 Manages the authorization flow:
 
 #### Client Validation
-- Validates client_id against whitelist
-- Currently supports `deploystack-gateway-cli`
-- Extensible for additional clients
+- Validates static clients against whitelist (`deploystack-gateway-cli`)
+- Validates dynamic clients against database (`dynamic_oauth_clients` table)
+- Supports both pre-registered and dynamically registered clients
+- Extensible for additional client types
 
 #### Redirect URI Validation
-- Checks URI against allowed list
-- Supports localhost callbacks for CLI
+- Checks URI against allowed patterns for MCP clients
+- Supports localhost callbacks for CLI tools
+- Supports VS Code specific patterns (`http://127.0.0.1:<port>/`, `vscode://`)
+- Supports Cursor patterns (`cursor://`)
+- Supports Claude.ai patterns (`https://claude.ai/mcp/auth/callback`)
 - Prevents redirect attacks
 
 #### Scope Validation
-- Validates requested scopes
+- Validates requested scopes against MCP scope patterns
+- Supports `mcp:read`, `mcp:tools:execute`, `offline_access`
 - Ensures scopes are recognized
 - Limits access appropriately
 
 #### Authorization Storage
-- Stores authorization requests
+- Stores authorization requests in database
 - Links PKCE challenges
-- Manages request lifecycle
+- Manages request lifecycle with expiration
+- Supports team-scoped authorization
 
 #### Code Generation
 - Creates authorization codes
-- Associates with user session
-- Implements expiration
+- Associates with user session and team
+- Implements 10-minute expiration
+- Prevents replay attacks
 
 #### Code Verification
-- Validates authorization codes
+- Validates authorization codes against database
 - Verifies PKCE challenge
 - Ensures single use
+- Validates client and redirect URI match
+
+### Dynamic Client Registration
+
+Implements RFC 7591 Dynamic Client Registration:
+
+#### Registration Endpoint
+- **File**: `services/backend/src/routes/oauth2/register.ts`
+- **Endpoint**: `POST /api/oauth2/register`
+- **Purpose**: Allows MCP clients to self-register
+
+#### Client Metadata Validation
+- Validates `redirect_uris` against MCP client patterns
+- Supports VS Code: `http://127.0.0.1:<port>/`, `https://vscode.dev/redirect`
+- Supports Cursor: `cursor://` schemes
+- Supports Claude.ai: `https://claude.ai/mcp/auth/callback`
+- Validates `grant_types` (authorization_code, refresh_token)
+- Validates `response_types` (code)
+
+#### Client ID Generation
+- Format: `dyn_<timestamp>_<random>`
+- Timestamp: Unix timestamp for uniqueness
+- Random suffix: 9-character base36 string
+- Example: `dyn_1757880447836_uvze3d0yc`
+
+#### Database Storage
+- **Table**: `dynamic_oauth_clients`
+- **Schema**: See `services/backend/src/db/schema.sqlite.ts`
+- **Fields**: client_id, client_name, redirect_uris, grant_types, response_types, scope, token_endpoint_auth_method, client_id_issued_at, expires_at
+- **Persistence**: Survives server restarts and supports multiple instances
 
 ### TokenService
 
@@ -96,50 +145,80 @@ Handles token lifecycle:
 #### Token Generation
 - Creates cryptographically secure tokens
 - Generates appropriate expiration
-- Stores hashed versions
+- Stores hashed versions in database
 
 #### Access Token Management
-- Issues 1-hour access tokens
-- Includes user and scope data
+- Issues 1-week access tokens for MCP clients
+- Issues 1-hour access tokens for CLI tools
+- Includes user, team, and scope data
 - Enables API authentication
 
 #### Refresh Token Handling
 - Issues 30-day refresh tokens
 - Allows token renewal
 - Maintains session continuity
+- Supports offline access
 
 #### Token Verification
 - Validates token format
 - Checks expiration
 - Verifies against database
+- Supports introspection endpoint
 
 #### Token Refresh
 - Exchanges refresh for access token
 - Validates client identity
 - Maintains scope consistency
+- Supports both static and dynamic clients
 
 #### Token Revocation
 - Invalidates tokens on demand
 - Cleans up related tokens
 - Ensures immediate effect
 
-### OAuthCleanupService
+### Database Schema
 
-Automatic maintenance:
+#### Dynamic OAuth Clients Table
+- **File**: `services/backend/src/db/schema.sqlite.ts`
+- **Table**: `dynamic_oauth_clients`
+- **Migration**: `0006_keen_firestar.sql`
+- **Purpose**: Persistent storage for dynamically registered MCP clients
+
+#### OAuth Authorization Codes Table
+- **Table**: `oauth_authorization_codes`
+- **Purpose**: Stores authorization requests and codes
+- **Features**: PKCE challenge storage, team context, expiration
+
+#### OAuth Access Tokens Table
+- **Table**: `oauth_access_tokens`
+- **Purpose**: Stores issued access tokens
+- **Features**: Hashed storage, scope tracking, team context
+
+#### OAuth Refresh Tokens Table
+- **Table**: `oauth_refresh_tokens`
+- **Purpose**: Stores refresh tokens for token renewal
+- **Features**: Long-term storage, client association
+
+### OAuthCleanupService (TODO)
+
+Automatic maintenance system needs implementation:
 
 #### Scheduled Cleanup
-- Runs hourly via cron
-- Removes expired tokens
-- Prevents database bloat
+- Should run hourly via cron
+- Remove expired authorization codes (>10 minutes)
+- Remove expired access tokens
+- Remove expired refresh tokens
+- Clean up unused dynamic client registrations
 
 #### Cleanup Scope
-- Authorization codes > 10 minutes
+- Authorization codes > 10 minutes old
 - Expired access tokens
 - Expired refresh tokens
+- Dynamic clients unused for >90 days (configurable)
 
 ## OAuth2 Endpoints Overview
 
-The OAuth2 server implements standard OAuth2 endpoints following RFC 6749:
+The OAuth2 server implements standard OAuth2 endpoints following RFC 6749 and RFC 7591:
 
 ### Authorization Flow Endpoints
 
@@ -147,6 +226,11 @@ The OAuth2 server implements standard OAuth2 endpoints following RFC 6749:
 - **Consent Endpoints** (`/api/oauth2/consent`) - Displays and processes user authorization consent
 - **Token Endpoint** (`/api/oauth2/token`) - Exchanges authorization codes for access tokens and handles token refresh
 - **User Info Endpoint** (`/api/oauth2/userinfo`) - Returns authenticated user information
+- **Introspection Endpoint** (`/api/oauth2/introspect`) - Token validation for resource servers
+
+### Dynamic Client Registration Endpoints
+
+- **Registration Endpoint** (`/api/oauth2/register`) - RFC 7591 compliant client registration
 
 For complete API specifications including request parameters, response schemas, and examples, see the [Backend API Documentation](/development/backend/api). The API documentation provides OpenAPI specifications for all OAuth2 endpoints.
 
@@ -154,7 +238,13 @@ For complete API specifications including request parameters, response schemas, 
 
 ### Available Scopes
 
-For the current list of supported scopes, see the source code at `services/backend/src/services/oauth/authorizationService.ts` in the `validateScope()` method.
+**MCP Client Scopes:**
+- `mcp:read` - Tool discovery and MCP server access
+- `mcp:tools:execute` - Tool execution permissions
+- `offline_access` - Refresh token issuance
+
+**CLI Tool Scopes:**
+For the current list of CLI-supported scopes, see the source code at `services/backend/src/services/oauth/authorizationService.ts` in the `validateScope()` method.
 
 ### Scope Enforcement
 
@@ -169,6 +259,49 @@ Scopes are enforced at the endpoint level:
 - Validates token contains required scope
 - Returns 403 for insufficient scope
 - Provides clear error messages
+
+## Client Types and Configuration
+
+### Static Clients (Pre-registered)
+
+**DeployStack Gateway CLI:**
+- **Client ID**: `deploystack-gateway-cli`
+- **Client Type**: Public (no secret)
+- **Redirect URIs**: 
+  - `http://localhost:8976/oauth/callback`
+  - `http://127.0.0.1:8976/oauth/callback`
+- **Required**: PKCE with SHA256
+- **Token Lifetime**: 1-hour access, 30-day refresh
+
+### Dynamic Clients (RFC 7591)
+
+**VS Code MCP Extension:**
+- **Client ID**: Auto-generated (e.g., `dyn_1757880447836_uvze3d0yc`)
+- **Registration**: Automatic via RFC 7591
+- **Redirect URIs**: `http://127.0.0.1:<port>/`, `https://vscode.dev/redirect`
+- **Scopes**: `mcp:read mcp:tools:execute offline_access`
+- **Token Lifetime**: 1-week access, 30-day refresh
+
+**Cursor MCP Client:**
+- **Client ID**: Auto-generated
+- **Registration**: Automatic via RFC 7591
+- **Redirect URIs**: `cursor://` schemes
+- **Scopes**: `mcp:read mcp:tools:execute offline_access`
+
+**Claude.ai MCP Client:**
+- **Client ID**: Auto-generated
+- **Registration**: Automatic via RFC 7591
+- **Redirect URIs**: `https://claude.ai/mcp/auth/callback`
+- **Scopes**: `mcp:read mcp:tools:execute offline_access`
+
+### Adding New Static Clients
+
+To support additional pre-registered OAuth2 clients:
+
+1. Add client_id to validation whitelist in `AuthorizationService.validateClient()`
+2. Configure allowed redirect URIs in `AuthorizationService.validateRedirectUri()`
+3. Define client-specific settings
+4. Update documentation
 
 ## Dual Authentication
 
@@ -200,29 +333,6 @@ The system maintains context about authentication:
 - **Type Detection**: Check for `tokenPayload` presence
 - **Unified Interface**: Same user object structure
 
-## Client Configuration
-
-### DeployStack Gateway CLI
-
-Pre-registered OAuth2 client:
-
-- **Client ID**: `deploystack-gateway-cli`
-- **Client Type**: Public (no secret)
-- **Redirect URIs**: 
-  - `http://localhost:8976/oauth/callback`
-  - `http://127.0.0.1:8976/oauth/callback`
-- **Required**: PKCE with SHA256
-- **Token Lifetime**: 1-hour access, 30-day refresh
-
-### Adding New Clients
-
-To support additional OAuth2 clients:
-
-1. Add client_id to validation whitelist
-2. Configure allowed redirect URIs
-3. Define client-specific settings
-4. Update documentation
-
 ## Security Implementation
 
 ### PKCE Security
@@ -240,12 +350,13 @@ Multiple layers of token protection:
 - Constant-time comparison
 - Secure random generation
 - Automatic expiration
-- Regular cleanup
+- Regular cleanup (TODO: implement)
 
 ### Authorization Security
 
 Secure authorization flow:
 - CSRF protection via state parameter
+- Proper URL encoding of state parameter
 - Session requirement for authorization
 - Validated redirect URIs
 - Clear consent interface
@@ -258,7 +369,27 @@ API access security:
 - Scope-based access control
 - Automatic token refresh
 
+### Dynamic Client Security
+
+RFC 7591 security measures:
+- Redirect URI validation against MCP patterns
+- Client metadata validation
+- Automatic client ID generation
+- Database persistence with proper indexing
+- No client secrets for public clients
+
 ## Integration Examples
+
+### MCP Client Registration Flow
+
+Example dynamic client registration for MCP clients:
+
+1. **Client registration request**
+2. **Server validates metadata**
+3. **Client ID generated and stored**
+4. **Client proceeds with OAuth flow**
+5. **User authorizes in browser**
+6. **Tokens issued for MCP access**
 
 ### CLI Authentication Flow
 
@@ -293,14 +424,16 @@ Content-Type: application/json
 {
   "grant_type": "refresh_token",
   "refresh_token": "<refresh_token>",
-  "client_id": "deploystack-gateway-cli"
+  "client_id": "dyn_1757880447836_uvze3d0yc"
 }
 ```
+
 ## Monitoring
 
 ### Metrics to Track (TODO)
 
 - Authorization requests
+- Dynamic client registrations
 - Token issuance rate
 - Refresh token usage
 - Failed authentication attempts
@@ -310,6 +443,7 @@ Content-Type: application/json
 
 Comprehensive logging for debugging:
 - Authorization flow steps
+- Dynamic client registration events
 - Token operations
 - Scope validations
 - Error conditions
@@ -317,7 +451,7 @@ Comprehensive logging for debugging:
 
 ## OAuth Scope Management
 
-The backend validates OAuth scopes to control API access. Scope configuration must stay synchronized between the backend and gateway.
+The backend validates OAuth scopes to control API access. Scope configuration must stay synchronized between the backend and clients.
 
 ### Current Scopes
 
@@ -330,7 +464,7 @@ For the current list of supported scopes, check the source code at:
 When adding support for a new OAuth scope in the backend:
 
 1. **Add the scope** to the `allowedScopes` array in `services/backend/src/services/oauth/authorizationService.ts`
-2. **Update the gateway** to request the new scope (see [Gateway OAuth Implementation](/development/gateway/oauth))
+2. **Update clients** to request the new scope (Gateway, MCP clients)
 3. **Apply scope enforcement** to relevant API endpoints using middleware
 4. **Test the complete flow** to ensure proper scope validation
 
@@ -341,7 +475,8 @@ static validateScope(scope: string): boolean {
   const requestedScopes = scope.split(' ');
   const allowedScopes = [
     'mcp:read',
-    'mcp:categories:read',
+    'mcp:tools:execute',
+    'offline_access',
     'your-new-scope',  // Add new scope here
     // ... other scopes
   ];
@@ -378,11 +513,11 @@ server.get('/api/another-endpoint', {
 
 ### Scope Synchronization
 
-**Critical**: The backend and gateway must have matching scope configurations:
-- If backend supports a scope but gateway doesn't request it, users won't get that permission
-- If gateway requests a scope but backend doesn't support it, authentication will fail
+**Critical**: The backend and clients must have matching scope configurations:
+- If backend supports a scope but client doesn't request it, users won't get that permission
+- If client requests a scope but backend doesn't support it, authentication will fail
 
-Always coordinate scope changes between both services.
+Always coordinate scope changes between backend and client implementations.
 
 ## Gateway Integration
 
@@ -397,10 +532,52 @@ See [Gateway OAuth Implementation](/development/gateway/oauth) for:
 - Token storage
 - Automatic refresh
 
+## MCP Client Integration
+
+The OAuth2 server supports MCP clients through dynamic registration:
+
+### Supported MCP Clients
+
+- **VS Code MCP Extension** - Automatic registration and authentication
+- **Cursor MCP Client** - Dynamic client registration support
+- **Claude.ai Custom Connector** - OAuth2 integration
+- **Cline MCP Client** - VS Code extension support
+
+### MCP Client Flow
+
+1. **Dynamic Registration** - Client registers via RFC 7591
+2. **OAuth Authorization** - User authorizes in browser
+3. **Token Issuance** - Long-lived tokens for MCP access
+4. **MCP Communication** - Bearer tokens for satellite access
+
+## Implementation Status
+
+### Completed Features
+
+- RFC 6749 OAuth2 Authorization Server
+- RFC 7591 Dynamic Client Registration
+- PKCE support for public clients
+- Database-backed client and token storage
+- Team-scoped authorization
+- MCP client support (VS Code, Cursor, Claude.ai)
+- Dual authentication (cookies + Bearer tokens)
+- Scope-based access control
+- Token introspection endpoint
+- State parameter URL encoding fix
+
+### TODO Items
+
+- **OAuthCleanupService Implementation** - Automated cleanup of expired tokens and clients
+- **Comprehensive Logging** - Enhanced logging for monitoring and debugging
+- **Metrics Collection** - Performance and usage metrics
+- **Rate Limiting** - Protection against abuse
+- **Client Management UI** - Admin interface for client management
+
 ## Related Documentation
 
 - [Backend Authentication System](/development/backend/auth) - Core authentication
 - [Gateway OAuth Implementation](/development/gateway/oauth) - Client-side OAuth
+- [Satellite OAuth Authentication](/development/satellite/oauth-authentication) - MCP client authentication
 - [Security Policy](/development/backend/security) - Security details
 - [API Documentation](/development/backend/api) - API reference
 - [OAuth Provider Implementation](/development/backend/oauth-providers) - Third-party OAuth login setup

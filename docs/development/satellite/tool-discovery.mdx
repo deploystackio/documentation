@@ -154,19 +154,23 @@ interface CachedTool {
 
 ### Namespacing Strategy
 
-Tools are namespaced to prevent conflicts between servers:
+Tools are namespaced using server_slug for user-friendly names:
 
 ```
 Original Tool Name: "resolve-library-id"
-Server Name: "context7"
+Server Slug: "context7"
 Namespaced Name: "context7-resolve-library-id"
+Internal Server: "context7-john-R36no6FGoMFEZO9nWJJLT"
 ```
 
 **Namespacing Rules:**
-- **Format**: `{serverName}-{originalToolName}`
+- **Format**: `{server_slug}-{originalToolName}`
 - **Separator**: Single hyphen character
-- **Parsing**: First hyphen separates server from tool name
+- **User Display**: Friendly names using server_slug from configuration
+- **Internal Routing**: Uses full server name for team isolation
 - **Uniqueness**: Guaranteed unique names across all servers
+
+For team-based server resolution, see [Team Isolation Implementation](./team-isolation).
 
 ## SSE Response Processing
 
