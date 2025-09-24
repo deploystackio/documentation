@@ -77,9 +77,9 @@ if (connectionStatus.connection_status === 'connected') {
 
 ### Phase 2: Satellite Registration ✅
 
-Satellite registration is now fully implemented with automatic startup registration and upsert logic for restarts.
+Satellite registration is now fully implemented with secure JWT-based token authentication preventing unauthorized satellite connections.
 
-For complete registration documentation, see [Satellite Registration](/development/satellite/registration).
+For complete registration documentation, see [Satellite Registration](/development/satellite/registration). For backend token management details, see [Registration Token Authentication](/development/backend/api-security#registration-token-authentication).
 
 ### Phase 3: Heartbeat Authentication ✅
 
@@ -277,7 +277,8 @@ npm install
 
 # Configure environment
 cp .env.example .env
-# Edit DEPLOYSTACK_BACKEND_URL as needed
+# Edit DEPLOYSTACK_BACKEND_URL and add DEPLOYSTACK_REGISTRATION_TOKEN
+# Obtain registration token from backend admin interface first
 
 # Start development server
 npm run dev
@@ -289,13 +290,16 @@ npm run dev
 ```bash
 # Required environment variables
 DEPLOYSTACK_BACKEND_URL=http://localhost:3000
+DEPLOYSTACK_SATELLITE_NAME=dev-satellite-001
+DEPLOYSTACK_REGISTRATION_TOKEN=deploystack_satellite_global_eyJhbGc...
 LOG_LEVEL=debug
 PORT=3001
 
 # Optional configuration
 NODE_ENV=development
-SATELLITE_ID=dev-satellite-01
 ```
+
+**Note:** `DEPLOYSTACK_REGISTRATION_TOKEN` is only required for initial satellite pairing. Once registered, satellites use their permanent API keys for all communication.
 
 ### Testing Backend Communication
 
@@ -329,10 +333,13 @@ See `services/backend/src/db/schema.sqlite.ts` for complete schema definitions.
 ### Authentication Flow
 
 **Registration Phase:**
-1. Generate temporary registration token
-2. Satellite registers with token
-3. Backend validates and issues permanent API key
-4. Satellite stores API key securely
+1. Admin generates JWT registration token via backend API
+2. Satellite includes token in Authorization header during registration
+3. Backend validates token signature, scope, and expiration
+4. Backend consumes single-use token and issues permanent API key
+5. Satellite stores API key securely for ongoing communication
+
+For detailed token validation process, see [Registration Security](/development/backend/satellite-communication#satellite-pairing-process).
 
 **Operational Phase:**
 1. All requests include `Authorization: Bearer {api_key}`

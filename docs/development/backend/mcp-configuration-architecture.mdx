@@ -44,14 +44,13 @@ Traditional MCP configurations assume a single user per installation. DeployStac
 **Team Setup:**
 - Team: "DevOps Team" 
 - Members: User A, User B
-- Devices: Each user has laptop + desktop
-- Total Configurations: 4 different configurations for the same MCP server
+- Total Configurations: 2 different user configurations for the same MCP server
 
 **User Requirements:**
-- User A needs access to `/Users/userA/Desktop`
-- User B needs access to `/Users/userB/Desktop` and `/Users/userB/Projects`
+- User A needs personal search preferences (Google, 10 results per page)
+- User B needs different preferences (Bing, 20 results per page)
 - Both users share the same team API credentials
-- Each user may have different debug settings
+- Each user may have different cache settings
 
 ### Solution Architecture
 
@@ -59,7 +58,7 @@ The three-tier system addresses this by:
 
 1. **Template Level**: Defines what arguments are fixed vs configurable
 2. **Team Level**: Manages shared credentials and team-wide settings
-3. **User Level**: Allows individual customization per user and device
+3. **User Level**: Allows individual customization per user
 
 ## Database Schema
 
@@ -93,12 +92,11 @@ team_env: text('team_env')                   -- Team environment variables (JSON
 
 ### Tier 3: User Configuration (`mcpUserConfigurations`)
 
-Individual user configurations support multiple devices:
+Individual user configurations:
 
 ```sql
 installation_id: text('installation_id')     -- References team installation
 user_id: text('user_id')                     -- User who owns this config
-device_name: text('device_name')             -- "MacBook Pro", "Work PC", etc.
 
 user_args: text('user_args')                 -- User arguments (JSON array)
 user_env: text('user_env')                   -- User environment variables (JSON object)

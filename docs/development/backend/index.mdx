@@ -16,7 +16,7 @@ The DeployStack backend is a modern, high-performance Node.js application built 
 - **Framework**: Fastify for high-performance HTTP server
 - **Language**: TypeScript for type safety
 - **Database**: SQLite (default) or PostgreSQL with Drizzle ORM
-- **Validation**: Zod for request/response validation and OpenAPI generation
+- **Validation**: JSON Schema for request/response validation and OpenAPI generation
 - **Plugin System**: Extensible architecture with security isolation
 - **Authentication**: Dual authentication system - cookie-based sessions for frontend and OAuth 2.1 for satellite access
 
@@ -38,7 +38,7 @@ The development server starts at `http://localhost:3000` with API documentation 
     href="/deploystack/development/backend/api" 
     title="API Documentation"
   >
-    Learn how to generate OpenAPI specifications, use Swagger UI, and implement Zod validation for automatic API documentation.
+    Learn how to generate OpenAPI specifications, use Swagger UI, and implement JSON Schema validation for automatic API documentation.
   </Card>
   
   <Card 
@@ -135,7 +135,7 @@ services/backend/
 - **Lifecycle Management**: Proper initialization and cleanup
 
 ### API Documentation
-- **Automatic Generation**: OpenAPI 3.0 specs from Zod schemas
+- **Automatic Generation**: OpenAPI 3.0 specs from JSON schemas
 - **Interactive Testing**: Swagger UI for API exploration
 - **Type Safety**: Request/response validation with TypeScript
 

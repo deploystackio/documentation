@@ -170,6 +170,123 @@ export default async function yourRoute(server: FastifyInstance) {
 
 **Avoid:** Direct usage of `server.db` as it can cause "Cannot read properties of null" errors.
 
+## Database Driver Compatibility
+
+⚠️ **Critical for Multi-Database Applications**: Understanding driver differences prevents hours of debugging!
+
+### The Problem: Different Result Property Names
+
+When performing database operations (INSERT, UPDATE, DELETE), different database drivers return different property names in their result objects:
+
+```typescript
+// SQLite (better-sqlite3) result object
+{
+  changes: 1,                    // ← Number of affected rows
+  lastInsertRowid: "abc123"
+}
+
+// Turso (libSQL) result object  
+{
+  rowsAffected: 1,               // ← Number of affected rows
+  lastInsertRowid: "abc123"
+}
+```
+
+**Key Difference:**
+- **SQLite**: Uses `result.changes` to indicate affected rows
+- **Turso**: Uses `result.rowsAffected` to indicate affected rows
+
+### Real-World Impact
+
+This difference caused a production bug where DELETE operations appeared to fail in Turso but worked in SQLite development:
+
+```typescript
+// ❌ WRONG: Only works with SQLite
+const deleted = result.changes > 0;
+
+// ✅ CORRECT: Works with both SQLite and Turso
+const deleted = (result.changes || result.rowsAffected || 0) > 0;
+```
+
+**Symptoms of this bug:**
+- ✅ Works perfectly in development (SQLite)
+- ❌ Fails mysteriously in production (Turso)
+- 🔄 Data actually gets modified, but application thinks it failed
+- 🐛 Users see error messages even though operation succeeded
+
+### DeployStack's Built-in Solution
+
+DeployStack services automatically handle this compatibility issue. For example, in `McpInstallationService.deleteInstallation()`:
+
+```typescript
+// DeployStack handles both drivers automatically
+const deleted = (result.changes || result.rowsAffected || 0) > 0;
+```
+
+### Writing Compatible Database Code
+
+When writing custom database operations, always use the cross-compatible pattern:
+
+```typescript
+// ✅ CORRECT: Multi-driver compatible
+export class MyService {
+  async deleteRecord(id: string): Promise<boolean> {
+    const result = await this.db
+      .delete(myTable)
+      .where(eq(myTable.id, id));
+
+    // Handle both SQLite and Turso drivers
+    return (result.changes || result.rowsAffected || 0) > 0;
+  }
+
+  async updateRecord(id: string, data: any): Promise<boolean> {
+    const result = await this.db
+      .update(myTable)
+      .set(data)
+      .where(eq(myTable.id, id));
+
+    // Same pattern for updates
+    return (result.changes || result.rowsAffected || 0) > 0;
+  }
+}
+```
+
+### Testing Across Database Types
+
+To catch these issues during development:
+
+1. **Test with both databases**: Run your code against both SQLite and Turso
+2. **Use integration tests**: Write tests that verify actual database operations
+3. **Check result objects**: Log result objects during development to see the structure
+
+```typescript
+// Debug logging to see result structure
+const result = await db.delete(table).where(condition);
+console.log('Delete result:', result); // Inspect the actual properties
+```
+
+### Why This Happens
+
+This difference exists because:
+
+- **SQLite/better-sqlite3**: Uses the native SQLite C API which returns `changes`
+- **Turso/libSQL**: Uses the HTTP/WebSocket protocol which standardizes on `rowsAffected`
+
+Both represent the same concept (number of affected rows) but with different property names.
+
+### Prevention Checklist
+
+When writing database operations:
+
+- [ ] Use `(result.changes || result.rowsAffected || 0)` pattern
+- [ ] Test with both SQLite and Turso if possible  
+- [ ] Look for existing DeployStack service patterns to follow
+- [ ] Never assume specific property names exist
+- [ ] Add debug logging when troubleshooting database operations
+
+> **💡 Pro Tip**: This pattern also future-proofs your code for additional database types that DeployStack might support later.
+
+
 ## Database Structure
 
 The database schema is defined in `src/db/schema.sqlite.ts`. This is the **single source of truth** for all database schema definitions and works across all supported database types.

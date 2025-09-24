@@ -238,6 +238,9 @@ requireOAuthScope('scope.name')               // Enforce OAuth2 scope requiremen
 // Satellite authentication (API key-based)
 requireSatelliteAuth()                        // Validates satellite API keys using argon2
 requireUserOrSatelliteAuth()                  // Accept either user auth or satellite API key
+
+// Registration token authentication (specialized)
+validateRegistrationToken()                   // Validates JWT registration tokens for satellite pairing
 ```
 
 ### Dual Authentication Support
@@ -341,6 +344,44 @@ interface SatelliteContext {
 - **Key Generation**: 32-byte cryptographically secure random keys (base64url encoded)
 - **Key Rotation**: New API key generated on each satellite registration
 - **Scope Isolation**: Satellites can only access their own resources and endpoints
+
+### Registration Token Authentication
+
+For satellite registration security, the system uses specialized JWT-based registration tokens that follow a different security model than regular user authentication.
+
+#### Registration Token Middleware
+
+The `validateRegistrationToken()` middleware (located in `src/middleware/registrationTokenMiddleware.ts`) provides secure satellite registration through:
+
+- **JWT Validation**: Cryptographically signed tokens with HMAC-SHA256
+- **Single-Use Enforcement**: Tokens consumed after successful registration
+- **Scope Validation**: Global vs team token verification
+- **Security Event Logging**: Failed attempts monitored and logged
+
+#### Token Format and Usage
+
+Registration tokens follow specific prefixes:
+- `deploystack_satellite_global_` for DeployStack-operated satellites
+- `deploystack_satellite_team_` for customer-deployed team satellites
+
+Tokens are passed via standard Authorization header: `Bearer deploystack_satellite_*`
+
+#### Error Response Pattern
+
+Unlike regular authentication errors, registration token failures provide specific instructions:
+
+```typescript
+{
+  "success": false,
+  "error": "registration_token_required",
+  "message": "Registration token required in Authorization header",
+  "instructions": "Set Authorization: Bearer <registration_token> header"
+}
+```
+
+#### Usage Context
+
+Registration token authentication is exclusively used for the `/api/satellites/register` endpoint. It should not be used for regular API endpoints, which use the standard authentication methods above.
 
 ### Team-Aware Permission System
 
