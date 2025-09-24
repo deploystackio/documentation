@@ -1,6 +1,6 @@
 ---
 title: DeployStack Documentation
-description: Official DeployStack documentation - The Enterprise Control Plane for MCP servers. Secure, centralized management of your organization's AI tool landscape with the DeployStack Gateway.
+description: Official DeployStack documentation - The Enterprise Control Plane for MCP servers. Secure, centralized management of your organization's AI tool landscape with the DeployStack Satellite.
 sidebar: Introduction
 icon: Star
 ---
@@ -10,7 +10,7 @@ import { Plug, Settings, Users, Code2, Server, Zap, Shield, Wrench, Terminal, Co
 
 # DeployStack - Enterprise Control Plane for MCP
 
-DeployStack is the **Enterprise Control Plane for the Model Context Protocol (MCP) ecosystem**. We provide a secure, centralized platform to manage your company's entire AI tool landscape, eliminating credential sprawl and enabling developers to move faster and more securely through our local DeployStack Gateway.
+DeployStack is the **Enterprise Control Plane for the Model Context Protocol (MCP) ecosystem**. We provide a secure, centralized platform to manage your company's entire AI tool landscape, eliminating credential sprawl and enabling developers to move faster and more securely through edge DeployStack Satellite.
 
 ## User Guides
 
@@ -20,7 +20,7 @@ DeployStack is the **Enterprise Control Plane for the Model Context Protocol (MC
     href="/quick-start" 
     title="DeployStack Quick Start"
   >
-    Get started with DeployStack in minutes. Set up your first MCP server and connect to the DeployStack Gateway.
+    Get started with DeployStack in minutes. Set up your first MCP server and connect to the DeployStack Satellite.
   </Card>
 
   <Card 
@@ -71,10 +71,10 @@ DeployStack is the **Enterprise Control Plane for the Model Context Protocol (MC
   
   <Card 
     icon={<Plug />} 
-    href="/development/gateway" 
-    title="Gateway Development"
+    href="/development/satellite" 
+    title="Satellite Development"
   >
-    Build and extend the DeployStack Gateway for secure MCP server management
+    Build and extend the DeployStack Satellite for secure MCP server management
   </Card>
 </Cards>
 
@@ -90,7 +90,7 @@ DeployStack consists of several integrated components that work together to prov
 
 <Cards>
 <Card icon={<Container className="text-primary" />} title="deploystack" href="https://github.com/deploystackio/deploystack">
-The main platform providing centralized MCP server management, team collaboration, and the DeployStack Gateway
+The main platform providing centralized MCP server management, team collaboration, and secure credential storage
 </Card>
 <Card icon={<BookOpenText className="text-primary" />} title="awesome-mcp-server" href="https://github.com/deploystackio/awesome-mcp-server">
 Community-curated catalog of production-ready MCP servers with standardized configurations

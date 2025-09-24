@@ -1,6 +1,6 @@
 ---
 title: MCP User Configuration and Personal Settings
-description: Learn how individual users configure personal MCP settings, customize their workflow across multiple devices, and work within team-defined boundaries.
+description: Learn how individual users configure personal MCP settings, customize their workflow, and work within team-defined boundaries.
 sidebar: User Configuration
 ---
 
@@ -13,7 +13,6 @@ Individual users customize personal MCP settings within boundaries set by their 
 As a user, you personalize your MCP server experience within team-defined boundaries:
 
 - **Personal Settings** that adapt to your individual workflow
-- **Multi-Device Support** for different computers and environments  
 - **Automatic Team Integration** with shared credentials and team standards
 - **Simplified Interface** showing only settings you can modify
 - **Secure Experience** without credential management burden
@@ -27,7 +26,6 @@ Your configuration options are precisely determined by how global administrators
 **🔓 You Can Configure:**
 - **Unlocked Elements** - Settings your team admin made available for personal customization
 - **User-Specific Elements** - Settings designed for individual workflow (like local file paths)
-- **Device-Specific Settings** - Different configurations for different computers
 
 **🔒 You Cannot See or Modify:**
 - **Locked Team Settings** - Shared configuration controlled by team administrators
@@ -46,26 +44,24 @@ For details on how global administrators define these boundaries and team admini
 When you configure an MCP server, you see a clean interface focused only on your personal options:
 
 ```
-Personal Configuration: "Development Team Filesystem"
+Personal Configuration: "Team Web Search"
 
 YOUR PERSONAL SETTINGS
 
-Device: MacBook Pro ▼ [Change Device]
+Search Preferences:
+├─ Default Search Engine: Google ▼
+├─ Results Per Page: 10 ▼  
+└─ Safe Search: Moderate ▼
 
-Personal Directories (Add directories you want to access):
-├─ /Users/alice/Development
-├─ /Users/alice/Projects  
-└─ [+] Add another directory
-
-Debug Settings:
-├─ Enable Debug Mode: ✓
-└─ Debug Level: Verbose ▼
+Cache Settings:
+├─ Enable Result Caching: ✓
+└─ Cache Duration: 1 hour ▼
 
 TEAM-MANAGED SETTINGS (You inherit these automatically)
 
 ✓ Team API credentials: ••••• (encrypted, see Security)
-✓ Shared project access: /company/projects
-✓ Team backup settings: Enabled
+✓ Shared search quotas: 1000 queries/day
+✓ Team content filters: Enabled
 
 [Save Configuration] [Test Configuration]
 ```
@@ -73,7 +69,6 @@ TEAM-MANAGED SETTINGS (You inherit these automatically)
 **Key Interface Features:**
 - **Only Personal Options** - You see only settings you can modify
 - **Clear Inheritance** - Understanding of what you get from your team
-- **Device Context** - Configure settings for specific devices
 - **Validation** - Immediate feedback on configuration validity
 
 ## Personal Configuration Types
@@ -82,31 +77,17 @@ TEAM-MANAGED SETTINGS (You inherit these automatically)
 
 Most commonly, you'll configure:
 
-**Directory Paths:**
-- Local directories you want MCP servers to access
-- Personal project folders
-- Document directories
-- Workspace locations
-
-**Example:**
-```
-Personal Directories:
-├─ /Users/alice/Development
-├─ /Users/alice/Projects
-└─ /Users/alice/Documents/Work
-```
+**API Preferences:**
+- Search result limits and pagination
+- Content filtering and safety settings
+- Cache and performance preferences
 
 ### User Environment Variables
 
 **Personal Preferences:**
-- Debug settings and logging levels
+- Search engine preferences and result formatting
+- Cache settings and performance tuning
 - Interface customization options
-- Cache and temporary file locations
-
-**Device-Specific Settings:**
-- Local file paths and cache directories
-- Hardware-specific optimizations
-- Network and connection preferences
 
 ## Configuration Process
 
@@ -114,10 +95,9 @@ When you first configure an MCP server:
 
 1. **Access Team Installation** - Navigate to your team's MCP server installations
 2. **Select Server** - Choose the server you want to configure personally
-3. **Device Setup** - Provide a name for your current device
-4. **Personal Configuration** - Configure only the unlocked elements
-5. **Validation** - System validates your configuration against team schema
-6. **Save and Deploy** - Personal configuration is saved and ready to use
+3. **Personal Configuration** - Configure only the unlocked elements
+4. **Validation** - System validates your configuration against team schema
+5. **Save and Deploy** - Personal configuration is saved and ready to use
 
 ## Configuration Assembly
 
@@ -128,35 +108,35 @@ Final Configuration = Template + Team + Your Personal Settings
 
 Template (System):
 ├─ Command: "npx"
-├─ Package: "@modelcontextprotocol/server-filesystem"
+├─ Package: "@brightdata/mcp-server-web-search"
 └─ System flags: "-y"
 
 + Team (Shared):
 ├─ Team API Key: "••••• (encrypted secret, hidden from you)"
-├─ Shared directory: "/company/projects"
-└─ Backup enabled: true
+├─ Search quota: "1000 queries/day"
+└─ Content filters: "enabled"
 
-+ Your Personal (Device):
-├─ Your directories: ["/Users/alice/Development", "/Users/alice/Projects"]
-├─ Debug: true
-└─ Log level: "verbose"
++ Your Personal Settings:
+├─ Default search engine: "google"
+├─ Results per page: 10
+└─ Cache duration: "1 hour"
 
 = Final Runtime Configuration:
-Command: npx -y @modelcontextprotocol/server-filesystem 
-         /Users/alice/Development /Users/alice/Projects
+Command: npx -y @brightdata/mcp-server-web-search
 Environment: {
   "TEAM_API_KEY": "decrypted-for-runtime-only",
-  "SHARED_DIR": "/company/projects", 
-  "BACKUP_ENABLED": "true",
-  "DEBUG": "true",
-  "LOG_LEVEL": "verbose"
+  "SEARCH_QUOTA": "1000", 
+  "CONTENT_FILTERS": "enabled",
+  "DEFAULT_ENGINE": "google",
+  "RESULTS_PER_PAGE": "10",
+  "CACHE_DURATION": "3600"
 }
 ```
 
 **Automatic Validation:**
 - Your settings are validated against the schema
 - Type checking ensures correct data formats
-- Invalid directory paths are caught before saving
+- Invalid search preferences are caught before saving
 - Missing required fields are highlighted
 
 ## Related Documentation

@@ -16,7 +16,7 @@ The DeployStack Backend uses Fastify with Swagger plugins to automatically gener
 - **Automated Generation**: Specifications are generated from actual route code
 - **Type Safety**: TypeScript interfaces provide compile-time checking
 
-## 🔒 Security First
+## Security First
 
 **IMPORTANT**: Before developing any protected API endpoints, read the [API Security Best Practices](/development/backend/api-security) documentation. It covers critical security patterns including:
 
@@ -27,11 +27,11 @@ The DeployStack Backend uses Fastify with Swagger plugins to automatically gener
 
 **Key Rule**: Always use `preValidation` for authorization checks to prevent information disclosure to unauthorized users.
 
-## 🔐 Dual Authentication Support
+## Authentication Methods
 
-The DeployStack Backend supports **dual authentication** for API endpoints, allowing both web users (cookie-based) and CLI users (OAuth2 Bearer tokens) to access the same endpoints seamlessly.
+The DeployStack Backend supports **multiple authentication methods** for different use cases, allowing web users, CLI users, and satellites to access appropriate endpoints.
 
-### Authentication Methods
+### Standard Authentication Methods
 
 1. **Cookie Authentication** (Web Users)
    - Session-based authentication using HTTP cookies
@@ -43,7 +43,13 @@ The DeployStack Backend supports **dual authentication** for API endpoints, allo
    - Uses `Authorization: Bearer <token>` header
    - Scope-based access control
 
-### Dual Authentication Middleware
+3. **Registration Token Authentication** (Satellite Registration)
+   - Specialized JWT-based tokens for secure satellite pairing
+   - Uses `Authorization: Bearer deploystack_satellite_*` header pattern
+   - Single-use tokens with scope validation (global vs team)
+   - Exclusively for `/api/satellites/register` endpoint
+
+### Multi-Authentication Middleware
 
 Use these middleware functions to enable dual authentication on endpoints:
 
@@ -409,13 +415,13 @@ export default async function yourRoute(server: FastifyInstance) {
 ```
 
 **Key Requirements:**
-- ✅ **Parameter name**: `server: FastifyInstance` (not `fastify`)
-- ✅ **Method calls**: `server.post()` (not `fastify.post()`)
-- ✅ **preValidation first**: Authorization before schema
-- ✅ **Reusable schemas**: Define schema constants at the top
-- ✅ **Single source**: Same schema for both `body` and `requestBody`
-- ✅ **TypeScript interfaces**: Provide type safety
-- ✅ **Manual JSON serialization**: Use `JSON.stringify()` for responses
+-  **Parameter name**: `server: FastifyInstance` (not `fastify`)
+-  **Method calls**: `server.post()` (not `fastify.post()`)
+-  **preValidation first**: Authorization before schema
+-  **Reusable schemas**: Define schema constants at the top
+-  **Single source**: Same schema for both `body` and `requestBody`
+-  **TypeScript interfaces**: Provide type safety
+-  **Manual JSON serialization**: Use `JSON.stringify()` for responses
 
 ### Registration in index.ts
 
@@ -451,15 +457,15 @@ export const registerRoutes = (server: FastifyInstance): void => {
 }
 ```
 
-### ✅ What TO Do
+###  What TO Do
 
 ```typescript
-// ✅ GOOD: Import and register separate route files
+//  GOOD: Import and register separate route files
 import myEndpointRoute from './my-endpoint'
 
 export const registerRoutes = (server: FastifyInstance): void => {
   server.register(async (apiInstance) => {
-    // ✅ GOOD: Register imported route
+    //  GOOD: Register imported route
     await apiInstance.register(myEndpointRoute);
   }, { prefix: '/api' });
 }
@@ -479,7 +485,7 @@ export const registerRoutes = (server: FastifyInstance): void => {
 
 **IMPORTANT**: The `Content-Type: application/json` header is required for specific HTTP methods when sending request body data.
 
-#### ✅ ALWAYS Include Content-Type for:
+####  ALWAYS Include Content-Type for:
 - **POST** requests with request body data
 - **PUT** requests with request body data  
 - **PATCH** requests with request body data
@@ -699,7 +705,7 @@ export default async function yourRoute(server: FastifyInstance) {
 ### Required Response Pattern
 
 ```typescript
-// ✅ CORRECT: Manual JSON serialization
+//  CORRECT: Manual JSON serialization
 const successResponse: SuccessResponse = {
   success: true,
   message: 'Operation completed successfully',
@@ -728,7 +734,7 @@ return reply.status(200).send(response);
 All error responses must also use manual JSON serialization:
 
 ```typescript
-// ✅ CORRECT: Error response with manual serialization
+//  CORRECT: Error response with manual serialization
 const errorResponse: ErrorResponse = {
   success: false,
   error: 'Detailed error message'
@@ -742,7 +748,7 @@ return reply.status(400).type('application/json').send(jsonString);
 Authentication middleware and hooks must also use this pattern:
 
 ```typescript
-// ✅ CORRECT: Authentication error with manual serialization
+//  CORRECT: Authentication error with manual serialization
 const errorResponse = {
   success: false,
   error: 'Unauthorized: Authentication required.'
@@ -754,11 +760,11 @@ return reply.status(401).type('application/json').send(jsonString);
 ### Why This Pattern is Required
 
 The manual JSON serialization pattern ensures:
-- ✅ Consistent, parseable JSON responses
-- ✅ Proper `success`/`error` properties in all responses
-- ✅ Reliable client-server communication
-- ✅ Passing e2e tests
-- ✅ No `"[object Object]"` serialization issues
+-  Consistent, parseable JSON responses
+-  Proper `success`/`error` properties in all responses
+-  Reliable client-server communication
+-  Passing e2e tests
+-  No `"[object Object]"` serialization issues
 
 ### Why Both `body` and `requestBody` Properties?
 
@@ -790,7 +796,7 @@ if (request.body.type !== 'mysql' && request.body.type !== 'sqlite') {
 }
 ```
 
-✅ **Do trust Fastify's automatic validation:**
+ **Do trust Fastify's automatic validation:**
 
 ```typescript
 // GOOD: Trust the validation - if handler runs, data is valid

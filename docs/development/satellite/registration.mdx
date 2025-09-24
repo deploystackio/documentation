@@ -10,6 +10,62 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 DeployStack Satellite implements automatic registration with the Backend during startup. This document covers the complete registration process, environment variable requirements, validation rules, and upsert logic for satellite restarts.
 
+## Persistent Storage
+
+### API Key Persistence
+
+Satellites automatically save their registration credentials to persistent storage to avoid re-registration on restart:
+
+**Storage Location:**
+```
+services/satellite/persistent_data/
+└── backend.key.json
+```
+
+**File Structure:**
+```json
+{
+  "api_key": "deploystack_satellite_api_global_EACQ7NeRD4gNjFjPAiz90AR7NqL-LF9d",
+  "satellite_id": "vwokw4qbax0cyin",
+  "satellite_name": "dev-satellite-005",
+  "registered_at": "2025-09-23T15:42:46.118Z",
+  "last_verified": "2025-09-23T15:42:46.118Z"
+}
+```
+
+### Registration Token Usage
+
+**Single-Use Registration Flow:**
+- **First startup**: Uses registration token → Saves API key to file
+- **Subsequent startups**: Uses saved API key → No token needed
+- **Token expiration**: Only affects first-time registration
+
+**Benefits:**
+- **No re-registration**: Satellites restart without consuming new tokens
+- **Server restarts**: Automatic recovery after system reboots
+- **Development workflow**: Frequent restarts don't require new tokens
+
+### Storage Management
+
+**Automatic Operations:**
+- **Save**: Credentials saved after successful registration
+- **Load**: Credentials loaded on startup before attempting registration
+- **Verify**: API key verified with backend heartbeat
+- **Clear**: Invalid credentials automatically cleared
+
+**Manual Operations:**
+```bash
+# Force re-registration (delete persistent storage)
+rm services/satellite/persistent_data/backend.key.json
+
+# View current credentials
+cat services/satellite/persistent_data/backend.key.json
+```
+
+<Callout type="info">
+**Important**: The `persistent_data/` directory must be writable by the satellite process. In production deployments, ensure proper volume mounting and permissions.
+</Callout>
+
 ## Registration Overview
 
 ### Automatic Registration Flow
@@ -19,33 +75,47 @@ Satellites register automatically during startup following this sequence:
 ```
 Satellite Startup
     │
-    ├── 1. Validate DEPLOYSTACK_SATELLITE_NAME
+    ├── 1. Check Persistent Storage
+    │   ├── Load persistent_data/backend.key.json
+    │   ├── If API key exists → Verify with heartbeat
+    │   └── If valid → Skip registration
+    │
+    ├── 2. Validate DEPLOYSTACK_SATELLITE_NAME
     │   ├── Length: 10-32 characters
     │   ├── Characters: a-z, 0-9, -, _
     │   └── Fail-fast if invalid
     │
-    ├── 2. Test Backend Connection
+    ├── 3. Validate DEPLOYSTACK_REGISTRATION_TOKEN
+    │   ├── JWT token format validation
+    │   ├── Required token prefix check
+    │   └── Fail-fast if missing or invalid
+    │
+    ├── 4. Test Backend Connection
     │   ├── GET /api/health (5s timeout)
     │   └── Exit if unreachable
     │
-    ├── 3. Register with Backend
+    ├── 5. Register with Backend (if needed)
     │   ├── POST /api/satellites/register
-    │   ├── Upsert logic (create or update)
-    │   └── Receive API key
+    │   ├── Authorization: Bearer {registration_token}
+    │   ├── Receive permanent API key
+    │   └── Save credentials to persistent storage
     │
-    └── 4. Start MCP Transport Services
+    └── 6. Start MCP Transport Services
         ├── SSE Handler
         ├── Streamable HTTP Handler
         └── Session Manager
 ```
 
-### Upsert Registration Logic
+### Secure Token-Based Registration
 
-The registration endpoint implements **upsert behavior** to handle satellite restarts:
+The registration system requires **valid JWT registration tokens** for security:
 
-- **First Registration**: Creates new satellite record in database
-- **Re-Registration**: Updates existing satellite record with new API key and system info
-- **No Conflicts**: Satellite restarts work seamlessly without 409 errors
+- **Token Required**: All satellites must provide valid registration tokens during startup
+- **Single-Use**: Registration tokens are consumed after successful pairing
+- **Admin-Controlled**: Only administrators can generate registration tokens
+- **No Open Registration**: Satellites cannot register without proper authorization
+
+For detailed token management, see [Registration Token Authentication](/development/backend/api-security#registration-token-authentication).
 
 ## Environment Variables
 
@@ -57,15 +127,39 @@ DEPLOYSTACK_SATELLITE_NAME=dev-satellite-001
 
 # Backend connection
 DEPLOYSTACK_BACKEND_URL=http://localhost:3000
+
+# Registration token (required for secure pairing)
+DEPLOYSTACK_REGISTRATION_TOKEN=deploystack_satellite_global_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
+
+## Registration Token Requirements
+
+### Token Types and Sources
+
+Satellites require registration tokens generated by administrators:
+
+**Global Satellite Tokens:**
+- Format: `deploystack_satellite_global_eyJhbGc...`
+- Generated by: `global_admin` users via backend API
+- Scope: Can register global satellites serving all teams
+- Expiration: 1 hour (configurable)
+
+**Team Satellite Tokens:**
+- Format: `deploystack_satellite_team_eyJhbGc...`
+- Generated by: `team_admin` users for specific teams
+- Scope: Can register team satellites for specific team only
+- Expiration: 24 hours (configurable)
+
+For token generation APIs, see [Satellite Communication - Registration Tokens](/development/backend/satellite-communication#satellite-pairing-process).
 
 ### Security Model
 
 All satellites register with secure defaults controlled by the backend:
 
-- **Satellite Type**: Always `global` (backend-controlled)
+- **Token-Based Pairing**: Valid JWT registration token required
+- **Satellite Type**: Determined by token scope (global or team)
 - **Status**: Always `inactive` (requires admin activation)
-- **Team Assignment**: Always `null` (admin-controlled via backend interface)
+- **Single-Use Tokens**: Registration tokens consumed after successful pairing
 
 ## Satellite Name Validation
 
@@ -205,13 +299,26 @@ git clone https://github.com/deploystackio/deploystack.git
 cd deploystack/services/satellite
 npm install
 
-# Configure satellite identity
+# Configure satellite identity and registration token
 cp .env.example .env
 echo "DEPLOYSTACK_SATELLITE_NAME=dev-satellite-001" >> .env
 echo "DEPLOYSTACK_BACKEND_URL=http://localhost:3000" >> .env
+echo "DEPLOYSTACK_REGISTRATION_TOKEN=your-token-here" >> .env
 
 # Start satellite (will auto-register)
 npm run dev
+```
+
+**⚠️ Obtaining Registration Token:**
+You must first generate a registration token via the backend API or admin interface:
+
+```bash
+# Generate global registration token (requires global_admin)
+curl -X POST http://localhost:3000/api/satellites/global/registration-tokens \
+  -H "Cookie: your-session-cookie" \
+  -H "Content-Type: application/json"
+
+# Copy the returned token to your .env file
 ```
 
 ### Expected Registration Output
@@ -226,20 +333,24 @@ npm run dev
 [INFO] 🔑 API key received and ready for authenticated communication
 ```
 
-### Testing Satellite Restarts
+### Token Expiration and Re-Registration
 
-To verify upsert registration logic:
+Registration tokens are single-use and expire:
 
 ```bash
-# Start satellite
+# First registration (consumes token)
 npm run dev
-# Wait for successful registration
+# ✅ Registration successful
 
-# Stop satellite (Ctrl+C)
-# Start again
-npm run dev
-# Should see "re-registered successfully" instead of conflict error
+# Stop and restart satellite
+# Ctrl+C, then npm run dev again
+# ✅ Uses permanent API key (no token needed)
+
+# If satellite needs new registration token:
+# ❌ Generate new token and update DEPLOYSTACK_REGISTRATION_TOKEN
 ```
+
+**Important:** Once registered, satellites use their permanent API key for all communication. Registration tokens are only needed for initial pairing.
 
 ## Security Considerations
 
@@ -272,6 +383,18 @@ npm run dev
 ❌ FATAL ERROR: DEPLOYSTACK_SATELLITE_NAME ist erforderlich
 ```
 **Solution:** Set the required environment variable
+
+**Missing Registration Token:**
+```bash
+❌ FATAL ERROR: DEPLOYSTACK_REGISTRATION_TOKEN ist erforderlich
+```
+**Solution:** Obtain registration token from admin and set environment variable
+
+**Invalid Registration Token:**
+```bash
+❌ FATAL ERROR: Invalid registration token format or expired
+```
+**Solution:** Generate new registration token from admin interface
 
 **Invalid Satellite Name:**
 ```bash
@@ -311,15 +434,19 @@ open http://localhost:3001/documentation
 - ✅ Default inactive status requiring admin activation
 
 **Security Improvements:**
-- ✅ All satellites register as `global` and `inactive` by default
-- ✅ Team assignment controlled exclusively by backend administrators
+- ✅ JWT-based registration token system prevents unauthorized satellites
+- ✅ Single-use tokens with cryptographic validation
+- ✅ Admin-controlled token generation with proper scope enforcement
+- ✅ All satellites register as `inactive` requiring admin activation
 
 **Planned Features:**
-- 🚧 Bearer token authentication for Backend communication
+- ✅ JWT-based registration token system (Phase 3 complete)
+- ✅ Bearer token authentication for Backend communication
+- 🚧 Admin interface for registration token management (Phase 4)
+- 🚧 Satellite client registration token support (Phase 5)
 - 🚧 API key rotation and renewal
 - 🚧 Registration status monitoring and alerts
-- 🚧 Admin interface for satellite activation and team assignment
 
 <Callout type="info">
-The satellite registration system is production-ready and handles both initial registration and restart scenarios seamlessly. The upsert logic ensures satellites can restart without manual intervention while maintaining security through API key rotation.
+The satellite registration system implements secure JWT-based pairing to prevent unauthorized satellite connections. Once registered with a valid token, satellites receive permanent API keys for ongoing communication. See [Backend API Security](/development/backend/api-security#registration-token-authentication) for complete token management details.
 </Callout>

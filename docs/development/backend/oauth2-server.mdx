@@ -9,7 +9,7 @@ This document describes the OAuth2 authorization server implementation in the De
 
 ## Overview
 
-The OAuth2 server provides RFC 6749 compliant authorization for programmatic API access with RFC 7591 Dynamic Client Registration support. This enables the DeployStack Gateway CLI, MCP clients (VS Code, Cursor, Claude.ai), and other tools to authenticate users and access APIs on their behalf using Bearer tokens instead of cookies.
+The OAuth2 server provides RFC 6749 compliant authorization for programmatic API access with RFC 7591 Dynamic Client Registration support. This enables the DeployStack Satellite, MCP clients (VS Code, Cursor, Claude.ai), and other tools to authenticate users and access APIs on their behalf using Bearer tokens instead of cookies.
 
 ## Architecture
 
@@ -451,7 +451,7 @@ For the current list of supported scopes, check the source code at:
 When adding support for a new OAuth scope in the backend:
 
 1. **Add the scope** to the `allowedScopes` array in `services/backend/src/services/oauth/authorizationService.ts`
-2. **Update clients** to request the new scope (Gateway, MCP clients)
+2. **Update clients** to request the new scope (Satellite, MCP clients)
 3. **Apply scope enforcement** to relevant API endpoints using middleware
 4. **Test the complete flow** to ensure proper scope validation
 
