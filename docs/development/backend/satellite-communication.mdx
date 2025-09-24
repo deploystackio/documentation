@@ -83,39 +83,32 @@ Satellites use **outbound-only HTTPS polling** to communicate with the backend, 
 
 ## Satellite Pairing Process
 
-### Registration Token Flow
+### Security Architecture
 
-The satellite pairing process follows a secure two-phase approach:
+The satellite pairing process implements a secure **two-phase JWT-based authentication system** that prevents unauthorized satellite connections. For complete implementation details, see [API Security - Registration Token Authentication](/development/backend/api-security#registration-token-authentication).
 
 **Phase 1: Token Generation**
-- Administrators generate temporary registration tokens
-- Global tokens for global satellites (global_admin only)
-- Team tokens for team satellites (team_admin for specific teams)
-- Tokens have scope-specific prefixes and expiration times
+- Administrators generate temporary registration tokens through admin APIs
+- Scope-specific tokens (global vs team) with cryptographic signatures
+- Token management endpoints for generation, listing, and revocation
 
 **Phase 2: Satellite Registration**
-- Satellites use registration tokens to authenticate initial pairing
-- Backend validates token scope and expiration
-- Permanent API keys issued after successful registration
-- Registration tokens marked as used (single-use security)
+- Satellites authenticate using `Authorization: Bearer deploystack_satellite_*` headers
+- Backend validates JWT tokens with single-use consumption
+- Permanent API keys issued after successful token validation
+- Token consumed to prevent replay attacks
 
-### Token Security Model
+**Breaking Change**: As of Phase 3 implementation, all new satellite registrations require valid registration tokens. The open registration system has been secured.
 
-**Registration Token Prefixes**:
-- Global satellites: `deploystack_satellite_global_...`
-- Team satellites: `deploystack_satellite_team_...`
+### Registration Middleware
 
-**Token Characteristics**:
-- JWT-based with cryptographic signatures
-- Short expiration times (1 hour global, 24 hours team)
-- Single-use to prevent replay attacks
-- Audit trail for compliance
+The secure registration process is implemented through specialized middleware. For technical implementation details, see `services/backend/src/middleware/registrationTokenMiddleware.ts`.
 
-**Operational API Keys**:
-- Permanent keys for ongoing satellite communication
-- Scope-specific prefixes for security validation
-- Argon2 hashed storage in database
-- Support for key rotation and revocation
+**Key Security Features**:
+- JWT signature verification with HMAC-SHA256
+- Scope validation (global vs team tokens)
+- Security event logging for failed attempts
+- Structured error responses with actionable instructions
 
 ## Command Orchestration
 

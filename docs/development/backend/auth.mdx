@@ -114,15 +114,14 @@ Enforces authentication on protected routes:
 
 ### Email Registration Process
 
-1. **Validation**: Input validation using Zod schemas
-2. **Uniqueness Check**: Verify username and email availability
-3. **Password Hashing**: Secure hash generation with Argon2
-4. **User Creation**: Database insertion with role assignment
-5. **First User Logic**: Automatic global_admin role for first user
-6. **Email Verification**: Send verification email (if enabled)
-7. **Team Creation**: Automatic default team creation
-8. **Session Creation**: Immediate login after registration
-9. **Response**: User data and success message
+1. **Uniqueness Check**: Verify username and email availability
+2. **Password Hashing**: Secure hash generation with Argon2
+3. **User Creation**: Database insertion with role assignment
+4. **First User Logic**: Automatic global_admin role for first user
+5. **Email Verification**: Send verification email (if enabled)
+6. **Team Creation**: Automatic default team creation
+7. **Session Creation**: Immediate login after registration
+8. **Response**: User data and success message
 
 ### Role Assignment
 
@@ -227,7 +226,6 @@ Endpoints can accept either authentication method using `requireAuthenticationAn
 
 ### Validation and Sanitization
 
-- **Input Validation**: All inputs validated with Zod schemas
 - **Email Normalization**: Lowercase conversion before storage
 - **SQL Injection Prevention**: Parameterized queries via Drizzle ORM
 - **XSS Prevention**: httpOnly cookies, no client-side session access

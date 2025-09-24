@@ -38,7 +38,7 @@ User sessions are managed using `lucia-auth` v3.
 
 ## Data Validation
 
-All incoming data from clients (e.g., API request bodies, URL parameters) is rigorously validated using `zod` schemas on the server-side before being processed. This helps prevent common vulnerabilities such as injection attacks and unexpected data handling errors.
+All incoming data from clients (e.g., API request bodies, URL parameters) is rigorously validated using JSON Schema on the server-side before being processed. This helps prevent common vulnerabilities such as injection attacks and unexpected data handling errors.
 
 - Registration endpoint validates: username, email, password, first_name, last_name
 - **Email verification endpoint validates: verification token format and expiration**
@@ -116,7 +116,7 @@ We strive to keep our dependencies up-to-date and regularly review them for know
 - `@node-rs/argon2`: Password hashing
 - `lucia`: Session management
 - `drizzle-orm`: Database ORM with parameterized queries
-- `zod`: Input validation and sanitization
+- `@fastify/swagger`: JSON Schema validation and API documentation
 - `@fastify/cookie`: Secure cookie handling
 - `node:crypto`: Built-in cryptographic functions for global settings encryption
 

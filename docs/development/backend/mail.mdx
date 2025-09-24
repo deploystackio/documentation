@@ -14,7 +14,6 @@ The email system provides a comprehensive solution for sending templated emails 
 - **Nodemailer**: For SMTP email delivery
 - **Pug Templates**: For beautiful, maintainable email templates
 - **Global Settings Integration**: Automatic SMTP configuration from global settings
-- **Zod Validation**: Type-safe email parameter validation
 - **Template Caching**: Performance optimization for template rendering
 
 ## Architecture
@@ -23,7 +22,7 @@ The email system provides a comprehensive solution for sending templated emails 
 src/email/
 ├── emailService.ts       # Main email service with SMTP integration
 ├── templateRenderer.ts   # Pug template compilation and rendering
-├── types.ts             # TypeScript interfaces and Zod schemas
+├── types.ts             # TypeScript interfaces schemas
 ├── index.ts             # Module exports
 └── templates/
     ├── layouts/
