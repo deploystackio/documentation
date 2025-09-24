@@ -94,7 +94,7 @@ The OAuth2 server implementation follows RFC 6749 and RFC 7636 security standard
 
 ### Authorization Flow Security
 - **State Parameter:** CSRF protection with cryptographically random state
-- **Client Validation:** Hardcoded client credentials for `deploystack-gateway-cli`
+- **Client Validation:** Dynamic client registration for MCP clients with validation against allowed patterns
 - **Redirect URI Validation:** Whitelist of allowed callback URLs
 - **Consent Page:** User authorization with security warnings
 - **Session Binding:** OAuth2 flow requires active user session

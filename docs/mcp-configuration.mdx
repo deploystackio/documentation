@@ -14,9 +14,9 @@ The system separates configuration into three distinct layers:
 
 1. **Template Level** - Global schemas and locked elements defined by administrators
 2. **Team Level** - Shared team configurations with lock/unlock controls  
-3. **User Level** - Personal configurations within team-defined boundaries **per device**
+3. **User Level** - Personal configurations within team-defined boundaries
 
-This architecture enables teams to share common settings like API keys while allowing individual members to customize personal settings like local file paths across multiple devices. Each user can have different configurations on different devices while maintaining team security and standards.
+This architecture enables teams to share common settings like API keys while allowing individual members to customize personal settings like local file paths while maintaining team security and standards.
 
 ## How It Works
 
@@ -42,12 +42,11 @@ This architecture enables teams to share common settings like API keys while all
                                         │
                                         ▼
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│ TIER 3: USER (Individual) - Device-Aware                                      │
+│ TIER 3: USER (Individual)                                                      │
 │ ┌─────────────────────────────────────────────────────────────────────────────┐ │
-│ │ 🔓 Personal Settings: Local paths, preferences (per device)                │ │
-│ │ 💻 Multi-Device: Different configs per device with automatic registration   │ │
-│ │ 🔗 Automatic Inheritance: Use team credentials seamlessly across devices    │ │
-│ │ 🛡️ Device Security: Hardware fingerprinting and secure registration        │ │
+│ │ 🔓 Personal Settings: Local paths, preferences                             │ │
+│ │ 🔗 Automatic Inheritance: Use team credentials seamlessly                  │ │
+│ │ 🛡️ Team Security: Access controlled through team OAuth tokens             │ │
 │ └─────────────────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────────┘
                                         │
@@ -78,10 +77,9 @@ The heart of the system is sophisticated lock/unlock controls with precise categ
 
 **User Access:**
 - **Personal Customization** - Modify only unlocked elements within boundaries set by global admin categorization
-- **Device-Specific Settings** - Configure personal settings across multiple devices with automatic device registration
 - **Secure Experience** - No access to locked configuration, team secrets, or template elements
 - **Focused Interface** - See only configuration elements designated as personally configurable
-- **Multi-Device Workflow** - Seamlessly work across different devices with device-specific configurations
+- **Team Integration** - Access through OAuth team authentication
 
 ## User Journey Workflows
 
@@ -98,9 +96,9 @@ Key workflow: Repository → Claude Desktop Config → **Configuration Schema Ca
 Key workflow: Browse Catalog → Configure Team Settings → Set Lock Controls → Deploy Installation
 
 ### For Individual Users
-**[User Configuration](/mcp-user-configuration)** - Learn how to configure personal MCP settings and customize your workflow across multiple devices.
+**[User Configuration](/mcp-user-configuration)** - Learn how to configure personal MCP settings and customize your workflow.
 
-Key workflow: Access Team Installation → Configure Personal Settings → Multi-Device Setup → Save Configuration
+Key workflow: Access Team Installation → Configure Personal Settings → Save Configuration
 
 ## Configuration Assembly Example
 
@@ -122,7 +120,7 @@ Here's how the three tiers combine into a final runtime configuration:
 }
 ```
 
-**User (Individual - i.e.: your MacBook Pro):**
+**User (Individual):**
 ```json
 {
   "args": ["/Users/alice/Development", "/Users/alice/Projects"],
@@ -156,7 +154,7 @@ Here's how the three tiers combine into a final runtime configuration:
 
 **Simplicity:** Users see only what they can configure, teams share common settings automatically
 
-**Flexibility:** Support for variable-length configurations and multi-device setups
+**Flexibility:** Support for variable-length configurations and individual customization
 
 **Collaboration:** Teams coordinate through shared settings while maintaining individual customization
 
@@ -177,6 +175,6 @@ For complete system understanding:
 - [MCP Catalog](/mcp-catalog) - Browse and discover available MCP servers
 - [Teams](/teams) - Team structure and membership management
 - [MCP Installation](/mcp-installation) - Basic MCP server installation concepts
-- [Security and Privacy](/security) - Platform security including device security
+- [Security and Privacy](/security) - Platform security and data protection
 
-The three-tier configuration system provides secure, scalable MCP server management that grows from individual developers to enterprise teams while maintaining simplicity and security at every level. Global administrators have sophisticated control over configuration boundaries through schema categorization, ensuring appropriate access and customization at each tier. The device-aware architecture enables seamless multi-device workflows while maintaining enterprise-grade security and governance.
+The three-tier configuration system provides secure, scalable MCP server management that grows from individual developers to enterprise teams while maintaining simplicity and security at every level. Global administrators have sophisticated control over configuration boundaries through schema categorization, ensuring appropriate access and customization at each tier. The OAuth-based team authentication ensures enterprise-grade security and governance.

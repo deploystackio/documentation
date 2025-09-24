@@ -54,31 +54,32 @@ The lock/unlock system gives you granular control over what team members can mod
 
 **When to Unlock:**
 - **Personal Workflow** - Individual customization needs
-- **Device Differences** - Different computers and environments
 - **User Preferences** - Personal productivity settings
 
 ## Team Configuration Example
 
-**Development Team Filesystem Server:**
+**Team Web Search Server:**
 
 ```
-Installation Name: "Development Team Filesystem"
+Installation Name: "Team Web Search"
 
 Template Configuration (Set by Global Admin, Cannot Change):
 ├─ Command: "npx" (🔒 Locked Forever)
-├─ Package: "@modelcontextprotocol/server-filesystem" (🔒 Locked Forever)
+├─ Package: "@brightdata/mcp-server-web-search" (🔒 Locked Forever)
 ├─ System Flag: "-y" (🔒 Locked Forever)
 
 Team Configuration (You Control):
-├─ GIT_ACCESS_TOKEN: "••••• (encrypted secret)" (🔒 Locked)
-├─ SHARED_PROJECT_ROOT: "/company/projects" (🔒 Locked)
+├─ API_KEY: "••••• (encrypted secret)" (🔒 Locked)
+├─ SEARCH_QUOTA: "1000 queries/day" (🔒 Locked)
+├─ CONTENT_FILTERS: "enabled" (🔒 Locked)
 
 User Controls (You Decide Lock/Unlock):
-├─ Personal Directories: 🔓 Unlocked (users add their own paths)
-├─ Debug Mode: 🔓 Unlocked (individual preference)
+├─ Default Search Engine: 🔓 Unlocked (users choose preference)
+├─ Results Per Page: 🔓 Unlocked (individual preference)
+├─ Cache Settings: 🔓 Unlocked (performance tuning)
 ```
 
-**Result:** Team members automatically inherit template configuration and team credentials, but can add personal directories and control debug settings within the boundaries you set.
+**Result:** Team members automatically inherit template configuration and team API credentials with quota limits, but can customize their search preferences and performance settings within the boundaries you set.
 
 ## Credential Management
 
@@ -116,9 +117,9 @@ Based on your lock/unlock decisions and the schema boundaries set by global admi
 
 - Only see configuration elements they can modify
 - Use team credentials automatically without seeing sensitive values
-- Can customize unlocked elements for their workflow across multiple devices
-- Get consistent behavior across all team members and devices
-- Benefit from automatic device registration and management
+- Can customize unlocked elements for their workflow
+- Get consistent behavior across all team members
+- Benefit from satellite-managed remote execution
 
 For details on the user experience, see [MCP User Configuration](/mcp-user-configuration).
 
