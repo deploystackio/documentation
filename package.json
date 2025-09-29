@@ -27,7 +27,7 @@
     "schema-dts": "^1.1.5"
   },
   "devDependencies": {
-    "@semantic-release/github": "^11.0.5",
+    "@semantic-release/github": "^11.0.6",
     "@tailwindcss/postcss": "^4.1.12",
     "@types/node": "24.5.2",
     "@types/react": "^19.1.12",
