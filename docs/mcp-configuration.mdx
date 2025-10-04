@@ -100,6 +100,17 @@ Key workflow: Browse Catalog → Configure Team Settings → Set Lock Controls �
 
 Key workflow: Access Team Installation → Configure Personal Settings → Save Configuration
 
+## Official Registry Configuration Mapping
+
+When MCP servers are synced from the official MCP Registry, their environment variables are automatically mapped to the appropriate tier based on their properties:
+
+**Mapping Rules:**
+- **Template Level (Locked)**: Fixed environment variables with preset values
+- **Team Level**: Required credentials marked as secrets (`isRequired: true` + `isSecret: true`)
+- **User Level**: Optional configurations and personal preferences (`isRequired: false`)
+
+This intelligent mapping ensures that synced servers work seamlessly with DeployStack's three-tier system, with credentials at the team level and personal customizations at the user level.
+
 ## Configuration Assembly Example
 
 Here's how the three tiers combine into a final runtime configuration:
@@ -148,6 +159,42 @@ Here's how the three tiers combine into a final runtime configuration:
 
 *Note: Secret values are automatically decrypted only for runtime execution. In all other contexts (API responses, user interfaces), secrets appear masked as `*****`.*
 
+### Example: Official Registry Server Configuration
+
+Here's how an official registry server (Context7) is mapped to the three-tier system:
+
+**Official Registry Environment Variables:**
+```json
+[
+  {
+    "name": "UPSTASH_REDIS_URL",
+    "isRequired": true,
+    "isSecret": false
+  },
+  {
+    "name": "UPSTASH_REDIS_TOKEN",
+    "isRequired": true,
+    "isSecret": true
+  },
+  {
+    "name": "DEBUG",
+    "isRequired": false,
+    "default": "false"
+  }
+]
+```
+
+**After Automatic Mapping:**
+
+*Team Level Schema (team_env_schema):*
+- `UPSTASH_REDIS_URL` (required credential)
+- `UPSTASH_REDIS_TOKEN` (required secret, encrypted)
+
+*User Level Schema (user_env_schema):*
+- `DEBUG` (optional personal preference)
+
+This automatic mapping enables synced servers from the official registry to work immediately with DeployStack's security and collaboration features.
+
 ## Key Benefits
 
 **Security:** Sensitive credentials managed at appropriate tiers with encryption and access controls
@@ -167,6 +214,18 @@ Here's how the three tiers combine into a final runtime configuration:
 **Data Science Teams:** Share database credentials and data lake access while supporting individual analysis workflows  
 
 **Support Teams:** Share customer service API keys while allowing personal workspace customization
+
+## Official Registry Transport Types
+
+Servers synced from the official MCP Registry can use different transport mechanisms:
+
+**STDIO Transport (via packages):**
+Servers that run as local processes using standard input/output. Arguments are configured in the template level (locked), with runtime arguments at team/user levels.
+
+**HTTP/SSE Transport (via remotes):**
+Servers accessed via HTTP endpoints. Headers are mapped to appropriate tiers - authentication headers at team level, optional headers at user level.
+
+The three-tier system adapts automatically based on the transport type detected from the official registry.
 
 ## Related Documentation
 

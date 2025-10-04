@@ -17,11 +17,11 @@ DeployStack Satellite is an edge worker service that manages MCP servers with du
 Satellites operate as edge workers similar to GitHub Actions runners, providing:
 
 - **MCP Transport Protocols**: SSE, Streamable HTTP, Direct HTTP communication
-- **Dual MCP Server Management**: HTTP proxy + stdio subprocess support (planned)
-- **Team Isolation**: Linux namespaces, cgroups v2, resource jailing (planned)
-- **OAuth 2.1 Resource Server**: Token introspection with Backend (planned)
+- **Dual MCP Server Management**: HTTP proxy + stdio subprocess support (ready for implementation)
+- **Team Isolation**: nsjail sandboxing with built-in resource limits (ready for implementation)
+- **OAuth 2.1 Resource Server**: Token introspection with Backend (implemented)
 - **Backend Polling Communication**: Outbound-only, firewall-friendly (implemented)
-- **Process Lifecycle Management**: Spawn, monitor, terminate MCP servers (planned)
+- **Process Lifecycle Management**: Spawn, monitor, terminate MCP servers (ready for implementation)
 
 ## Current Implementation Architecture
 

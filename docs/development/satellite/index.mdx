@@ -22,9 +22,10 @@ The satellite service has completed **Phase 1: MCP Transport Implementation** wi
 - ✅ **JSON-RPC 2.0 Protocol** compliance for MCP communication
 - ✅ **TypeScript + Webpack** build system with full type safety
 - ✅ **Development Workflow** with hot reload and linting
-- 🚧 **MCP Server Process Management** (planned)
-- 🚧 **Team Isolation** (planned)
-- 🚧 **Backend Communication** (planned)
+- ✅ **Backend Communication** (polling, commands, heartbeat)
+- ✅ **OAuth 2.1 Authentication** (token introspection, team context)
+- 🚧 **MCP Server Process Management** (ready for implementation)
+- 🚧 **Team Isolation with nsjail** (ready for implementation)
 
 ## Architecture Vision
 
@@ -219,26 +220,27 @@ curl -X POST http://localhost:3001/mcp \
 
 ## Planned Features (Roadmap)
 
-### Phase 2: MCP Server Process Management
-- **Process Lifecycle**: Spawn, monitor, and terminate MCP server processes
+### Phase 2: MCP Server Process Management (Ready for Implementation)
+- **Process Lifecycle**: Spawn, monitor, and terminate MCP server processes with nsjail
 - **stdio Communication**: JSON-RPC communication with local MCP servers
-- **HTTP Proxy**: Reverse proxy for external MCP server endpoints
+- **HTTP Proxy**: Reverse proxy for external MCP server endpoints (already working)
 - **Health Monitoring**: Process health checks and automatic restart
+- **Resource Limits**: 100MB RAM, 60s CPU, 50 processes per server (via nsjail)
 
-### Phase 3: Team Isolation
-- **Resource Boundaries**: CPU and memory limits per team
-- **Process Isolation**: Separate process groups and namespaces
-- **Filesystem Isolation**: Team-specific directories and permissions
-- **Credential Management**: Secure team credential injection
+### Phase 3: Team Isolation (Infrastructure Ready)
+- **nsjail Sandboxing**: Complete process isolation with built-in resource limits
+- **Namespace Isolation**: PID, mount, UTS, IPC namespaces per team
+- **Filesystem Isolation**: Team-specific read-only and writable directories
+- **Credential Management**: Secure environment injection via nsjail
 
-### Phase 4: Backend Integration
+### Phase 4: Backend Integration ✅ COMPLETED
 - **HTTP Polling**: Outbound communication with DeployStack Backend
 - **Configuration Sync**: Dynamic configuration updates from Backend
 - **Status Reporting**: Real-time satellite health and usage metrics
 - **Command Processing**: Execute Backend commands with acknowledgment
 
 ### Phase 5: Enterprise Features
-- **OAuth 2.1 Authentication**: Resource server with token introspection
+- **OAuth 2.1 Authentication**: Resource server with token introspection ✅ COMPLETED
 - **Audit Logging**: Complete audit trails for compliance
 - **Multi-Region Support**: Global satellite deployment
 - **Auto-Scaling**: Dynamic resource allocation based on demand

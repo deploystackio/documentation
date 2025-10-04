@@ -6,40 +6,83 @@ sidebar: Admin Schema Workflow
 
 # MCP Schema Creation Workflow for Global Administrators
 
-Global administrators transform raw MCP server configurations into structured schemas that enable teams and users to safely configure MCP servers. This workflow creates the foundation for DeployStack's three-tier configuration system.
+Global administrators manage MCP server schemas through two distinct paths: automatic synchronization from the official MCP Registry and manual creation for custom integrations. This workflow creates the foundation for DeployStack's three-tier configuration system.
+
+## Two Paths to Catalog Servers
+
+DeployStack supports adding MCP servers to the catalog through two methods:
+
+### Path 1: Official Registry Sync (Automatic)
+
+**Recommended for public MCP servers**
+
+- **Source**: Synced automatically from registry.modelcontextprotocol.io
+- **Schema Creation**: Automatic transformation via background jobs
+- **Configuration Mapping**: Environment variables automatically categorized into three tiers
+- **Maintenance**: Updates sync automatically from registry
+- **Effort**: One-click sync operation
+
+**How it works**: When you trigger a registry sync, the system automatically:
+1. Fetches server data from the official registry
+2. Transforms package/remote configurations to DeployStack format
+3. Maps environment variables to appropriate tiers (template/team/user)
+4. Enriches with GitHub metadata (README, stars, topics)
+5. Stores in catalog ready for team installation
+
+For details on the sync process, see [MCP Catalog - Official Registry Integration](/mcp-catalog#official-mcp-registry-integration).
+
+### Path 2: Manual Creation (Custom)
+
+**Required for custom integrations not in official registry**
+
+- **Source**: Manually created by global administrators
+- **Schema Creation**: Sophisticated manual categorization process (this document)
+- **Configuration Mapping**: Precise control over every configuration element
+- **Maintenance**: Manual updates as needed
+- **Effort**: Complete four-step workflow with detailed categorization
+
+**When to use**: Custom company integrations, private MCP servers, proprietary tools, or servers not yet in the official registry.
+
+---
+
+**The rest of this document describes Path 2: Manual Creation** for custom MCP servers that require the sophisticated schema categorization process.
 
 ## Overview
 
-When you add new MCP servers to the catalog, you design the entire configuration experience by precisely categorizing every configuration element and setting sophisticated lock/unlock controls:
+When you manually add custom MCP servers to the catalog, you design the entire configuration experience by precisely categorizing every configuration element and setting sophisticated lock/unlock controls:
 - **What stays locked forever** (template elements like system commands, package names)
 - **What teams can configure and control** (team-level settings like API keys, shared credentials) 
 - **What users can always customize** (user-level settings like local paths, personal preferences)
 - **Lock/unlock defaults and visibility controls** for each configurable element
 
-For an overview of how the three-tier system works, see [MCP Configuration System](/mcp-configuration).
+For an overview of how the three-tier system works, see [MCP Configuration System](/mcp-configuration). To understand how official registry servers are automatically transformed, see [MCP Catalog - Official Registry Integration](/mcp-catalog#official-mcp-registry-integration).
 
-## The Four-Step Admin Workflow
+## The Four-Step Manual Creation Workflow
 
-Adding an MCP server to the catalog follows this process:
+Manually adding a custom MCP server to the catalog follows this process:
 
 ```
-Step 1: GitHub Repository     ──→ Link to source repository
+Step 1: GitHub Repository     ──→ Link to source repository (optional for custom servers)
 Step 2: Claude Desktop Config ──→ Input raw configuration JSON  
 Step 3: Configuration Schema  ──→ **Categorize every element into three tiers with lock/unlock controls**
 Step 4: Basic Info           ──→ Set name, description, category
 ```
 
+**Note**: This manual workflow is for custom servers. Official registry servers are synced automatically with schema transformation handled by the system.
+
 **Step 3** is the sophisticated categorization process where you transform raw configuration into the three-tier system with precise lock/unlock controls.
 
-### Step 1: GitHub Repository
+### Step 1: GitHub Repository (Optional)
 
-- **Repository URL** - GitHub repository containing the MCP server
+- **Repository URL** - GitHub repository containing the MCP server (optional for custom servers)
 - **Branch** - Usually `main` or `master`
 - **Sync Settings** - Automatic vs manual synchronization
 
+**Note**: For custom company integrations without public repositories, this step can be skipped.
+
 ### Step 2: Claude Desktop Configuration
 
-Input the raw Claude Desktop configuration:
+Input the raw Claude Desktop configuration for your custom MCP server:
 
 ```json
 {
@@ -58,11 +101,23 @@ Input the raw Claude Desktop configuration:
   }
 }
 
-The system extracts all arguments and environment variables for categorization.
+The system extracts all arguments and environment variables for manual categorization.
 
-### Step 3: Configuration Schema Definition
+**For Official Registry Servers**: This extraction and categorization happens automatically during the sync process. The system reads `environmentVariables[]` from the registry format and maps them to appropriate tiers based on `isRequired` and `isSecret` properties.
 
-Categorize every argument and environment variable from the Claude Desktop config into one of three tiers with sophisticated lock/unlock controls - this determines exactly what teams and users can configure.
+### Step 3: Configuration Schema Definition (Manual)
+
+For custom servers, you manually categorize every argument and environment variable from the Claude Desktop config into one of three tiers with sophisticated lock/unlock controls - this determines exactly what teams and users can configure.
+
+**Comparison to Official Registry Servers**:
+
+| Aspect | Manual Creation (Custom) | Official Registry (Synced) |
+|--------|-------------------------|---------------------------|
+| Schema Creation | Manual categorization by admin | Automatic transformation |
+| Environment Variables | Admin decides tier placement | Auto-mapped by `isRequired`/`isSecret` |
+| Arguments | Admin categorizes each arg | Auto-extracted from packages/remotes |
+| Lock/Unlock Defaults | Admin sets defaults | Intelligent defaults based on registry |
+| Effort | 15-30 minutes per server | Instant (background job) |
 
 ### Step 4: Basic Information
 
@@ -70,11 +125,80 @@ Categorize every argument and environment variable from the Claude Desktop confi
 - **Description** - Clear explanation of functionality
 - **Category** - Organizational classification
 
-## Step 3: Configuration Schema Definition (Detailed)
+## Automatic Registry Server Transformation
 
-### The Sophisticated Categorization Process
+When servers are synced from the official MCP Registry, the transformation happens automatically:
 
-For every argument and environment variable extracted from the Claude Desktop config, you make precise categorization decisions with lock/unlock controls:
+### Automatic Environment Variable Mapping
+
+**Registry Format:**
+```json
+{
+  "environmentVariables": [
+    {
+      "name": "UPSTASH_REDIS_URL",
+      "isRequired": true,
+      "isSecret": false
+    },
+    {
+      "name": "UPSTASH_REDIS_TOKEN",
+      "isRequired": true,
+      "isSecret": true
+    },
+    {
+      "name": "DEBUG",
+      "isRequired": false,
+      "default": "false"
+    }
+  ]
+}
+```
+
+**Automatic Tier Mapping:**
+- **Template Level**: Fixed values (if provided in registry)
+- **Team Level**: `isRequired: true` + `isSecret: true` → Encrypted team secrets
+- **Team Level**: `isRequired: true` + `isSecret: false` → Required team settings
+- **User Level**: `isRequired: false` → Optional personal preferences
+
+**Result**: The synced server works immediately with the three-tier system without any manual schema work.
+
+### Automatic Transport Detection
+
+**STDIO Servers (packages):**
+```json
+{
+  "packages": [{
+    "transport": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7"]
+    }
+  }]
+}
+```
+- Command and package name → Template level (locked)
+- Runtime args → Team/user level based on registry metadata
+
+**HTTP/SSE Servers (remotes):**
+```json
+{
+  "remotes": [{
+    "type": "sse",
+    "url": "https://api.example.com/mcp",
+    "headers": [...]
+  }]
+}
+```
+- URL → Template level (locked)
+- Headers → Team/user level based on authentication requirements
+
+For complete details on automatic transformation, see the [Official Registry Integration documentation](/mcp-catalog#official-mcp-registry-integration).
+
+## Step 3: Configuration Schema Definition for Manual Servers (Detailed)
+
+### The Sophisticated Categorization Process (Manual Servers Only)
+
+For custom MCP servers created manually, you make precise categorization decisions with lock/unlock controls for every argument and environment variable extracted from the Claude Desktop config:
 
 **Categorization Options:**
 - **🔒 Template (Static)** - Locked forever, never changes (system commands, package names)
@@ -87,6 +211,8 @@ For every argument and environment variable extracted from the Claude Desktop co
 - **Schema Validation** - Data types, requirements, and constraints for each element
 
 This sophisticated system determines the exact configuration experience for teams and users.
+
+**Note**: Official registry servers receive automatic categorization based on their registry metadata, eliminating this manual process.
 
 ### Example: Web Search MCP Server
 
@@ -110,10 +236,15 @@ This sophisticated system determines the exact configuration experience for team
 }
 ```
 
-**Your Categorization:**
+**Your Manual Categorization:**
 - **🔒 Template**: `-y` and `@brightdata/mcp-server-web-search` (system commands, locked forever)
 - **🔧 Team Configurable**: `API_KEY` and `SEARCH_QUOTA` (shared credentials and limits)
 - **🔓 User Configurable**: `DEFAULT_ENGINE` (personal search preference, default unlocked)
+
+**If This Were an Official Registry Server**: The system would automatically categorize based on registry metadata:
+- `API_KEY` with `isRequired: true, isSecret: true` → Team level (encrypted)
+- `SEARCH_QUOTA` with `isRequired: true` → Team level
+- `DEFAULT_ENGINE` with `isRequired: false` → User level
 
 **Lock/Unlock Decisions:**
 - API credentials: Default locked for users, hidden from users (security)
@@ -141,10 +272,14 @@ This sophisticated system determines the exact configuration experience for team
 }
 ```
 
-**Your Categorization:**
+**Your Manual Categorization:**
 - **🔒 Template**: System commands (`npx`, `-y`, package name) - locked forever
 - **🔧 Team Configurable**: `TEAM_API_KEY` (shared credential, team controls access)
 - **🔓 User Configurable**: `DEBUG` (personal preference, always available to users)
+
+**If From Official Registry**: Would be automatically mapped:
+- `TEAM_API_KEY` with `isRequired: true, isSecret: true` → Team level (encrypted, hidden)
+- `DEBUG` with `isRequired: false` → User level (unlocked)
 
 **Lock/Unlock Decisions:**
 - `TEAM_API_KEY`: Default locked for users, hidden from users (security)
@@ -172,9 +307,9 @@ DeployStack provides suggestions to help with categorization:
 - Cache and performance settings
 - Personal API preferences
 
-### Configuration Schema Step Interface
+### Configuration Schema Step Interface (Manual Creation)
 
-The Configuration Schema Step presents a sophisticated interface for categorizing and controlling every configuration element:
+The Configuration Schema Step presents a sophisticated interface for manually categorizing and controlling every configuration element:
 
 #### Arguments Categorization Interface
 ```
@@ -244,24 +379,28 @@ This matrix shows how your schema categorization creates precise boundaries for 
 
 ## What Happens Next
 
-After you complete the sophisticated schema categorization:
+After you complete the sophisticated schema categorization for manual servers:
 
 1. **Schema Generation** - System creates the complete three-tier schema structure with lock/unlock metadata
 2. **Catalog Addition** - MCP server is added to the global catalog with precise configuration boundaries
 3. **Team Access** - Teams can install and configure only the elements you designated as team-configurable
 4. **User Experience** - Users see only the elements you made available, with lock/unlock states controlled by teams
 
+**For Official Registry Servers**: This process happens automatically during sync, with schemas generated from registry metadata.
+
 Your categorization and lock/unlock decisions directly shape how teams and users interact with the MCP server across the entire three-tier system.
 
 ## Security Validation
 
-The system automatically validates your sophisticated schema categorization:
+The system automatically validates schema categorization for both manual and synced servers:
 
 **Security Checks:**
 - ✅ Secrets properly categorized as team/user level with appropriate visibility controls
 - ✅ System commands locked at template level to prevent tampering
 - ⚠️ Warns if secrets might be visible inappropriately or unlocked by default
 - ✅ Validates lock inheritance logic across all three tiers
+
+**For Official Registry Servers**: Security validation happens automatically during the transformation process, ensuring registry metadata is properly interpreted.
 
 **Schema Validation:**
 - ✅ All extracted elements are properly categorized
@@ -277,21 +416,23 @@ The system automatically validates your sophisticated schema categorization:
 
 ## Key Benefits
 
-Your sophisticated schema categorization provides:
+The schema system (whether manual or automatic) provides:
 
 **Security** - Sensitive data properly protected at the right tier with appropriate visibility controls
 **Precision** - Users see only what they can configure, teams control exactly what they need
 **Flexibility** - Teams can lock/unlock elements based on their specific organizational needs
 **Consistency** - Predictable configuration experience across all MCP servers in the catalog
 **Governance** - Complete audit trail and control over configuration inheritance across all tiers
+**Automation** - Official registry servers get instant schema transformation without manual work
 
 ## Related Documentation
 
-For understanding how your sophisticated schemas are used across the three-tier system:
+For understanding how schemas work across the system:
 
-- [MCP Configuration System](/mcp-configuration) - Overview of the three-tier system your schemas enable
-- [Team Installation](/mcp-team-installation) - How teams use your schemas to configure installations
-- [User Configuration](/mcp-user-configuration) - How users interact with the boundaries you define
-- [MCP Catalog](/mcp-catalog) - Where your categorized schemas are stored and managed
+- [MCP Configuration System](/mcp-configuration) - Overview of the three-tier system schemas enable
+- [MCP Catalog - Official Registry Integration](/mcp-catalog#official-mcp-registry-integration) - How automatic schema transformation works
+- [Team Installation](/mcp-team-installation) - How teams use schemas to configure installations
+- [User Configuration](/mcp-user-configuration) - How users interact with schema boundaries
+- [MCP Catalog](/mcp-catalog) - Where schemas are stored and managed
 
-The sophisticated schema creation workflow is the foundation that enables secure, flexible MCP server configuration with precise control over configuration inheritance across all teams and users.
+The schema creation system—whether through sophisticated manual categorization or automatic registry transformation—is the foundation that enables secure, flexible MCP server configuration with precise control over configuration inheritance across all teams and users.
