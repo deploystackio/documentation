@@ -55,10 +55,14 @@ Each satellite command contains:
 **Satellite Actions**:
 1. Fetch updated MCP server configurations from backend
 2. Compare with existing configurations using hash-based change detection
-3. Spawn new MCP server processes for added/modified servers
-4. Terminate MCP server processes for deleted installations
-5. Update HTTP proxy routes for new/removed MCP servers
-6. Perform tool discovery on newly spawned servers
+3. Spawn new MCP servers based on transport type:
+   - **stdio transport**: Spawn Node.js subprocess via ProcessManager
+   - **HTTP transport**: Configure HTTP proxy routes
+4. Terminate MCP servers for deleted installations:
+   - **stdio transport**: Graceful process termination (SIGTERM → SIGKILL)
+   - **HTTP transport**: Remove proxy routes
+5. Perform tool discovery on newly spawned/configured servers
+6. Report process status to backend via team-grouped heartbeat
 
 ### restart
 
