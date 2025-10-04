@@ -251,7 +251,62 @@ Follow this recommended setup workflow for new DeployStack instances:
     - Set up user roles and permissions
     - Configure team workspaces
   </Step>
+  
+  <Step>
+    **Set Up Satellites**
+    
+    - Navigate to Admin → Satellites → Pairing
+    - Generate registration tokens for new satellites
+    - Deploy satellite services with registration tokens
+    - Verify satellite registration and health
+    
+    For satellite deployment instructions, see [Quick Start - Satellite Service](/self-hosted/quick-start#satellite-service).
+  </Step>
 </Steps>
+
+## Satellite Administration
+
+<Callout type="warn">
+  Satellites are **required** for DeployStack to function. Without satellites, you cannot manage MCP servers. Deploy at least one satellite after completing the platform setup.
+</Callout>
+
+### Generating Registration Tokens
+
+Administrators can generate registration tokens for new satellites:
+
+1. **Navigate to Satellite Management**:
+   - Log in as `global_admin`
+   - Go to Admin → Satellites → Pairing
+
+2. **Generate Token**:
+   - Click "Generate Token"
+   - Copy the full token (starts with `deploystack_satellite_global_`)
+   - Token expires in 1 hour for security
+
+3. **Deploy Satellite**:
+   - Use the token in `DEPLOYSTACK_REGISTRATION_TOKEN` environment variable
+   - See [Quick Start - Satellite Service](/self-hosted/quick-start#optional-satellite-service) for deployment instructions
+
+### Token Security
+
+- **Single-Use**: Registration tokens are consumed after successful pairing
+- **Expiration**: Global tokens expire after 1 hour
+- **Scope**: All self-hosted satellites are global satellites by default
+- **Admin Only**: Only `global_admin` users can generate registration tokens
+
+### Satellite Status Management
+
+After registration, satellites appear in the admin panel with `inactive` status:
+
+1. **Activate Satellite**:
+   - Navigate to Admin → Satellites
+   - Find your registered satellite
+   - Click "Activate" to enable it
+
+2. **Monitor Health**:
+   - View heartbeat status and system metrics
+   - Check last communication timestamp
+   - Review process status and resource usage
 
 ## Security Considerations
 
@@ -261,6 +316,7 @@ Follow this recommended setup workflow for new DeployStack instances:
 - **Use HTTPS** for Frontend URL in production environments
 - **Restrict Registration** (`Enable Email Registration: No`) for private deployments
 - **Use Strong SMTP Passwords** and enable 2FA on email accounts
+- **Secure Satellite Tokens**: Store registration tokens securely and don't commit to version control
 
 ### Email Security
 
