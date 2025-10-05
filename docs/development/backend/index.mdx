@@ -5,7 +5,7 @@ sidebar: Getting Started
 ---
 
 import { Card, Cards } from 'fumadocs-ui/components/card';
-import { Database, Shield, Plug, Settings, Mail, TestTube, Wrench, BookOpen, Terminal } from 'lucide-react';
+import { Database, Shield, Plug, Settings, Mail, TestTube, Wrench, BookOpen, Terminal, ListTodo } from 'lucide-react';
 
 # DeployStack Backend Development
 
@@ -103,6 +103,14 @@ The development server starts at `http://localhost:3000` with API documentation 
     title="Satellite Communication"
   >
     API endpoints for satellite registration, configuration management, and command orchestration with polling-based communication.
+  </Card>
+  
+  <Card 
+    icon={<ListTodo />} 
+    href="/deploystack/development/backend/job-queue" 
+    title="Background Job Queue"
+  >
+    Database-backed job processing system with persistent storage, automatic retries, and rate limiting for long-running background tasks.
   </Card>
 </Cards>
 

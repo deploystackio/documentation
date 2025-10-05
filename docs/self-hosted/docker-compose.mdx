@@ -18,7 +18,11 @@ Deploy DeployStack using Docker Compose for a production-ready, self-hosted inst
 
 ## Overview
 
-This guide provides step-by-step instructions to install and configure DeployStack using Docker Compose. The setup includes both frontend and backend services with persistent data storage and proper networking.
+This guide provides step-by-step instructions to install and configure DeployStack using Docker Compose. The setup includes frontend, backend, and **required satellite service** with persistent data storage and proper networking.
+
+<Callout type="warn">
+  **Satellites are required**: DeployStack cannot manage MCP servers without at least one satellite. This guide includes satellite deployment as a mandatory step.
+</Callout>
 
 **Important:** Only modify settings explicitly mentioned in this guide. Altering other configurations may lead to issues.
 
@@ -84,9 +88,13 @@ cat > .env << EOF
 # DeployStack Configuration
 DEPLOYSTACK_ENCRYPTION_SECRET=your-generated-secret-here
 
-# Optional: Customize ports (default: frontend=8080, backend=3000)
+# Satellite Registration (required - obtain from admin panel after setup)
+DEPLOYSTACK_REGISTRATION_TOKEN=
+
+# Optional: Customize ports (default: frontend=8080, backend=3000, satellite=3001)
 # FRONTEND_PORT=8080
 # BACKEND_PORT=3000
+# SATELLITE_PORT=3001
 
 # Optional: Custom app title
 # VITE_APP_TITLE=My DeployStack Instance
@@ -94,6 +102,10 @@ EOF
 ```
 
 Replace `your-generated-secret-here` with the secret you generated in Step 2.
+
+<Callout type="warn">
+  **Important**: Leave `DEPLOYSTACK_REGISTRATION_TOKEN` empty for now. You'll add it after completing the admin setup in Step 6.
+</Callout>
 
 ### Step 4: Launch DeployStack
 
@@ -124,6 +136,39 @@ You should see both `deploystack-frontend` and `deploystack-backend` containers 
 Open your browser and navigate to:
 - **Frontend**: [http://localhost:8080](http://localhost:8080)
 - **Backend API**: [http://localhost:3000](http://localhost:3000)
+
+### Step 7: Deploy Satellite Service (Required)
+
+<Callout type="warn">
+  **Satellites are required** - Without at least one satellite, DeployStack cannot manage MCP servers. Complete this step to make your deployment functional.
+</Callout>
+
+The satellite service is **already included** in the docker-compose.yml file. You just need to configure the registration token:
+
+1. **Generate Registration Token** (via admin interface after backend setup):
+   - Log in to DeployStack as admin (complete Step 6 first)
+   - Navigate to Admin → Satellites → Pairing
+   - Click "Generate Token" and copy it
+
+2. **Add token to your `.env` file**:
+   ```bash
+   # Satellite Configuration (required)
+   DEPLOYSTACK_REGISTRATION_TOKEN=deploystack_satellite_global_eyJhbGc...
+   ```
+
+3. **Restart services to apply token**:
+   ```bash
+   docker-compose down
+   docker-compose up -d
+   ```
+
+4. **Verify satellite registration**:
+   ```bash
+   docker logs deploystack-satellite
+   # Should show: ✅ Satellite registered successfully: docker-satellite-001
+   ```
+
+**Note**: After initial registration, the satellite saves its API key to persistent storage and doesn't need the registration token for subsequent starts.
 
 ## Configuration
 
@@ -227,6 +272,16 @@ docker run --rm -v deploystack_backend_persistent:/data -v $(pwd)/backups/$(date
 | `VITE_APP_TITLE` | Custom application title | `DeployStack` | `Company DeployStack` |
 | `FRONTEND_PORT` | Frontend port mapping | `8080` | `80` |
 | `BACKEND_PORT` | Backend port mapping | `3000` | `3001` |
+
+### Satellite Variables (Required)
+
+| Variable | Description | Example |
+|----------|-------------|----------|
+| `DEPLOYSTACK_REGISTRATION_TOKEN` | JWT registration token from admin (required for initial satellite pairing) | `deploystack_satellite_global_eyJhbGc...` |
+
+<Callout type="info">
+  **Note**: The satellite name `docker-satellite-001` is pre-configured in docker-compose.yml. You only need to provide the registration token in your `.env` file.
+</Callout>
 
 ## Troubleshooting
 

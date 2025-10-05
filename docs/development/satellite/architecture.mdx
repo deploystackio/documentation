@@ -17,11 +17,11 @@ DeployStack Satellite is an edge worker service that manages MCP servers with du
 Satellites operate as edge workers similar to GitHub Actions runners, providing:
 
 - **MCP Transport Protocols**: SSE, Streamable HTTP, Direct HTTP communication
-- **Dual MCP Server Management**: HTTP proxy + stdio subprocess support (planned)
-- **Team Isolation**: Linux namespaces, cgroups v2, resource jailing (planned)
-- **OAuth 2.1 Resource Server**: Token introspection with Backend (planned)
+- **Dual MCP Server Management**: HTTP proxy + stdio subprocess support (ready for implementation)
+- **Team Isolation**: nsjail sandboxing with built-in resource limits (ready for implementation)
+- **OAuth 2.1 Resource Server**: Token introspection with Backend (implemented)
 - **Backend Polling Communication**: Outbound-only, firewall-friendly (implemented)
-- **Process Lifecycle Management**: Spawn, monitor, terminate MCP servers (planned)
+- **Process Lifecycle Management**: Spawn, monitor, terminate MCP servers (ready for implementation)
 
 ## Current Implementation Architecture
 
@@ -315,21 +315,24 @@ For complete implementation details, see [Backend Polling Implementation](/devel
 - **Scope-Based Access**: Fine-grained permissions
 - **Team Context**: Automatic team resolution from tokens
 
-## MCP Server Management (Planned)
+## MCP Server Management
 
 ### Dual MCP Server Support
 
 **stdio Subprocess Servers:**
-- **Local Execution**: MCP servers as child processes
-- **JSON-RPC Communication**: Standard MCP protocol
-- **Process Lifecycle**: Spawn, monitor, terminate
-- **Team Isolation**: Processes isolated per team
+- **Local Execution**: MCP servers as Node.js child processes
+- **JSON-RPC Communication**: Full MCP protocol 2025-11-05 over stdin/stdout
+- **Process Lifecycle**: Spawn, monitor, auto-restart (max 3 attempts), terminate
+- **Team Isolation**: Processes tracked by team_id with environment-based security
+- **Tool Discovery**: Automatic tool caching with namespacing
+- **Resource Limits**: nsjail in production (100MB RAM, 60s CPU, 50 processes)
+- **Development Mode**: Plain spawn() on all platforms for easy debugging
 
 **HTTP Proxy Servers:**
 - **External Endpoints**: Proxy to remote MCP servers
 - **Load Balancing**: Distribute requests across instances
 - **Health Monitoring**: Endpoint availability checks
-- **Caching**: Response caching for performance
+- **Tool Discovery**: Automatic at startup from remote endpoints
 
 ### Process Management
 
@@ -357,11 +360,13 @@ Configuration → Spawn → Monitor → Health Check → Restart/Terminate
 - **Session Management**: Cryptographically secure session handling
 - **JSON-RPC 2.0**: Full protocol compliance with error handling
 
-### Phase 2: MCP Server Process Management (Next)
-- **Process Lifecycle**: Spawn, monitor, terminate MCP servers
-- **stdio Communication**: JSON-RPC with local processes
-- **Basic Health Monitoring**: Process health checks
-- **Simple Configuration**: Static MCP server definitions
+### Phase 2: MCP Server Process Management ✅ COMPLETED
+- **Process Lifecycle**: Spawn, monitor, terminate MCP servers with auto-restart
+- **stdio Communication**: JSON-RPC 2.0 over stdin/stdout with buffer-based parsing
+- **Tool Discovery**: Discover and cache tools from stdio MCP servers
+- **Health Monitoring**: Process health checks and crash detection
+- **Auto-Restart**: Max 3 attempts with exponential backoff, then permanently_failed status
+- **Team-Aware Reporting**: processes_by_team in heartbeat every 30 seconds
 
 ### Phase 3: Team Isolation
 - **Resource Boundaries**: CPU and memory limits
@@ -469,9 +474,3 @@ The satellite service has completed **Phase 1: MCP Transport Implementation** an
 - **Logging System**: Pino with structured logging
 - **Build Pipeline**: TypeScript compilation and bundling
 - **Development Workflow**: Hot reload and code quality tools
-
-Next milestone: **Phase 2 - MCP Server Process Management** with stdio JSON-RPC communication.
-
-<Callout type="info">
-**Current Status**: The satellite service has completed Phase 1 (MCP Transport Implementation) and Phase 4 (Backend Integration). It provides full external client interface support and complete backend communication including command orchestration, configuration management, and status reporting. The next major milestone is implementing MCP server process management (Phase 2) to enable actual MCP server hosting.
-</Callout>

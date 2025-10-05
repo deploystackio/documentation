@@ -8,9 +8,17 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 # Tool Discovery Implementation
 
-DeployStack Satellite implements automatic tool discovery from remote HTTP MCP servers, providing dynamic tool availability without manual configuration. This system enables MCP clients to discover and execute tools from external MCP servers through the satellite's proxy layer.
+DeployStack Satellite implements automatic tool discovery from MCP servers, providing dynamic tool availability without manual configuration. This system enables MCP clients to discover and execute tools through the satellite's unified interface.
+
+<Callout type="info">
+**Current Implementation**: Tool discovery currently supports HTTP/SSE remote MCP servers only. Future implementation will add stdio tool discovery from locally spawned MCP server processes (see Phase 2 in [Architecture](/development/satellite/architecture)). Both transport types will use the same caching and namespacing approach.
+</Callout>
 
 For information about the overall satellite architecture, see [Satellite Architecture Design](/development/satellite/architecture). For details about the MCP transport protocols that expose discovered tools, see [MCP Transport Protocols](/development/satellite/mcp-transport).
+
+## Current Implementation: HTTP Tool Discovery
+
+This document describes the current HTTP-based tool discovery system. The same architectural patterns will be extended to support stdio transport in the future.
 
 ## Technical Overview
 

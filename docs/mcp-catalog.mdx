@@ -13,6 +13,7 @@ The MCP (Model Context Protocol) Server Catalog is DeployStack's comprehensive s
 The MCP Catalog serves as a marketplace and management system for MCP servers, offering:
 
 - **Server Discovery**: Browse available MCP servers by category, language, and functionality
+- **Official Registry Integration**: Automatic synchronization with the official MCP Registry at registry.modelcontextprotocol.io
 - **Team-Based Management**: Organize servers within your teams with proper access control
 - **Version Management**: Track different versions of MCP servers with changelog support
 - **GitHub Integration**: Automatic synchronization with GitHub repositories
@@ -35,6 +36,23 @@ The catalog supports two types of servers:
 - **Management**: Team administrators can create, edit, and delete within their teams
 - **Purpose**: Custom integrations, private tools, team-specific configurations
 - **Examples**: Internal API integrations, custom business logic, proprietary tools
+
+### Server Sources
+
+The catalog contains servers from two sources:
+
+#### Official Registry Servers
+- **Source**: Synced automatically from registry.modelcontextprotocol.io
+- **Identification**: Marked with `synced_from_official_registry` flag
+- **Updates**: Periodically refreshed via background jobs
+- **Enhanced Data**: Enriched with GitHub metadata (stars, README, topics)
+- **Official Name**: Stored in reverse-DNS format (e.g., "io.github.upstash/context7")
+
+#### Manual Servers
+- **Source**: Created manually by administrators
+- **Purpose**: Custom integrations not in official registry
+- **Flexibility**: Full control over all server properties
+- **Team Servers**: Can be created by team administrators
 
 ### Categories
 
@@ -120,13 +138,19 @@ Each server in the catalog includes comprehensive metadata:
 
 #### Basic Information
 - **Name & Description**: Clear identification and purpose
+- **Official Name**: Reverse-DNS identifier from official registry (for synced servers)
+- **Version**: Current version number from official registry or manual entry
 - **Category**: Organizational classification
 - **Tags**: Searchable keywords and labels
 - **Status**: Active, deprecated, or maintenance mode
+- **Sync Status**: Whether server is synced from official registry
 
 #### Technical Specifications
-- **Language**: Programming language (Node.js, Python, etc.)
-- **Runtime**: Specific runtime requirements
+- **Language**: Programming language (TypeScript, Python, etc.)
+- **Runtime**: Specific runtime requirements (Node.js, Python, etc.)
+- **Transport Type**: Communication method (stdio, HTTP, SSE)
+- **Packages**: npm, pip, docker package definitions
+- **Remotes**: HTTP/SSE endpoint configurations
 - **Minimum Version**: Required runtime version
 - **Dependencies**: External dependencies and requirements
 
@@ -139,10 +163,16 @@ Each server in the catalog includes comprehensive metadata:
 For details on how configuration schemas work in DeployStack's three-tier system, see [MCP Configuration System](/mcp-configuration).
 
 #### Repository Integration
-- **GitHub URL**: Source code repository
+- **Repository URL**: Source code repository (GitHub, GitLab, etc.)
+- **Repository Source**: Platform identifier (github, gitlab)
+- **Repository ID**: Platform-specific repository identifier
+- **Repository Subfolder**: Monorepo subfolder path (if applicable)
 - **Branch**: Target branch for synchronization
+- **GitHub Stars**: Star count from GitHub
+- **GitHub README**: Automatically fetched and stored README content
 - **Last Sync**: When repository was last synchronized
 - **Version Tracking**: Automatic version detection from repository
+- **Organization**: Repository owner organization
 
 ### Version Management
 
@@ -150,10 +180,12 @@ The catalog supports comprehensive version tracking:
 
 #### Version Information
 - **Version Numbers**: Semantic versioning (e.g., 1.2.3)
+- **Official Registry Version**: Version ID from official registry (for synced servers)
 - **Git Commits**: Linked to specific repository commits
 - **Changelog**: Detailed change descriptions
 - **Stability**: Stable vs. beta/alpha versions
 - **Latest Flag**: Automatic latest version detection
+- **Registry Updates**: Automatic version updates from official registry sync
 
 #### Version Operations
 - **Create Version**: Add new versions manually or via GitHub sync
@@ -161,14 +193,35 @@ The catalog supports comprehensive version tracking:
 - **Version History**: Complete timeline of all versions
 - **Rollback Support**: Deploy specific versions as needed
 
+### Official MCP Registry Integration
+
+DeployStack automatically syncs with the official MCP Registry at registry.modelcontextprotocol.io to provide instant access to all publicly available MCP servers.
+
+**Sync Process**: The registry sync uses DeployStack's background job queue system to process servers sequentially with rate limiting. This prevents API overload and ensures reliable synchronization. For technical details on how the job queue system works, see [Job Queue System](/development/backend/job-queue).
+
+**Key Features:**
+- **Automatic Sync**: One-click sync from official registry
+- **Background Processing**: Non-blocking sync via job queue
+- **Rate Limiting**: Sequential processing with configurable delays
+- **Progress Tracking**: Real-time monitoring of sync operations
+- **GitHub Enhancement**: Automatic enrichment with GitHub metadata
+- **Version Tracking**: Syncs version information from registry
+- **Transport Detection**: Automatic detection of stdio, HTTP, or SSE transport
+- **Environment Variable Mapping**: Intelligent mapping to three-tier configuration system
+
+**For Global Administrators**: Use the "Sync Registry" button in the MCP Server Catalog admin interface to trigger a sync operation.
+
 ### GitHub Integration
 
 Integration with GitHub repositories for automatic synchronization and metadata extraction. For complete details on setting up and using GitHub integration, see the [GitHub App Integration Guide](/github-application).
 
 **Key Features:**
 - **Automatic Repository Sync**: Pull server metadata from GitHub repositories
+- **README Fetching**: Automatically fetch and store GitHub README content
+- **Star Tracking**: Track GitHub stars for social proof
 - **Version Detection**: Automatic version tracking from repository tags
-- **Metadata Extraction**: Import descriptions, licenses, and topics
+- **Metadata Extraction**: Import descriptions, licenses, topics, and organization info
+- **Security**: XSS prevention and content sanitization (2MB size limit)
 - **Manual and Scheduled Sync**: Flexible synchronization options
 
 ## Browsing and Discovery

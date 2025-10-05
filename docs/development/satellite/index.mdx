@@ -13,7 +13,7 @@ DeployStack Satellites are **edge workers** (similar to GitHub Actions runners) 
 
 ## Current Implementation Status
 
-The satellite service has completed **Phase 1: MCP Transport Implementation** with working external client interfaces:
+:The satellite service has completed
 
 - ✅ **Fastify HTTP Server** with Swagger API documentation
 - ✅ **Pino Logging System** identical to backend configuration
@@ -22,9 +22,12 @@ The satellite service has completed **Phase 1: MCP Transport Implementation** wi
 - ✅ **JSON-RPC 2.0 Protocol** compliance for MCP communication
 - ✅ **TypeScript + Webpack** build system with full type safety
 - ✅ **Development Workflow** with hot reload and linting
-- 🚧 **MCP Server Process Management** (planned)
-- 🚧 **Team Isolation** (planned)
-- 🚧 **Backend Communication** (planned)
+- ✅ **Backend Communication** (polling, commands, heartbeat with team-grouped processes)
+- ✅ **OAuth 2.1 Authentication** (token introspection, team context)
+- ✅ **stdio MCP Server Process Management** (spawn, monitor, auto-restart, terminate)
+- ✅ **Team Isolation** (environment-based: nsjail in production, plain spawn in dev)
+- ✅ **Auto-Restart Protection** (max 3 attempts, permanently_failed status)
+- ✅ **Tool Discovery** (HTTP and stdio MCP servers)
 
 ## Architecture Vision
 
@@ -217,28 +220,31 @@ curl -X POST http://localhost:3001/mcp \
 - **Build System**: TypeScript compilation with Webpack bundling
 - **Release Management**: Conventional changelog with release-it
 
-## Planned Features (Roadmap)
+## Implemented Features
 
-### Phase 2: MCP Server Process Management
-- **Process Lifecycle**: Spawn, monitor, and terminate MCP server processes
-- **stdio Communication**: JSON-RPC communication with local MCP servers
-- **HTTP Proxy**: Reverse proxy for external MCP server endpoints
-- **Health Monitoring**: Process health checks and automatic restart
+### Phase 2: MCP Server Process Management ✅ COMPLETED
+- **Process Lifecycle**: Spawn, monitor, auto-restart (max 3), and terminate MCP servers
+- **stdio Communication**: Full JSON-RPC 2.0 protocol over stdin/stdout
+- **HTTP Proxy**: Reverse proxy for external MCP server endpoints ✅ working
+- **Health Monitoring**: Process crash detection with auto-restart
+- **Resource Limits**: nsjail with 100MB RAM, 60s CPU, 50 processes (production Linux)
+- **Tool Discovery**: Automatic tool caching from both HTTP and stdio servers
+- **Team-Grouped Heartbeat**: processes_by_team reporting every 30 seconds
 
-### Phase 3: Team Isolation
-- **Resource Boundaries**: CPU and memory limits per team
-- **Process Isolation**: Separate process groups and namespaces
-- **Filesystem Isolation**: Team-specific directories and permissions
-- **Credential Management**: Secure team credential injection
+### Phase 3: Team Isolation (Infrastructure Ready)
+- **nsjail Sandboxing**: Complete process isolation with built-in resource limits
+- **Namespace Isolation**: PID, mount, UTS, IPC namespaces per team
+- **Filesystem Isolation**: Team-specific read-only and writable directories
+- **Credential Management**: Secure environment injection via nsjail
 
-### Phase 4: Backend Integration
+### Phase 4: Backend Integration ✅ COMPLETED
 - **HTTP Polling**: Outbound communication with DeployStack Backend
 - **Configuration Sync**: Dynamic configuration updates from Backend
 - **Status Reporting**: Real-time satellite health and usage metrics
 - **Command Processing**: Execute Backend commands with acknowledgment
 
 ### Phase 5: Enterprise Features
-- **OAuth 2.1 Authentication**: Resource server with token introspection
+- **OAuth 2.1 Authentication**: Resource server with token introspection ✅ COMPLETED
 - **Audit Logging**: Complete audit trails for compliance
 - **Multi-Region Support**: Global satellite deployment
 - **Auto-Scaling**: Dynamic resource allocation based on demand
@@ -296,8 +302,3 @@ When contributing to satellite development:
 5. **Consider Enterprise**: Design features with team isolation and security in mind
 6. **MCP Compliance**: Ensure JSON-RPC 2.0 protocol compliance
 
-## Next Steps
-
-The satellite service has completed Phase 1 (MCP Transport Implementation) and is ready for Phase 2 development. The next major milestone is implementing MCP server process management, which will enable the core satellite functionality of managing MCP servers on behalf of teams.
-
-For detailed implementation guidance, see the architecture and MCP transport documentation linked above.
