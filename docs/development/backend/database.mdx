@@ -292,9 +292,10 @@ When writing database operations:
 The database schema is defined in `src/db/schema.sqlite.ts`. This is the **single source of truth** for all database schema definitions and works across all supported database types.
 
 The schema contains:
-1. Core application tables
-2. Plugin table definitions (populated dynamically)
-3. Proper foreign key relationships and constraints
+1. Core application tables (users, teams, MCP configurations, etc.)
+2. Background job queue tables (`queueJobs` and `queueJobBatches`) - see [Background Job Queue](/development/backend/job-queue)
+3. Plugin table definitions (populated dynamically)
+4. Proper foreign key relationships and constraints
 
 **Important**: Only `schema.sqlite.ts` should be edited for schema changes. All databases use SQLite syntax.
 

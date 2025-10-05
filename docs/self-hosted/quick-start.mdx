@@ -11,7 +11,11 @@ import { Steps, Step } from 'fumadocs-ui/components/steps';
 
 # Quick Start
 
-Get DeployStack up and running in minutes. Choose between our recommended Docker Compose setup or individual Docker containers for maximum flexibility.
+Get DeployStack up and running in minutes. This guide covers deploying the core platform (frontend + backend) and the required satellite service for MCP server management.
+
+<Callout type="warn">
+  **Important**: Satellites are required for DeployStack to function. The platform alone cannot manage MCP servers - you must deploy at least one satellite.
+</Callout>
 
 ## Prerequisites
 
@@ -201,6 +205,78 @@ sudo firewall-cmd --permanent --add-port=8080/tcp
 sudo firewall-cmd --reload
 ```
 
+## Satellite Service
+
+<Callout type="warn">
+  **Satellites are required** - DeployStack cannot manage MCP servers without satellites. You must deploy at least one satellite for the platform to function.
+</Callout>
+
+### Adding a Satellite to Your Deployment
+
+After completing the basic backend and frontend setup, deploy at least one satellite:
+
+<Steps>
+  <Step>
+    **Generate Registration Token**
+    
+    After setting up your admin account, generate a registration token:
+    
+    1. Log in to your DeployStack instance as admin
+    2. Navigate to Admin → Satellites → Pairing
+    3. Click "Generate Token" and copy the full token
+    
+    The token format will be: `deploystack_satellite_global_eyJhbGciOi...`
+  </Step>
+  
+  <Step>
+    **Start Satellite Service**
+    
+    ```bash
+    docker run -d \
+      --name deploystack-satellite \
+      -p 3001:3001 \
+      -e DEPLOYSTACK_BACKEND_URL="http://localhost:3000" \
+      -e DEPLOYSTACK_SATELLITE_NAME="my-satellite-001" \
+      -e DEPLOYSTACK_REGISTRATION_TOKEN="your-token-here" \
+      -v deploystack_satellite_persistent:/app/persistent_data \
+      deploystack/satellite:latest
+    ```
+    
+    <Callout type="warn">
+      **Satellite Name Requirements:**
+      - 10-32 characters
+      - Only lowercase letters, numbers, hyphens, and underscores
+      - No spaces or special characters
+    </Callout>
+  </Step>
+  
+  <Step>
+    **Verify Satellite Registration**
+    
+    Check the satellite logs to confirm successful registration:
+    
+    ```bash
+    docker logs deploystack-satellite
+    ```
+    
+    You should see:
+    ```
+    ✅ Satellite registered successfully: my-satellite-001
+    🔑 API key received and ready for authenticated communication
+    ```
+  </Step>
+</Steps>
+
+### Satellite Persistence
+
+After initial registration, satellites save their API key to persistent storage. This means:
+
+- **First startup**: Uses registration token → Registers → Saves API key
+- **Subsequent startups**: Uses saved API key → No token needed
+- **Container restarts**: Automatic recovery without re-registration
+
+The registration token is only required once during initial pairing.
+
 ## Environment Variables Reference
 
 ### Required Variables
@@ -217,9 +293,17 @@ sudo firewall-cmd --reload
 | `VITE_DEPLOYSTACK_BACKEND_URL` | Backend API URL for frontend | `http://localhost:3000` | `https://api.deploystack.company.com` |
 | `VITE_APP_TITLE` | Custom application title | `DeployStack` | `Company DeployStack` |
 
+### Satellite Variables (Required)
+
+| Variable | Description | Example |
+|----------|-------------|----------|
+| `DEPLOYSTACK_BACKEND_URL` | Backend URL for satellite to connect to | `http://localhost:3000` |
+| `DEPLOYSTACK_SATELLITE_NAME` | Unique satellite name (10-32 chars, lowercase only) | `my-satellite-001` |
+| `DEPLOYSTACK_REGISTRATION_TOKEN` | JWT registration token from admin (required for initial pairing) | `deploystack_satellite_global_eyJhbGc...` |
+
 ## Next Steps
 
-Once DeployStack is running:
+Once DeployStack is running with at least one satellite:
 
 <Steps>
   <Step>
@@ -231,11 +315,20 @@ Once DeployStack is running:
   </Step>
   
   <Step>
+    **Deploy Satellite Service**
+    
+    - Generate registration token from admin panel
+    - Deploy satellite with the token
+    - Verify satellite registration and activation
+    - See [Satellite Service](#satellite-service) section above
+  </Step>
+  
+  <Step>
     **Deploy Your First MCP Server**
     
     - Browse the MCP server catalog
     - Configure credentials and settings
-    - Deploy to your preferred cloud provider
+    - Deploy to your satellite
   </Step>
   
   <Step>
