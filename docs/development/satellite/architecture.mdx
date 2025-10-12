@@ -22,6 +22,7 @@ Satellites operate as edge workers similar to GitHub Actions runners, providing:
 - **OAuth 2.1 Resource Server**: Token introspection with Backend (implemented)
 - **Backend Polling Communication**: Outbound-only, firewall-friendly (implemented)
 - **Process Lifecycle Management**: Spawn, monitor, terminate MCP servers (ready for implementation)
+- **Background Jobs System**: Cron-like recurring tasks with automatic error handling (implemented)
 
 ## Current Implementation Architecture
 
@@ -474,3 +475,6 @@ The satellite service has completed **Phase 1: MCP Transport Implementation** an
 - **Logging System**: Pino with structured logging
 - **Build Pipeline**: TypeScript compilation and bundling
 - **Development Workflow**: Hot reload and code quality tools
+- **Background Jobs System**: Cron-like job management for recurring tasks
+
+For details on the background jobs system, see [Background Jobs System](/development/satellite/background-jobs).

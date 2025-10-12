@@ -5,7 +5,7 @@ sidebar: Getting Started
 ---
 
 import { Card, Cards } from 'fumadocs-ui/components/card';
-import { Cloud, Shield, Plug, Settings, Network, TestTube, Wrench, BookOpen, Terminal, Users } from 'lucide-react';
+import { Cloud, Shield, Plug, Settings, Network, TestTube, Wrench, BookOpen, Terminal, Users, Timer } from 'lucide-react';
 
 # DeployStack Satellite Development
 
@@ -28,6 +28,7 @@ DeployStack Satellites are **edge workers** (similar to GitHub Actions runners) 
 - ✅ **Team Isolation** (environment-based: nsjail in production, plain spawn in dev)
 - ✅ **Auto-Restart Protection** (max 3 attempts, permanently_failed status)
 - ✅ **Tool Discovery** (HTTP and stdio MCP servers)
+- ✅ **Background Jobs System** (cron-like recurring tasks with automatic error handling)
 
 ## Architecture Vision
 
@@ -194,6 +195,14 @@ curl -X POST http://localhost:3001/mcp \
     title="Deployment & Operations"
   >
     Satellite deployment patterns, monitoring, scaling, and operational considerations.
+  </Card>
+  
+  <Card 
+    icon={<Timer />} 
+    href="/development/satellite/background-jobs" 
+    title="Background Jobs"
+  >
+    Cron-like job system for recurring tasks with automatic error handling and monitoring.
   </Card>
 </Cards>
 
