@@ -1,0 +1,914 @@
+---
+title: Event System
+description: Real-time event emission from satellite to backend for operational visibility, audit trails, and user feedback.
+sidebar: Satellite Development
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Satellite Event System
+
+The Satellite Event System provides real-time communication from satellites to the backend for operational visibility. Unlike the 30-second heartbeat cycle, events are emitted immediately when significant actions occur and batched for efficient transmission.
+
+## Why Events?
+
+DeployStack Satellites use a **polling-based communication pattern** where satellites make outbound HTTP requests to the backend. This is firewall-friendly and NAT-compatible, but creates a timing gap:
+
+**Problem**: Important satellite operations need immediate backend visibility
+- MCP client connects (user expects instant UI feedback)
+- Tool executes (audit trail needs precise timestamps)
+- Process crashes (alerts need immediate dispatch)
+- Security events (compliance requires real-time logging)
+
+**Solution**: Event emission with automatic batching
+- Events emitted immediately when actions occur
+- Batched every 3 seconds for network efficiency
+- Sent to backend via existing authentication
+- Zero impact on satellite performance
+
+## Architecture Overview
+
+```
+Satellite Components          EventBus              Backend
+     │                           │                     │
+     │─── emit('mcp.server.started') ───▶│            │
+     │                           │                     │
+     │─── emit('mcp.tool.executed') ────▶│            │
+     │                        [Queue]                  │
+     │─── emit('mcp.client.connected') ─▶│            │
+     │                           │                     │
+     │                    [Every 3 seconds]            │
+     │                           │                     │
+     │                           │─── POST /events ───▶│
+     │                           │                     │
+     │                           │◀─── 200 OK ─────────│
+```
+
+### Key Components
+
+**EventBus Service** (`src/services/event-bus.ts`)
+- In-memory queue for event collection
+- 3-second batch window (configurable)
+- Automatic transmission to backend
+- Graceful error handling and retry
+
+**Event Registry** (`src/events/registry.ts`)
+- Type-safe event definitions
+- Event data structures
+- Compile-time validation
+
+**Backend Integration** (`src/services/backend-client.ts`)
+- `sendEvents()` method for batch transmission
+- Uses existing satellite authentication
+- Handles partial success responses
+
+## Event Types
+
+The satellite emits 10 event types across 4 categories:
+
+### MCP Server Lifecycle
+
+#### `mcp.server.started`
+Emitted when MCP server process successfully spawns and completes handshake.
+
+**Data Structure:**
+```typescript
+{
+  server_id: string;           // installation_id
+  server_slug: string;         // installation_name
+  team_id: string;
+  process_id: number;          // OS process ID
+  transport: 'stdio';
+  tool_count: number;          // Tools discovered (0 initially)
+  spawn_duration_ms: number;
+}
+```
+
+**Example:**
+```typescript
+eventBus.emit('mcp.server.started', {
+  server_id: 'inst_abc123',
+  server_slug: 'filesystem',
+  team_id: 'team_xyz',
+  process_id: 12345,
+  transport: 'stdio',
+  tool_count: 0,
+  spawn_duration_ms: 234
+});
+```
+
+#### `mcp.server.crashed`
+Emitted when MCP server process exits unexpectedly with non-zero code.
+
+**Data Structure:**
+```typescript
+{
+  server_id: string;
+  server_slug: string;
+  team_id: string;
+  process_id: number;
+  exit_code: number;
+  signal: string;              // 'SIGTERM', 'SIGKILL', etc.
+  uptime_seconds: number;
+  crash_count: number;
+  will_restart: boolean;
+}
+```
+
+#### `mcp.server.restarted`
+Emitted after successful automatic restart following a crash.
+
+**Data Structure:**
+```typescript
+{
+  server_id: string;
+  server_slug: string;
+  team_id: string;
+  old_process_id: number;
+  new_process_id: number;
+  restart_reason: 'crash';
+  attempt_number: number;      // 1, 2, or 3
+}
+```
+
+#### `mcp.server.permanently_failed`
+Emitted when server exhausts all 3 restart attempts.
+
+**Data Structure:**
+```typescript
+{
+  server_id: string;
+  server_slug: string;
+  team_id: string;
+  total_crashes: number;
+  last_error: string;
+  failed_at: string;           // ISO 8601 timestamp
+}
+```
+
+### Client Connections
+
+#### `mcp.client.connected`
+Emitted when MCP client establishes SSE connection to satellite.
+
+**Data Structure:**
+```typescript
+{
+  session_id: string;
+  client_type: 'vscode' | 'cursor' | 'claude' | 'unknown';
+  user_agent: string;
+  team_id: string;
+  transport: 'sse';
+  ip_address: string;
+}
+```
+
+**Client Type Detection:**
+- Parses `User-Agent` header
+- Detects VS Code, Cursor, Claude Desktop
+- Falls back to 'unknown' for unrecognized clients
+
+#### `mcp.client.disconnected`
+Emitted when SSE connection closes (client disconnect, timeout, or error).
+
+**Data Structure:**
+```typescript
+{
+  session_id: string;
+  team_id: string;
+  connection_duration_seconds: number;
+  tool_execution_count: number;
+  disconnect_reason: 'client_close' | 'timeout' | 'error';
+}
+```
+
+### Tool Discovery
+
+#### `mcp.tools.discovered`
+Emitted after successful tool discovery from HTTP or stdio MCP server.
+
+**Data Structure:**
+```typescript
+{
+  server_id: string;
+  server_slug: string;
+  team_id: string;
+  tool_count: number;
+  tool_names: string[];
+  discovery_duration_ms: number;
+  previous_tool_count: number;
+}
+```
+
+#### `mcp.tools.updated`
+Emitted when tool list changes during configuration refresh.
+
+**Data Structure:**
+```typescript
+{
+  server_id: string;
+  server_slug: string;
+  team_id: string;
+  added_tools: string[];
+  removed_tools: string[];
+  total_tools: number;
+}
+```
+
+### Configuration Management
+
+#### `config.refreshed`
+Emitted after successful configuration fetch from backend.
+
+**Data Structure:**
+```typescript
+{
+  config_hash: string;
+  server_count: number;
+  teams_count: number;
+  change_detected: boolean;
+  fetch_duration_ms: number;
+}
+```
+
+#### `config.error`
+Emitted when configuration fetch fails.
+
+**Data Structure:**
+```typescript
+{
+  error_type: 'server_error';
+  error_message: string;
+  status_code: number | null;
+  retry_in: number;            // Seconds until next retry
+}
+```
+
+## Event Batching
+
+### Batch Window: 3 Seconds
+
+Events are collected in memory for 3 seconds, then sent as a single batch:
+
+```
+0s              3s              6s              9s
+│───────────────│───────────────│───────────────│
+│ Collect events│ Send batch    │ Collect events│
+│ (6 events)    │ (6 events)    │ (2 events)    │
+```
+
+**Benefits:**
+- Reduces HTTP request overhead
+- Efficient network usage
+- Near real-time (3s latency acceptable)
+- Backend-friendly batching
+
+### Max Batch Size: 100 Events
+
+If more than 100 events accumulate, only first 100 are sent:
+
+```
+0-3s: Collect 150 events
+3s:   Send first 100, keep 50 in queue
+3-6s: Collect 30 more (queue = 80)
+6s:   Send 80 events
+```
+
+### Empty Batch Handling
+
+If no events occur, no HTTP request is made:
+
+```
+0-3s: No events
+3s:   Skip sending (no request)
+3-6s: No events  
+6s:   Skip sending (no request)
+```
+
+## Memory Management
+
+### Queue Limit: 10,000 Events
+
+The in-memory queue holds a maximum of 10,000 events:
+
+**Normal Operation:**
+- Events queued and sent every 3 seconds
+- Queue size typically under 100 events
+
+**Backend Outage:**
+- Events accumulate in queue
+- Queue grows up to 10,000 events
+- Oldest events dropped when limit reached
+- Dropped count logged for monitoring
+
+**Memory Usage:**
+- Average event: 1-2KB
+- 10,000 events ≈ 10-20MB RAM
+- Acceptable footprint for satellite process
+
+<Callout type="info">
+Queue is in-memory only. Satellite restarts clear the queue. This is acceptable because events are operational telemetry, not critical data requiring persistence.
+</Callout>
+
+## Error Handling
+
+### Backend Response Codes
+
+**400 Bad Request** (Invalid event data)
+- Drops the invalid event immediately
+- Logs error with event details
+- Continues processing other events
+- No retry for malformed data
+
+**401 Unauthorized** (Authentication failed)
+- Keeps events in queue
+- Logs authentication error
+- Retries in next batch cycle
+- May indicate satellite needs re-registration
+
+**429 Too Many Requests** (Rate limited)
+- Implements exponential backoff
+- Backoff sequence: 3s → 6s → 12s → 24s → 48s (max)
+- Keeps all events in queue
+- Resumes normal 3s batching after successful send
+
+**500 Internal Server Error** (Backend failure)
+- Keeps events in queue
+- Logs backend error
+- Retries in next 3s batch cycle
+- Continues normal operations
+
+**Network Timeout / Connection Refused**
+- Keeps events in queue
+- Logs connection failure
+- Retries in next 3s batch cycle
+- Satellite continues operating normally
+
+### Retry Strategy
+
+**Natural Retry Pattern:**
+- Failed batches remain in queue
+- Next 3-second cycle automatically includes them
+- No explicit retry logic needed
+
+**Exponential Backoff:**
+- Only applies to 429 rate limit responses
+- Temporary increase in batch interval
+- Returns to 3s after successful send
+
+**Event Dropping:**
+- Only drops events for 400 validation errors
+- Never drops events for temporary failures
+- Queue overflow drops oldest events (logged)
+
+## Graceful Shutdown
+
+When satellite receives SIGTERM or SIGINT:
+
+```
+1. Stop accepting new events
+2. Cancel next scheduled batch
+3. Flush all queued events immediately
+4. Wait up to 5 seconds for completion
+5. If successful: Log success, proceed with shutdown
+6. If timeout: Force shutdown, log lost event count
+```
+
+**Configuration:**
+```bash
+EVENT_FLUSH_TIMEOUT_MS=5000  # 5-second grace period
+```
+
+## Integration Points
+
+### ProcessManager
+
+**Location:** `src/process/manager.ts`
+
+**Events Emitted:**
+- `mcp.server.started` - After spawn + handshake
+- `mcp.server.crashed` - On unexpected exit
+- `mcp.server.restarted` - After auto-restart
+- `mcp.server.permanently_failed` - After 3 failed restarts
+
+**Implementation Pattern:**
+```typescript
+// Constructor accepts optional EventBus
+constructor(
+  logger: Logger,
+  eventBus?: EventBus
+) {
+  this.eventBus = eventBus;
+}
+
+// Emit events with try-catch protection
+try {
+  this.eventBus?.emit('mcp.server.started', {
+    server_id: config.installation_id,
+    server_slug: config.installation_name,
+    team_id: config.team_id,
+    process_id: process.pid,
+    transport: 'stdio',
+    tool_count: 0,
+    spawn_duration_ms: elapsed
+  });
+} catch (error) {
+  this.logger.warn({ error }, 'Failed to emit event (non-fatal)');
+}
+```
+
+### SessionManager
+
+**Location:** `src/core/session-manager.ts`
+
+**Events Emitted:**
+- `mcp.client.connected` - On new SSE session creation
+- `mcp.client.disconnected` - On session cleanup
+
+**Client Type Detection:**
+```typescript
+private detectClientType(userAgent?: string): string {
+  if (!userAgent) return 'unknown';
+  const ua = userAgent.toLowerCase();
+  if (ua.includes('vscode')) return 'vscode';
+  if (ua.includes('cursor')) return 'cursor';
+  if (ua.includes('claude')) return 'claude';
+  return 'unknown';
+}
+```
+
+### RemoteToolDiscoveryManager
+
+**Location:** `src/services/remote-tool-discovery-manager.ts`
+
+**Events Emitted:**
+- `mcp.tools.discovered` - After initial tool discovery
+- `mcp.tools.updated` - When tool list changes
+
+**Tool Change Detection:**
+```typescript
+// Compare previous and current tool lists
+const addedTools = currentTools.filter(t => !previousTools.includes(t));
+const removedTools = previousTools.filter(t => !currentTools.includes(t));
+
+if (addedTools.length > 0 || removedTools.length > 0) {
+  eventBus.emit('mcp.tools.updated', {
+    server_id,
+    server_slug,
+    team_id,
+    added_tools: addedTools,
+    removed_tools: removedTools,
+    total_tools: currentTools.length
+  });
+}
+```
+
+### DynamicConfigManager
+
+**Location:** `src/services/dynamic-config-manager.ts`
+
+**Events Emitted:**
+- `config.refreshed` - After successful config fetch
+- `config.error` - On config fetch failure
+
+**Configuration Hash:**
+```typescript
+import crypto from 'crypto';
+
+const configHash = crypto
+  .createHash('sha256')
+  .update(JSON.stringify(config))
+  .digest('hex')
+  .substring(0, 12);
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Event batching (default: 3000ms = 3 seconds)
+EVENT_BATCH_INTERVAL_MS=3000
+
+# Max events per batch (default: 100)
+EVENT_MAX_BATCH_SIZE=100
+
+# Max events in memory (default: 10000)
+EVENT_MAX_QUEUE_SIZE=10000
+
+# Graceful shutdown timeout (default: 5000ms)
+EVENT_FLUSH_TIMEOUT_MS=5000
+```
+
+### Development vs Production
+
+**Development:**
+```bash
+EVENT_BATCH_INTERVAL_MS=1000   # 1s for faster feedback
+EVENT_MAX_QUEUE_SIZE=1000      # Smaller queue
+LOG_LEVEL=debug                # Verbose logging
+```
+
+**Production:**
+```bash
+EVENT_BATCH_INTERVAL_MS=3000   # Standard 3s
+EVENT_MAX_QUEUE_SIZE=10000     # Full queue
+LOG_LEVEL=info                 # Standard logging
+```
+
+## Monitoring Events
+
+### Structured Logging
+
+All event operations are logged with structured data:
+
+```bash
+# Event emission
+{"level":"debug","operation":"event_emitted","event_type":"mcp.server.started","queue_size":23}
+
+# Batch sending
+{"level":"info","operation":"event_batch_sending","event_count":45,"queue_size":45}
+
+# Batch success
+{"level":"info","operation":"event_batch_success","event_count":45,"duration_ms":234}
+
+# Queue overflow
+{"level":"warn","operation":"event_queue_overflow","dropped_count":10,"queue_size":10000}
+
+# Backend errors
+{"level":"error","operation":"event_batch_error","error":"Connection refused"}
+```
+
+### Log Searches
+
+```bash
+# All event emissions
+grep "event_emitted" logs/satellite.log
+
+# Specific event type
+grep "mcp.server.started" logs/satellite.log
+
+# Batch operations
+grep "event_batch" logs/satellite.log
+
+# Errors only
+grep "event.*error" logs/satellite.log
+
+# Queue issues
+grep "event_queue_overflow" logs/satellite.log
+```
+
+### EventBus Statistics
+
+Access runtime statistics programmatically:
+
+```typescript
+const stats = eventBus.getStats();
+console.log({
+  queueSize: stats.queueSize,           // Current events in queue
+  totalEmitted: stats.totalEmitted,     // Total events emitted
+  totalSent: stats.totalSent,           // Total events sent to backend
+  totalFailed: stats.totalFailed,       // Total send failures
+  totalDropped: stats.totalDropped,     // Total events dropped
+  lastBatchSentAt: stats.lastBatchSentAt, // ISO timestamp
+  lastErrorAt: stats.lastErrorAt,       // ISO timestamp
+  isShuttingDown: stats.isShuttingDown  // Graceful shutdown status
+});
+```
+
+## Type Safety
+
+### Compile-Time Validation
+
+The event system uses TypeScript for complete type safety:
+
+```typescript
+// ✅ Valid: Correct event type and data structure
+eventBus.emit('mcp.server.started', {
+  server_id: 'inst_123',
+  server_slug: 'filesystem',
+  team_id: 'team_xyz',
+  process_id: 12345,
+  transport: 'stdio',
+  tool_count: 0,
+  spawn_duration_ms: 234
+});
+
+// ❌ TypeScript Error: Unknown event type
+eventBus.emit('invalid.event.type', { ... });
+
+// ❌ TypeScript Error: Missing required field
+eventBus.emit('mcp.server.started', {
+  server_id: 'inst_123',
+  // Missing: server_slug, team_id, process_id, etc.
+});
+
+// ❌ TypeScript Error: Wrong field type
+eventBus.emit('mcp.server.started', {
+  server_id: 123,  // Should be string
+  // ...
+});
+```
+
+### Event Registry
+
+**Location:** `src/events/registry.ts`
+
+```typescript
+// Event type union
+export type EventType =
+  | 'mcp.server.started'
+  | 'mcp.server.crashed'
+  | 'mcp.client.connected'
+  // ... all event types
+
+// Event data mapping
+export interface EventDataMap {
+  'mcp.server.started': {
+    server_id: string;
+    server_slug: string;
+    team_id: string;
+    process_id: number;
+    transport: 'stdio';
+    tool_count: number;
+    spawn_duration_ms: number;
+  };
+  // ... all event data structures
+}
+
+// Complete event structure
+export interface SatelliteEvent {
+  type: EventType;
+  timestamp: string;  // ISO 8601
+  data: EventDataMap[EventType];
+}
+```
+
+## Best Practices
+
+### DO ✅
+
+**Wrap emit() calls in try-catch:**
+```typescript
+try {
+  this.eventBus?.emit('event.type', { ... });
+} catch (error) {
+  this.logger.warn({ error }, 'Failed to emit event (non-fatal)');
+}
+```
+
+**Use optional chaining:**
+```typescript
+// EventBus might be undefined during initialization
+this.eventBus?.emit('event.type', { ... });
+```
+
+**Include all required fields:**
+```typescript
+// TypeScript enforces this, but be explicit
+eventBus.emit('mcp.server.started', {
+  server_id: config.installation_id,     // Required
+  server_slug: config.installation_name, // Required
+  team_id: config.team_id,               // Required
+  // ... all required fields
+});
+```
+
+**Calculate metrics before emitting:**
+```typescript
+const duration = Date.now() - startTime;
+this.logger.info({ duration_ms: duration });
+eventBus.emit('operation.completed', { duration_ms: duration });
+```
+
+**Use descriptive event names:**
+```typescript
+// ✅ Clear intent
+'mcp.server.crashed'
+'mcp.client.connected'
+
+// ❌ Vague
+'server.event'
+'client.update'
+```
+
+### DON'T ❌
+
+**Never block on event emission:**
+```typescript
+// ❌ BAD: Don't await event emission
+await eventBus.emit('event.type', { ... });
+
+// ✅ GOOD: Fire-and-forget
+eventBus.emit('event.type', { ... });
+```
+
+**Never throw errors from emission failures:**
+```typescript
+// ❌ BAD: Event failure crashes service
+eventBus.emit('event.type', { ... }); // Might throw
+
+// ✅ GOOD: Wrapped in try-catch
+try {
+  eventBus.emit('event.type', { ... });
+} catch (error) {
+  logger.warn({ error }, 'Event emission failed (non-fatal)');
+}
+```
+
+**Never emit sensitive data:**
+```typescript
+// ❌ BAD: Includes passwords
+eventBus.emit('auth.failed', {
+  username: 'user@example.com',
+  password: 'secret123'  // Never log passwords!
+});
+
+// ✅ GOOD: Sanitized data
+eventBus.emit('auth.failed', {
+  username: 'user@example.com',
+  reason: 'invalid_credentials'
+});
+```
+
+**Avoid high-frequency emission without sampling:**
+```typescript
+// ❌ BAD: Emits thousands of events
+for (const item of largeArray) {
+  eventBus.emit('item.processed', { item });
+}
+
+// ✅ GOOD: Emit summary after batch
+const processed = largeArray.map(processItem);
+eventBus.emit('batch.processed', {
+  item_count: largeArray.length,
+  duration_ms: elapsed
+});
+```
+
+**Never assume EventBus is defined:**
+```typescript
+// ❌ BAD: Crashes if EventBus not initialized
+this.eventBus.emit('event.type', { ... });
+
+// ✅ GOOD: Optional chaining
+this.eventBus?.emit('event.type', { ... });
+```
+
+## Troubleshooting
+
+### Events Not Emitting
+
+**Symptom:** No `event_emitted` logs in satellite logs
+
+**Diagnosis:**
+```typescript
+// Check if EventBus is defined
+console.log('EventBus defined:', !!this.eventBus);
+```
+
+**Fix:** Verify EventBus is assigned to service in `src/server.ts`:
+```typescript
+(yourService as any).eventBus = eventBus;
+```
+
+### Events Not Reaching Backend
+
+**Symptom:** Events emitted but not in backend database
+
+**Check backend connectivity:**
+```bash
+curl http://localhost:3000/api/health
+```
+
+**Check event batch errors:**
+```bash
+grep "event_batch_error" logs/satellite.log
+```
+
+**Check backend logs:**
+```bash
+# Backend should log received events
+grep "satelliteEvents" logs/backend.log
+```
+
+### High Queue Size
+
+**Symptom:** `event_queue_overflow` warnings in logs
+
+**Causes:**
+- Backend unreachable (network issues)
+- Backend overloaded (429 responses)
+- Very high event volume
+
+**Solutions:**
+```bash
+# Check backend connectivity
+curl http://localhost:3000/api/satellites/{id}/events
+
+# Check for rate limiting
+grep "429" logs/satellite.log
+
+# Monitor queue size
+grep "queue_size" logs/satellite.log | tail -20
+```
+
+### Batch Send Failures
+
+**Symptom:** Repeated `event_batch_error` logs
+
+**Check error details:**
+```bash
+grep "event_batch_error" logs/satellite.log | jq .
+```
+
+**Common causes:**
+- Network timeout → Check network connectivity
+- 401 Unauthorized → Verify satellite API key
+- 500 Server Error → Check backend logs
+- Connection refused → Verify backend running
+
+## Performance Considerations
+
+### Network Efficiency
+
+**Batch Size Impact:**
+- 100 events/batch ≈ 100-200KB payload
+- Single HTTP request vs 100 individual requests
+- Reduced network overhead
+- Backend-friendly batching
+
+**Batch Interval Trade-offs:**
+- 3s default: Near real-time with efficient batching
+- 1s interval: More real-time, more requests
+- 5s interval: Less real-time, fewer requests
+
+### Memory Usage
+
+**Queue Memory:**
+- Average event: 1-2KB
+- Max queue: 10,000 events
+- Total memory: 10-20MB
+- Acceptable for satellite process
+
+**Queue Growth:**
+- Normal: < 100 events
+- Backend outage: Grows to 10,000
+- Overflow: Oldest events dropped
+
+### CPU Impact
+
+**Event Emission:**
+- Synchronous queue operation
+- No I/O during emit()
+- < 1ms overhead per event
+
+**Batch Processing:**
+- JSON serialization every 3 seconds
+- Single HTTP POST request
+- Minimal CPU impact
+
+## Future Enhancements
+
+### Disk-Based Queue (Planned)
+
+**Benefits:**
+- Survive satellite restarts
+- No event loss during crashes
+- Longer backend outage tolerance
+
+**Trade-offs:**
+- Increased complexity
+- Disk I/O overhead
+- Not needed for operational telemetry
+
+### Event Sampling (Planned)
+
+**High-Volume Events:**
+- Sample 10% of tool executions
+- 100% sampling for errors
+- Configurable sampling rates
+
+**Benefits:**
+- Reduced network traffic
+- Lower backend load
+- Maintained visibility into patterns
+
+### Real-Time Streaming (Future)
+
+**WebSocket Event Stream:**
+- Real-time event delivery to frontend
+- Sub-second latency
+- Live operational dashboards
+
+**Requirements:**
+- WebSocket infrastructure
+- Frontend event handling
+- Connection management
+
+## Related Documentation
+
+- [Backend Communication](/development/satellite/backend-communication) - Satellite-backend communication patterns
+- [Polling](/development/satellite/polling) - Command polling system
+- [Logging](/development/satellite/logging) - Structured logging configuration
+- [Process Management](/development/satellite/process-management) - MCP server lifecycle
