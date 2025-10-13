@@ -11,58 +11,60 @@
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "General",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Essentials",
             "pages": [
               "index",
-              "quickstart",
-              "development"
+              "general/architecture",
+              "general/teams",
+              "general/roles",
+              "general/onboard-new-team-members",
+              "general/global-settings",
+              "general/security"
             ]
           },
           {
-            "group": "Customization",
+            "group": "MCP Server",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "/general/mcp-catalog",
+              "/general/mcp-installation",
+              "/general/mcp-categories",
+              "/general/mcp-admin-schema-workflow"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "MCP Server Configuration",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "/general/mcp-configuration",
+              "/general/mcp-user-configuration",
+              "/general/mcp-team-installation"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Self Hosted",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Guides",
             "pages": [
-              "api-reference/introduction"
+              "self-hosted/quick-start",
+              "self-hosted/setup",
+              "self-hosted/docker-compose",
+              "self-hosted/upgrade-guide",
+              "self-hosted/database-setup"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Administration",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "/general/auth",
+              "/general/github-application",
+              "/general/github-oauth-setup",
+              "/general/troubleshooting",
+              "/general/local-setup"
             ]
           }
         ]
@@ -71,19 +73,14 @@
     "global": {
       "anchors": [
         {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
+          "anchor": "Login to DeployStack",
+          "href": "https://cloud.deploystack.io",
+          "icon": "user-key"
         },
         {
-          "anchor": "Community",
-          "href": "https://mintlify.com/community",
-          "icon": "slack"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
+          "anchor": "Discord",
+          "href": "https://discord.gg/42Ce3S7b3b",
+          "icon": "discord"
         }
       ]
     }
@@ -119,9 +116,8 @@
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "x": "https://x.com/deploystack",
+      "github": "https://github.com/deploystackio"
     }
   }
 }
