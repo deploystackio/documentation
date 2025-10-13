@@ -244,6 +244,39 @@ The ProcessManager emits events for monitoring and integration:
 - Request tracking includes: `request_id`, `method`, `duration_ms`
 - Error context includes: error messages, exit codes, signals
 
+## Event Emission
+
+The ProcessManager emits real-time events to the Backend for operational visibility and audit trails. These events are batched every 3 seconds and sent via the Event System.
+
+### Lifecycle Events
+
+**mcp.server.started**
+- Emitted after successful spawn and handshake completion
+- Includes: server_id, process_id, spawn_duration_ms, tool_count
+- Provides immediate visibility into new MCP server availability
+
+**mcp.server.crashed**
+- Emitted on unexpected process exit with non-zero code
+- Includes: exit_code, signal, uptime_seconds, crash_count, will_restart
+- Enables real-time alerting for process failures
+
+**mcp.server.restarted**
+- Emitted after successful automatic restart
+- Includes: old_process_id, new_process_id, restart_reason, attempt_number
+- Tracks restart attempts for reliability monitoring
+
+**mcp.server.permanently_failed**
+- Emitted when restart limit (3 attempts) is exceeded
+- Includes: total_crashes, last_error, failed_at timestamp
+- Critical alert requiring manual intervention
+
+**Event vs Internal Events:**
+- ProcessManager internal events (processSpawned, processTerminated, etc.) are for satellite-internal coordination
+- Event System events (mcp.server.started, etc.) are sent to Backend for external visibility
+- Both work together: Internal events trigger state changes, Event System events provide audit trail
+
+For complete event system documentation and all event types, see [Event System](/development/satellite/event-system).
+
 ## Team Isolation
 
 ### Installation Name Format

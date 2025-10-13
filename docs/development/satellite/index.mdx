@@ -23,6 +23,7 @@ DeployStack Satellites are **edge workers** (similar to GitHub Actions runners) 
 - ✅ **TypeScript + Webpack** build system with full type safety
 - ✅ **Development Workflow** with hot reload and linting
 - ✅ **Backend Communication** (polling, commands, heartbeat with team-grouped processes)
+- ✅ **Real-Time Event System** (immediate event emission with 3s batching, 10 event types)
 - ✅ **OAuth 2.1 Authentication** (token introspection, team context)
 - ✅ **stdio MCP Server Process Management** (spawn, monitor, auto-restart, terminate)
 - ✅ **Team Isolation** (environment-based: nsjail in production, plain spawn in dev)
@@ -88,30 +89,6 @@ npm run build    # Production build
 npm run start    # Start production server
 npm run lint     # ESLint with auto-fix
 npm run release  # Release management
-```
-
-### Current MCP Transport Endpoints
-
-- **GET** `/sse` - Establish SSE connection with session management
-- **POST** `/message?session={id}` - Send JSON-RPC messages via SSE sessions
-- **GET/POST** `/mcp` - Streamable HTTP transport with optional sessions
-- **OPTIONS** `/mcp` - CORS preflight handling
-
-### Testing MCP Transport
-
-```bash
-# Test SSE connection
-curl -N -H "Accept: text/event-stream" http://localhost:3001/sse
-
-# Send JSON-RPC message (replace SESSION_ID)
-curl -X POST "http://localhost:3001/message?session=SESSION_ID" \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{}}'
-
-# Direct HTTP transport
-curl -X POST http://localhost:3001/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":"1","method":"tools/list","params":{}}'
 ```
 
 ## Development Guides
@@ -204,11 +181,19 @@ curl -X POST http://localhost:3001/mcp \
   >
     Cron-like job system for recurring tasks with automatic error handling and monitoring.
   </Card>
+  
+  <Card 
+    icon={<Network />} 
+    href="/development/satellite/event-system" 
+    title="Event System"
+  >
+    Real-time event emission from satellite to backend with automatic batching and error handling.
+  </Card>
 </Cards>
 
 ## Current Features
 
-### MCP Transport Layer (Implemented)
+### MCP Transport Layer
 - **SSE Transport**: Server-Sent Events with session management
 - **SSE Messaging**: JSON-RPC message sending via established sessions
 - **Streamable HTTP**: Direct HTTP communication with optional streaming
@@ -231,29 +216,30 @@ curl -X POST http://localhost:3001/mcp \
 
 ## Implemented Features
 
-### Phase 2: MCP Server Process Management ✅ COMPLETED
+### Phase 2: MCP Server Process Management
 - **Process Lifecycle**: Spawn, monitor, auto-restart (max 3), and terminate MCP servers
 - **stdio Communication**: Full JSON-RPC 2.0 protocol over stdin/stdout
-- **HTTP Proxy**: Reverse proxy for external MCP server endpoints ✅ working
+- **HTTP Proxy**: Reverse proxy for external MCP server endpoints working
 - **Health Monitoring**: Process crash detection with auto-restart
 - **Resource Limits**: nsjail with 100MB RAM, 60s CPU, 50 processes (production Linux)
 - **Tool Discovery**: Automatic tool caching from both HTTP and stdio servers
 - **Team-Grouped Heartbeat**: processes_by_team reporting every 30 seconds
 
-### Phase 3: Team Isolation (Infrastructure Ready)
+### Phase 3: Team Isolation
 - **nsjail Sandboxing**: Complete process isolation with built-in resource limits
 - **Namespace Isolation**: PID, mount, UTS, IPC namespaces per team
 - **Filesystem Isolation**: Team-specific read-only and writable directories
 - **Credential Management**: Secure environment injection via nsjail
 
-### Phase 4: Backend Integration ✅ COMPLETED
+### Phase 4: Backend Integration
 - **HTTP Polling**: Outbound communication with DeployStack Backend
 - **Configuration Sync**: Dynamic configuration updates from Backend
 - **Status Reporting**: Real-time satellite health and usage metrics
 - **Command Processing**: Execute Backend commands with acknowledgment
+- **Event System**: Real-time event emission with automatic batching (10 event types)
 
 ### Phase 5: Enterprise Features
-- **OAuth 2.1 Authentication**: Resource server with token introspection ✅ COMPLETED
+- **OAuth 2.1 Authentication**: Resource server with token introspection
 - **Audit Logging**: Complete audit trails for compliance
 - **Multi-Region Support**: Global satellite deployment
 - **Auto-Scaling**: Dynamic resource allocation based on demand
@@ -278,27 +264,11 @@ Follow established patterns when adding new routes:
 4. Use manual JSON serialization with `JSON.stringify()`
 5. Register routes in `src/routes/index.ts`
 
-### Logging Best Practices
-- Use structured logging with context objects
-- Pass logger instances as parameters to services
-- Include operation identifiers for traceability
-- Use appropriate log levels (debug, info, warn, error)
-- Avoid console.log statements in favor of Pino logger
-
 ### Configuration Management
 - Use environment variables for configuration
 - Provide sensible defaults for development
 - Document all configuration options
 - Support both development and production modes
-
-## Strategic Context
-
-The satellite service represents DeployStack's evolution from a developer tool into a comprehensive enterprise MCP management platform. This strategic pivot addresses:
-
-- **Adoption Friction**: Eliminates CLI installation barriers (12x better conversion)
-- **Market Differentiation**: Creates new "MCP-as-a-Service" category
-- **Enterprise Requirements**: Provides team isolation and compliance features
-- **Scalability**: Enables horizontal scaling and global deployment
 
 ## Contributing
 
@@ -309,5 +279,4 @@ When contributing to satellite development:
 3. **Document Changes**: Update relevant documentation for new features
 4. **Test Thoroughly**: Ensure changes work in both development and production
 5. **Consider Enterprise**: Design features with team isolation and security in mind
-6. **MCP Compliance**: Ensure JSON-RPC 2.0 protocol compliance
 

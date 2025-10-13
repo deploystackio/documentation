@@ -19,14 +19,15 @@ Satellites operate as edge workers similar to GitHub Actions runners, providing:
 - **MCP Transport Protocols**: SSE, Streamable HTTP, Direct HTTP communication
 - **Dual MCP Server Management**: HTTP proxy + stdio subprocess support (ready for implementation)
 - **Team Isolation**: nsjail sandboxing with built-in resource limits (ready for implementation)
-- **OAuth 2.1 Resource Server**: Token introspection with Backend (implemented)
-- **Backend Polling Communication**: Outbound-only, firewall-friendly (implemented)
+- **OAuth 2.1 Resource Server**: Token introspection with Backend
+- **Backend Polling Communication**: Outbound-only, firewall-friendly
+- **Real-Time Event System**: Immediate satellite → backend event emission with automatic batching
 - **Process Lifecycle Management**: Spawn, monitor, terminate MCP servers (ready for implementation)
-- **Background Jobs System**: Cron-like recurring tasks with automatic error handling (implemented)
+- **Background Jobs System**: Cron-like recurring tasks with automatic error handling
 
 ## Current Implementation Architecture
 
-### Phase 1: MCP Transport Layer (Implemented)
+### Phase 1: MCP Transport Layer
 
 The current satellite implementation provides complete MCP client interface support:
 
@@ -83,7 +84,7 @@ MCP Client                    Satellite
     │◀─── Response via SSE ─────│  (Stream response back)
 ```
 
-### Core Components (Implemented)
+### Core Components
 
 **Session Manager:**
 - Cryptographically secure 32-byte base64url session IDs
@@ -237,7 +238,7 @@ Each satellite instance will contain five core components:
 
 ## Communication Patterns
 
-### Client-to-Satellite Communication (Implemented)
+### Client-to-Satellite Communication
 
 **Multiple Transport Protocols:**
 - **SSE (Server-Sent Events)**: Real-time streaming with session management
@@ -263,7 +264,7 @@ MCP Client                    Satellite
 - **Activity Tracking**: Updated on each message
 - **State Management**: Client info and initialization status
 
-### Satellite-to-Backend Communication (Implemented)
+### Satellite-to-Backend Communication
 
 **HTTP Polling Pattern:**
 ```
@@ -288,6 +289,34 @@ Satellite                    Backend
 - **3-Second Response Time**: Immediate priority commands enable near real-time responses
 
 For complete implementation details, see [Backend Polling Implementation](/development/satellite/polling).
+
+### Real-Time Event System
+
+**Event Emission with Batching:**
+```
+Satellite Operations          EventBus              Backend
+       │                         │                     │
+       │─── mcp.server.started ──▶│                    │
+       │─── mcp.tool.executed ───▶│ [Queue]            │
+       │─── mcp.client.connected ─▶│                    │
+       │                      [Every 3 seconds]         │
+       │                         │                     │
+       │                         │─── POST /events ───▶│
+       │                         │◀─── 200 OK ─────────│
+```
+
+**Event Features:**
+- **Immediate Emission**: Events emitted when actions occur (not delayed by 30s heartbeat)
+- **Automatic Batching**: Events collected for 3 seconds, then sent as single batch (max 100 events)
+- **Memory Management**: In-memory queue (10,000 event limit) with overflow protection
+- **Graceful Error Handling**: 429 exponential backoff, 400 drops invalid events, 500/network errors retry
+- **10 Event Types**: Server lifecycle, client connections, tool discovery, configuration updates
+
+**Difference from Heartbeat:**
+- **Heartbeat** (every 30s): Aggregate metrics, system health, resource usage
+- **Events** (immediate): Point-in-time occurrences, user actions, precise timestamps
+
+For complete event system documentation, see [Event System](/development/satellite/event-system).
 
 ## Security Architecture
 
@@ -469,6 +498,7 @@ The satellite service has completed **Phase 1: MCP Transport Implementation** an
 - **Command Processing**: HTTP MCP server management (spawn/kill/restart/health_check)
 - **Heartbeat Service**: Process status reporting and system metrics
 - **Configuration Sync**: Real-time MCP server configuration updates
+- **Event System**: Real-time event emission with automatic batching (10 event types)
 
 **Foundation Infrastructure:**
 - **HTTP Server**: Fastify with Swagger documentation

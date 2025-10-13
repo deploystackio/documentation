@@ -43,6 +43,30 @@ Satellites adjust polling frequency based on Backend guidance:
 - **Backoff Mode**: Exponential backoff up to 5 minutes on errors
 - **Maintenance Mode**: Reduced polling during maintenance windows
 
+### Communication Channels
+
+The satellite uses three distinct communication channels with the Backend:
+
+**1. Command Polling (Backend → Satellite)**
+- Backend creates commands, satellite polls and executes
+- Adaptive intervals: 2-60 seconds based on command priority
+- Used for: MCP server configuration, process management, system updates
+- Direction: Backend initiates, satellite responds
+
+**2. Heartbeat (Satellite → Backend, Periodic)**
+- Satellite reports status every 30 seconds
+- Contains: System metrics, process counts, resource usage
+- Used for: Health monitoring, capacity planning, aggregate analytics
+- Direction: Satellite reports on fixed schedule
+
+**3. Events (Satellite → Backend, Immediate)**
+- Satellite emits events when actions occur, batched every 3 seconds
+- Contains: Point-in-time occurrences with precise timestamps
+- Used for: Real-time UI updates, audit trails, user notifications
+- Direction: Satellite reports immediately (not waiting for heartbeat)
+
+For detailed event system documentation, see [Event System](/development/satellite/event-system).
+
 ## Current Implementation
 
 ### Phase 1: Basic Connection Testing ✅
