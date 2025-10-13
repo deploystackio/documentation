@@ -1,7 +1,7 @@
 import { defineDocs, defineConfig, frontmatterSchema } from 'fumadocs-mdx/config';
 import { z } from 'zod';
 
-export const docs = defineDocs({
+export const { docs, meta } = defineDocs({
   // Directory of documents, relative to the project root.
   // We are using the existing 'docs' folder.
   dir: 'docs',
