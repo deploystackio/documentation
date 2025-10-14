@@ -1,0 +1,376 @@
+---
+title: Process Management
+description: Technical implementation of stdio subprocess management for local MCP servers in DeployStack Satellite.
+---
+
+
+
+# stdio Process Management
+
+DeployStack Satellite implements stdio subprocess management for local MCP servers through the ProcessManager component. This system handles spawning, monitoring, and lifecycle management of MCP server processes with dual-mode operation for development and production environments.
+
+## Overview
+
+**Core Components:**
+- **ProcessManager**: Handles spawning, communication, and lifecycle of stdio-based MCP servers
+- **RuntimeState**: Maintains in-memory state of all processes with team-grouped tracking
+- **TeamIsolationService**: Validates team-based access control for process operations
+
+**Deployment Modes:**
+- **Development**: Direct spawn without isolation (cross-platform)
+- **Production**: nsjail isolation with resource limits (Linux only)
+
+## Process Spawning
+
+### Spawning Modes
+
+The system automatically selects the appropriate spawning mode based on environment:
+
+**Direct Spawn (Development):**
+- Standard Node.js `child_process.spawn()` without isolation
+- Full environment variable inheritance
+- No resource limits or namespace isolation
+- Works on all platforms (macOS, Windows, Linux)
+
+**nsjail Spawn (Production Linux):**
+- Resource limits: 50MB RAM, 60s CPU time, and one process per started MCP server
+- Namespace isolation: PID, mount, UTS, IPC
+- Filesystem isolation: Read-only mounts for `/usr`, `/lib`, `/lib64`, `/bin` with writable `/tmp`
+- Team-specific hostname: `mcp-{team_id}`
+- Non-root user (99999:99999)
+- Network access enabled
+
+<Info>
+**Mode Selection**: The system uses `process.env.NODE_ENV === 'production' && process.platform === 'linux'` to determine isolation mode. This ensures development works seamlessly on all platforms while production deployments get full security.
+</Info>
+
+### Process Configuration
+
+Processes are spawned using MCPServerConfig containing:
+- `installation_name`: Unique identifier in format `{server_slug}-{team_slug}-{installation_id}`
+- `installation_id`: Database UUID for the installation
+- `team_id`: Team owning the process
+- `command`: Executable command (e.g., `npx`, `node`)
+- `args`: Command arguments
+- `env`: Environment variables (credentials, configuration)
+
+## MCP Handshake Protocol
+
+After spawning, processes must complete an MCP handshake before becoming operational:
+
+**Two-Step Process:**
+1. **Initialize Request**: Sent to process via stdin
+   - Protocol version: 2025-11-05
+   - Client info: deploystack-satellite v1.0.0
+   - Capabilities: roots.listChanged=false, sampling={}
+2. **Initialized Notification**: Sent after successful initialization response
+
+**Handshake Requirements:**
+- 30-second timeout (accounts for npx package downloads)
+- Response must include `serverInfo` with name and version
+- Process marked 'failed' and terminated if handshake fails
+
+## stdio Communication Protocol
+
+### Message Format
+
+All communication uses newline-delimited JSON following JSON-RPC 2.0 specification:
+
+**stdin (Satellite → Process):**
+- Write JSON-RPC messages followed by `\n`
+- Requests include `id` field for response matching
+- Notifications omit `id` field (no response expected)
+
+**stdout (Process → Satellite):**
+- Buffer-based parsing accumulates chunks
+- Split on newlines to extract complete messages
+- Incomplete lines remain in buffer for next chunk
+- Parse complete lines as JSON
+
+**Message Types:**
+- **Requests** (with `id`): Expect response, tracked in active requests map
+- **Notifications** (no `id`): Fire-and-forget, no response tracking
+- **Responses**: Match `id` to active request, resolve or reject promise
+
+### Request/Response Handling
+
+**Active Request Tracking:**
+- Map of request ID → \{resolve, reject, timeout, startTime\}
+- Configurable timeout per request (default 30s)
+- Automatic cleanup on response or timeout
+
+**Request Flow:**
+1. Validate process status (must be 'starting' or 'running')
+2. Register timeout handler
+3. Write JSON-RPC message to stdin
+4. Wait for response via stdout parsing
+5. Resolve/reject promise based on response
+
+**Error Handling:**
+- Write errors: Immediate rejection
+- Timeout errors: Clean up active request, reject with timeout message
+- JSON-RPC errors: Extract `error.message` from response
+
+## Process Lifecycle
+
+### Lifecycle States
+
+**starting:**
+- Process spawned with handlers attached
+- MCP handshake in progress
+- Accepts handshake messages only
+
+**running:**
+- Handshake completed successfully
+- Ready for JSON-RPC requests
+- Tools discovered and cached
+
+**terminating:**
+- Graceful shutdown initiated
+- Active requests cancelled
+- Awaiting process exit
+
+**terminated:**
+- Process exited
+- Removed from tracking maps
+
+**failed:**
+- Spawn or handshake failure
+- Not operational
+
+### Graceful Termination
+
+Termination follows a two-phase approach:
+
+1. **SIGTERM Phase**: Send graceful shutdown signal
+2. **SIGKILL Phase**: Force kill if timeout exceeded (default 10s)
+
+**Cleanup Operations:**
+- Cancel all active requests with rejection
+- Clear active requests map
+- Remove from tracking maps (by ID, by name, by team)
+- Emit 'processTerminated' event
+
+## Auto-Restart System
+
+### Crash Detection
+
+The system detects crashes based on exit conditions:
+- Non-zero exit code
+- Process not in 'terminating' state
+- Unexpected signal termination
+
+### Restart Policy
+
+**Limits:**
+- Maximum 3 restart attempts in 5-minute window
+- After limit exceeded: Process marked 'permanently_failed' in RuntimeState
+
+**Backoff Delays:**
+- Process ran >60 seconds before crash: Immediate restart
+- Quick crashes: Exponential backoff (1s → 5s → 15s)
+
+**Restart Flow:**
+1. Detect crash with exit code and signal
+2. Check restart eligibility (3 attempts in 5 minutes)
+3. Apply backoff delay based on uptime
+4. Attempt restart via `spawnProcess()`
+5. Emit 'processRestarted' or 'restartLimitExceeded' event
+
+<Warning>
+**Permanently Failed State**: After 3 failed restart attempts, processes enter a permanently_failed state and are tracked separately for reporting. They will not be restarted automatically and require manual intervention.
+</Warning>
+
+## RuntimeState Integration
+
+RuntimeState maintains in-memory tracking of all MCP server processes:
+
+**Tracking Methods:**
+- By process ID (UUID)
+- By installation name (for lookups)
+- By team ID (for team-grouped operations)
+
+**RuntimeProcessInfo Fields:**
+- Extends ProcessInfo with: `installationId`, `installationName`, `teamId`
+- Health status: unknown/healthy/unhealthy
+- Last health check timestamp
+
+**Special Tracking:**
+- **Permanently Failed Map**: Separate storage for processes exceeding restart limits
+- **Team-Grouped Sets**: Map of team_id → Set of process IDs for heartbeat reporting
+
+**State Queries:**
+- Get all processes (includes permanently failed for reporting)
+- Get team processes (filter by team_id)
+- Get running team processes (status='running')
+- Get process count by status
+
+## Process Monitoring
+
+### Metrics Tracked
+
+Each process tracks operational metrics:
+- **Message count**: Total requests sent to process
+- **Error count**: Communication failures
+- **Last activity**: Timestamp of last message sent/received
+- **Uptime**: Calculated from start time
+- **Active requests**: Count of pending requests
+
+### Events Emitted
+
+The ProcessManager emits events for monitoring and integration:
+- `processSpawned`: New process started successfully
+- `processRestarted`: Process restarted after crash
+- `processTerminated`: Process shut down
+- `processExit`: Process exited (any reason)
+- `processError`: Spawn or runtime error
+- `serverNotification`: Notification received from MCP server
+- `restartLimitExceeded`: Max restart attempts reached
+- `restartFailed`: Restart attempt failed
+
+### Logging
+
+**stderr Handling:**
+- Logged at debug level (informational output, not errors)
+- MCP servers often write logs to stderr
+
+**stdout Parse Errors:**
+- Malformed JSON lines logged and skipped
+- Does not crash the process or satellite
+
+**Structured Logging:**
+- All operations include: `installation_name`, `installation_id`, `team_id`
+- Request tracking includes: `request_id`, `method`, `duration_ms`
+- Error context includes: error messages, exit codes, signals
+
+## Event Emission
+
+The ProcessManager emits real-time events to the Backend for operational visibility and audit trails. These events are batched every 3 seconds and sent via the Event System.
+
+### Lifecycle Events
+
+**mcp.server.started**
+- Emitted after successful spawn and handshake completion
+- Includes: server_id, process_id, spawn_duration_ms, tool_count
+- Provides immediate visibility into new MCP server availability
+
+**mcp.server.crashed**
+- Emitted on unexpected process exit with non-zero code
+- Includes: exit_code, signal, uptime_seconds, crash_count, will_restart
+- Enables real-time alerting for process failures
+
+**mcp.server.restarted**
+- Emitted after successful automatic restart
+- Includes: old_process_id, new_process_id, restart_reason, attempt_number
+- Tracks restart attempts for reliability monitoring
+
+**mcp.server.permanently_failed**
+- Emitted when restart limit (3 attempts) is exceeded
+- Includes: total_crashes, last_error, failed_at timestamp
+- Critical alert requiring manual intervention
+
+**Event vs Internal Events:**
+- ProcessManager internal events (processSpawned, processTerminated, etc.) are for satellite-internal coordination
+- Event System events (mcp.server.started, etc.) are sent to Backend for external visibility
+- Both work together: Internal events trigger state changes, Event System events provide audit trail
+
+For complete event system documentation and all event types, see [Event System](/development/satellite/event-system).
+
+## Team Isolation
+
+### Installation Name Format
+
+Installation names follow strict format for team isolation:
+```
+{server_slug}-{team_slug}-{installation_id}
+```
+
+**Examples:**
+- `filesystem-john-R36no6FGoMFEZO9nWJJLT`
+- `context7-alice-S47mp8GHpNGFZP0oWKKMU`
+
+### Team Access Validation
+
+TeamIsolationService provides:
+- `extractTeamInfo()`: Parse installation name into components
+- `validateTeamAccess()`: Ensure request team matches process team
+- `isValidInstallationName()`: Validate name format
+
+**Team-Specific Features:**
+- RuntimeState groups processes by team_id
+- nsjail uses team-specific hostname: `mcp-{team_id}`
+- Heartbeat reports processes grouped by team
+
+## Performance Characteristics
+
+**Timing:**
+- Spawn time: 1-3 seconds (includes handshake and tool discovery)
+- Message latency: ~10-50ms for stdio communication
+- Handshake timeout: 30 seconds
+
+**Resource Usage:**
+- Memory per process: Base ~10-20MB (application-dependent, limited to 50MB in production)
+- Event-driven architecture: Handles multiple processes concurrently
+- CPU overhead: Minimal (background event loop processing)
+
+**Scalability:**
+- No hard limit on process count (bounded by system resources)
+- Team-grouped tracking enables efficient filtering
+- Permanent failure tracking prevents infinite restart loops
+
+## Development & Testing
+
+### Local Development
+
+**Development Mode:**
+- Uses direct spawn (no nsjail required)
+- Works on macOS, Windows, Linux
+- Full environment inheritance simplifies debugging
+
+**Debug Logging:**
+```bash
+# Enable detailed stdio communication logs
+LOG_LEVEL=debug npm run dev
+```
+
+### Testing Processes
+
+**Manual Testing Methods:**
+- `getAllProcesses()`: Inspect all active processes
+- `getServerStatus(installationName)`: Get detailed process status
+- `restartServer(installationName)`: Test restart functionality
+- `terminateProcess(processInfo)`: Test graceful shutdown
+
+**Platform Support:**
+- Development: All platforms (macOS/Windows/Linux)
+- Production: Linux only (nsjail requirement)
+
+## Security Considerations
+
+**Environment Injection:**
+- Credentials passed securely via environment variables
+- No credentials stored in process arguments or logs
+
+**Resource Limits (Production):**
+- nsjail enforces hard limits: 50MB RAM, 60s CPU, one process
+- Prevents resource exhaustion attacks
+
+**Namespace Isolation (Production):**
+- Complete process isolation per team
+- Separate PID, mount, UTS, IPC namespaces
+
+**Filesystem Jailing (Production):**
+- System directories mounted read-only
+- Only `/tmp` writable
+- Prevents filesystem tampering
+
+**Network Access:**
+- Enabled by default (MCP servers need external connectivity)
+- Can be disabled for higher security requirements
+
+## Related Documentation
+
+- [Satellite Architecture Design](/development/satellite/architecture) - Overall system architecture
+- [Tool Discovery Implementation](/development/satellite/tool-discovery) - How tools are discovered from processes
+- [Team Isolation Implementation](/development/satellite/team-isolation) - Team-based access control
+- [Backend Communication](/development/satellite/backend-communication) - Integration with Backend commands

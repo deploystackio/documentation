@@ -1,0 +1,159 @@
+---
+title: GitHub Application Integration
+description: Understanding how DeployStack's GitHub integration works for MCP server creation and repository information extraction.
+---
+
+# GitHub Application Integration
+
+DeployStack provides seamless GitHub integration that automatically extracts repository information when creating MCP servers. This integration works in two modes to accommodate both local development and production environments.
+
+## How GitHub Integration Works
+
+### MCP Server Creation Process
+
+When you create an MCP server in DeployStack and provide a GitHub repository URL, the system automatically:
+
+1. **Fetches Repository Metadata**: Extracts the repository name, description, primary programming language, license information, and topics
+2. **Analyzes Technical Details**: Determines the appropriate runtime environment (Node.js for TypeScript/JavaScript, Python for Python projects, etc.)
+3. **Reads Package Information**: Scans package.json, pyproject.toml, or other package files to understand dependencies and installation requirements
+4. **Generates Installation Methods**: Creates appropriate installation commands based on the detected package manager and project type
+5. **Auto-populates Form Fields**: Pre-fills the MCP server creation form with all discovered information
+
+This automation saves significant time and ensures consistency when adding MCP servers from GitHub repositories.
+
+### Smart Runtime Detection
+
+DeployStack intelligently maps programming languages to their corresponding runtime environments:
+
+- **TypeScript/JavaScript** → Node.js runtime
+- **Python** → Python runtime  
+- **Go** → Go runtime
+- **Rust** → Rust runtime
+- **Java** → Java runtime
+- **C#** → .NET runtime
+
+The system also detects minimum runtime versions from package files when available.
+
+## Two Authentication Modes
+
+DeployStack supports two GitHub integration modes to accommodate different use cases:
+
+### Local/Development Mode (No GitHub App Required)
+
+**When to use**: Perfect for local development, personal projects, and working with public repositories.
+
+**How it works**:
+- Uses GitHub's public API without authentication
+- Works immediately without any setup
+- Accesses public repositories only
+- Subject to GitHub's unauthenticated rate limits (60 requests per hour per IP address)
+
+**Benefits**:
+- Zero configuration required
+- Works out of the box
+- Ideal for open-source MCP servers
+- Perfect for local development and testing
+
+**Limitations**:
+- Public repositories only
+- Lower rate limits
+- Cannot access private repositories
+- May hit rate limits with heavy usage
+
+### Production/Enterprise Mode (GitHub App Required)
+
+**When to use**: Production environments, private repositories, high-volume usage, or enterprise deployments.
+
+**How it works**:
+- Uses GitHub App authentication with higher privileges
+- Requires GitHub App creation and configuration
+- Can access both public and private repositories
+- Higher rate limits (5,000 requests per hour)
+
+**Benefits**:
+- Access to private repositories
+- Higher rate limits for production use
+- Better for team environments
+- More reliable for continuous integration
+
+**Requirements**:
+- GitHub App must be created
+- App credentials must be configured in DeployStack
+- App must be installed on target repositories
+
+## Automatic Mode Selection
+
+DeployStack automatically chooses the appropriate authentication mode based on your configuration:
+
+- **GitHub App Disabled** (default): Uses public API mode for immediate functionality
+- **GitHub App Enabled**: Uses authenticated mode for enhanced capabilities
+
+You can switch between modes at any time through the Global Settings without affecting existing MCP servers.
+
+## Setting Up GitHub App (Optional)
+
+If you need access to private repositories or higher rate limits, you can optionally configure a GitHub App:
+
+### Step 1: Create GitHub App
+
+1. **Navigate to GitHub**: Go to GitHub.com → Settings → Developer settings → GitHub Apps
+2. **Create New App**: Click "New GitHub App"
+3. **Configure Basic Information**:
+   - **App Name**: `DeployStack - [Your Organization]`
+   - **Homepage URL**: Your DeployStack instance URL
+   - **Webhook URL**: Not required for this integration
+   - **Repository permissions**: 
+     - Contents: Read (to access repository files)
+     - Metadata: Read (to access repository information)
+     - Pull requests: Read (optional, for future features)
+
+### Step 2: Generate Credentials
+
+1. **Note the App ID**: Copy the numeric App ID from the app settings
+2. **Generate Private Key**: Click "Generate a private key" and download the .pem file
+3. **Install the App**: Install the app on your organization or specific repositories
+
+### Step 3: Configure DeployStack
+
+1. **Access Global Settings**: Navigate to Admin → Global Settings → GitHub App Configuration
+2. **Enter Credentials**:
+   - **App ID**: The numeric ID from step 2
+   - **Private Key**: Upload or paste the contents of the .pem file (will be automatically base64 encoded)
+   - **Installation ID**: Found in the app installation URL
+3. **Enable Integration**: Toggle "Enable GitHub App integration"
+4. **Test Connection**: Use the built-in connection test to verify setup
+
+### Step 4: Verify Setup
+
+1. **Test with Private Repository**: Try creating an MCP server from a private repository
+2. **Check Rate Limits**: Monitor usage in the GitHub App settings
+3. **Verify Permissions**: Ensure the app has access to required repositories
+
+## Repository Information Extracted
+
+When processing a GitHub repository, DeployStack extracts:
+
+### Basic Information
+- Repository name and description
+- Primary programming language
+- License type (MIT, Apache, GPL, etc.)
+- Homepage URL
+- Repository topics/tags
+
+### Technical Details
+- Runtime environment and version requirements
+- Package dependencies and their versions
+- Installation and build scripts
+- Project structure and entry points
+
+### Metadata
+- Repository statistics (stars, forks)
+- Latest release information
+- Default branch name
+- Repository owner and organization
+
+### Installation Methods
+- Package manager commands (npm, pip, cargo, etc.)
+- Git clone instructions
+- Build and setup procedures
+- Environment variable requirements

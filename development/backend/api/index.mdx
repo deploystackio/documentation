@@ -1,0 +1,1029 @@
+---
+title: API Documentation Generation
+description: Complete guide to generating OpenAPI specifications, Swagger documentation, and API testing tools for DeployStack Backend development.
+sidebarTitle: Overview
+---
+
+# API Documentation Generation
+
+This document explains how to generate and use the OpenAPI specification for the DeployStack Backend API.
+
+## Overview
+
+The DeployStack Backend uses Fastify with Swagger plugins to automatically generate OpenAPI 3.0 specifications. Route schemas are defined using **reusable JSON Schema constants** for type safety and documentation. This provides:
+
+- **Interactive Documentation**: Swagger UI interface for testing APIs
+- **Postman Integration**: JSON/YAML specs that can be imported into Postman
+- **Automated Generation**: Specifications are generated from actual route code
+- **Type Safety**: TypeScript interfaces provide compile-time checking
+
+## Security First
+
+**IMPORTANT**: Before developing any protected API endpoints, read the [API Security Best Practices](/development/backend/api/security) documentation. It covers critical security patterns including:
+
+- **Authorization Before Validation**: Why `preValidation` must be used instead of `preHandler` for authorization
+- **Proper Error Responses**: Ensuring unauthorized users get 403 Forbidden, not validation errors
+- **Security Testing**: How to test authorization properly
+- **Common Pitfalls**: Security anti-patterns to avoid
+
+**Key Rule**: Always use `preValidation` for authorization checks to prevent information disclosure to unauthorized users.
+
+## Authentication Methods
+
+The DeployStack Backend supports **multiple authentication methods** for different use cases, allowing web users, CLI users, and satellites to access appropriate endpoints.
+
+### Standard Authentication Methods
+
+1. **Cookie Authentication** (Web Users)
+   - Session-based authentication using HTTP cookies
+   - Automatic for web browser requests
+   - Uses `session` cookie set during login
+
+2. **OAuth2 Bearer Token Authentication** (CLI Users)
+   - RFC 6749 compliant OAuth2 implementation with PKCE
+   - Uses `Authorization: Bearer <token>` header
+   - Scope-based access control
+
+3. **Registration Token Authentication** (Satellite Registration)
+   - Specialized JWT-based tokens for secure satellite pairing
+   - Uses `Authorization: Bearer deploystack_satellite_*` header pattern
+   - Single-use tokens with scope validation (global vs team)
+   - Exclusively for `/api/satellites/register` endpoint
+
+### Multi-Authentication Middleware
+
+Use these middleware functions to enable dual authentication on endpoints:
+
+```typescript
+import { requireAuthenticationAny, requireOAuthScope } from '../../middleware/oauthMiddleware';
+
+export default async function yourRoute(server: FastifyInstance) {
+  server.get('/your-endpoint', {
+    preValidation: [
+      requireAuthenticationAny(),     // Accept either auth method
+      requireOAuthScope('your:scope') // Enforce OAuth2 scope
+    ],
+    schema: {
+      security: [
+        { cookieAuth: [] },    // Cookie authentication
+        { bearerAuth: [] }     // OAuth2 Bearer token
+      ]
+    }
+  }, async (request, reply) => {
+    // Endpoint accessible via both authentication methods
+    const authType = request.tokenPayload ? 'oauth2' : 'cookie';
+    const userId = request.user!.id;
+  });
+}
+```
+
+### OAuth2 Scopes
+
+Available OAuth2 scopes for fine-grained access control:
+
+- `mcp:read` - Read MCP server installations and configurations
+- `account:read` - Read account information
+- `user:read` - Read user profile information  
+- `teams:read` - Read team memberships and information
+- `offline_access` - Maintain access when not actively using the application
+
+### OAuth2 Flow Endpoints
+
+- `GET /api/oauth2/auth` - Authorization endpoint (PKCE required)
+- `GET /api/oauth2/consent` - User consent page
+- `POST /api/oauth2/consent` - Process consent decision
+- `POST /api/oauth2/token` - Token exchange endpoint
+
+### Client Configuration
+
+- **Client ID**: `deploystack-gateway-cli`
+- **Redirect URIs**: `http://localhost:8976/oauth/callback`, `http://127.0.0.1:8976/oauth/callback`
+- **PKCE**: Required (SHA256 method)
+- **Token Lifetime**: 1 hour access tokens, 30 day refresh tokens
+
+### Usage Examples
+
+**Web Users (Cookie Authentication)**:
+```bash
+curl -b cookies.txt "http://localhost:3000/api/teams/me/default"
+```
+
+**CLI Users (OAuth2 Bearer Token)**:
+```bash
+curl -H "Authorization: Bearer <access_token>" \
+     "http://localhost:3000/api/teams/me/default"
+```
+
+## Available Commands
+
+### 1. Generate Complete API Specification
+
+```bash
+npm run api:spec
+```
+
+This command:
+
+- Starts a temporary server
+- Generates both JSON and YAML specifications
+- Saves files to `api-spec.json` and `api-spec.yaml`
+- Provides URLs for interactive documentation
+- Automatically shuts down the server
+
+**Output:**
+
+- `api-spec.json` - OpenAPI JSON specification (for Postman import)
+- `api-spec.yaml` - OpenAPI YAML specification
+
+### 2. Generate JSON Specification (requires running server)
+
+```bash
+npm run api:spec:json
+```
+
+Requires the development server to be running (`npm run dev`).
+
+### 3. Generate YAML Specification (requires running server)
+
+```bash
+npm run api:spec:yaml
+```
+
+Requires the development server to be running (`npm run dev`).
+
+## Usage Examples
+
+### Complete Generation (Recommended)
+
+```bash
+cd services/backend
+npm run api:spec
+```
+
+### Manual Generation with Running Server
+
+```bash
+# Terminal 1: Start the server
+cd services/backend
+npm run dev
+
+# Terminal 2: Generate specifications
+npm run api:spec:json
+npm run api:spec:yaml
+```
+
+## Accessing Documentation
+
+When the server is running (`npm run dev`), you can access:
+
+- **Interactive Docs**: http://localhost:3000/documentation
+- **JSON Spec**: http://localhost:3000/documentation/json
+- **YAML Spec**: http://localhost:3000/documentation/yaml
+
+## Importing into Postman
+
+1. Run `npm run api:spec` to generate the specification
+2. Open Postman
+3. Click "Import"
+4. Select the generated `api-spec.json` file
+5. All API endpoints will be imported with proper documentation
+
+## Route File Structure Rules
+
+**IMPORTANT**: Every new API endpoint must be created in a separate file following the established directory structure pattern. Do not add route definitions directly to `src/routes/index.ts`.
+
+### File Structure Requirements
+
+1. **Separate Files**: Each route or group of related routes must be in its own file
+2. **Directory Organization**: Group related routes in directories (e.g., `/auth/`, `/users/`, `/health/`)
+3. **Import Pattern**: Routes are imported and registered in `src/routes/index.ts`
+4. **Consistent Naming**: Use descriptive names that match the route purpose
+5. **Modular Approach**: **Keep route files small and focused** - aim for 1-3 related methods per file maximum
+6. **Maintainability**: Avoid large monolithic route files that become difficult to maintain
+
+### Correct File Structure
+
+```
+services/backend/src/routes/
+├── index.ts              # Main routes registration (imports only)
+├── health/
+│   └── index.ts          # Health check endpoints
+├── auth/
+│   ├── loginEmail.ts     # Email login endpoint
+│   ├── registerEmail.ts  # Email registration endpoint
+│   └── logout.ts         # Logout endpoint
+├── db/
+│   ├── status.ts         # Database status endpoint
+│   └── setup.ts          # Database setup endpoint
+├── users/
+│   └── index.ts          # User management endpoints
+└── teams/
+    └── index.ts          # Team management endpoints
+```
+
+### Modular Route Organization (Recommended)
+
+For complex feature areas, break down routes into smaller, focused files:
+
+```
+services/backend/src/routes/mcp/
+├── index.ts              # Route registration only
+├── categories/
+│   ├── create.ts        # POST /api/mcp/categories (1 method)
+│   ├── update.ts        # PUT /api/mcp/categories/{id} (1 method)
+│   └── delete.ts        # DELETE /api/mcp/categories/{id} (1 method)
+├── servers/
+│   ├── list.ts          # GET /api/mcp/servers (1 method)
+│   ├── get.ts           # GET /api/mcp/servers/{id} (1 method)
+│   ├── search.ts        # GET /api/mcp/servers/search (1 method)
+│   ├── create-global.ts # POST /api/mcp/servers/global (1 method)
+│   ├── update-global.ts # PUT /api/mcp/servers/global/{id} (1 method)
+│   └── delete-global.ts # DELETE /api/mcp/servers/global/{id} (1 method)
+└── versions/
+    ├── list.ts          # GET /api/mcp/servers/{id}/versions (1 method)
+    ├── create.ts        # POST /api/mcp/servers/{id}/versions (1 method)
+    └── update.ts        # PUT /api/mcp/servers/{id}/versions/{versionId} (1 method)
+```
+
+**Benefits of Modular Approach:**
+- **Easier Maintenance**: Small files are easier to understand and modify
+- **Better Testing**: Individual route files can be tested in isolation
+- **Team Collaboration**: Multiple developers can work on different routes without conflicts
+- **Clear Responsibility**: Each file has a single, clear purpose
+- **Reduced Complexity**: Avoid hundreds of lines in single files
+
+### Shared Schemas for CRUD Modules (Mandatory)
+
+**MANDATORY PATTERN**: For route directories that implement complete CRUD operations on a single entity (Create, Read, Update, Delete), you **must** create a shared `schemas.ts` file to eliminate duplication and ensure consistency.
+
+#### When to Create Shared Schemas
+
+Create a `schemas.ts` file when your route directory contains:
+- **Multiple endpoints** operating on the same core entity
+- **Duplicate schema definitions** across route files
+- **Common response structures** (error responses, entity objects)
+- **Shared parameter validation** (ID parameters, common fields)
+
+#### What to Include in Shared Schemas
+
+**Always Share:**
+- **Error response schemas** that appear in multiple files
+- **Core entity object schemas** used in responses
+- **Common parameter schemas** (ID validation, shared fields)
+- **Shared TypeScript interfaces** for consistent typing
+
+**Keep Endpoint-Specific:**
+- **Request body schemas** with different requirements (create vs. update)
+- **Endpoint-specific success response wrappers**
+- **Unique validation rules** specific to individual operations
+
+#### Implementation Requirements
+
+1. **File Naming**: Use `schemas.ts` in the route directory
+2. **Export Pattern**: Export const schemas and TypeScript interfaces
+3. **Import Pattern**: Import shared components into individual route files
+4. **Documentation**: Include clear comments explaining shared vs. specific schemas
+
+#### Benefits of Shared Schemas
+
+- **Single Source of Truth**: Entity structure defined once
+- **Elimination of Duplication**: Removes copy-pasted schema definitions
+- **Improved Maintainability**: Changes happen in one place
+- **Enhanced Consistency**: All endpoints use identical shared structures
+- **Better Type Safety**: Shared interfaces prevent type drift
+
+#### Module Examples Requiring Shared Schemas
+
+- `/mcp/categories/` - Complete category management CRUD
+- `/mcp/servers/` - Server management operations
+- `/teams/` - Team management functionality
+- Any directory with 3+ routes operating on the same entity
+
+### Route File Template
+
+Each route file should follow this **recommended pattern**:
+
+```typescript
+import { type FastifyInstance } from 'fastify'
+
+// Reusable Schema Constants
+const REQUEST_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { 
+      type: 'string', 
+      minLength: 1,
+      description: 'Name is required'
+    },
+    email: { 
+      type: 'string', 
+      format: 'email',
+      description: 'Valid email required'
+    }
+  },
+  required: ['name', 'email'],
+  additionalProperties: false
+} as const;
+
+const SUCCESS_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    message: { type: 'string' }
+  },
+  required: ['success', 'message']
+} as const;
+
+const ERROR_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', default: false },
+    error: { type: 'string' }
+  },
+  required: ['success', 'error']
+} as const;
+
+// TypeScript interfaces for type safety
+interface RequestBody {
+  name: string;
+  email: string;
+}
+
+interface SuccessResponse {
+  success: boolean;
+  message: string;
+}
+
+interface ErrorResponse {
+  success: boolean;
+  error: string;
+}
+
+export default async function yourRoute(server: FastifyInstance) {
+  server.post('/your-endpoint', {
+    preValidation: requirePermission('your.permission'), // Authorization FIRST
+    schema: {
+      tags: ['Your Category'],
+      summary: 'Brief description',
+      description: 'Detailed description. Requires Content-Type: application/json header when sending request body.',
+      security: [{ cookieAuth: [] }],
+      
+      // Fastify validation schema
+      body: REQUEST_SCHEMA,
+      
+      // OpenAPI documentation (same schema, reused)
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: REQUEST_SCHEMA
+          }
+        }
+      },
+      
+      response: {
+        200: {
+          ...SUCCESS_RESPONSE_SCHEMA,
+          description: 'Success'
+        },
+        400: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Bad Request'
+        },
+        401: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Unauthorized'
+        },
+        403: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Forbidden'
+        }
+      }
+    }
+  }, async (request, reply) => {
+    // TypeScript type assertion (Fastify has already validated)
+    const { name, email } = request.body as RequestBody;
+    
+    // Your route logic
+    const successResponse: SuccessResponse = {
+      success: true,
+      message: `User ${name} processed successfully`
+    };
+    const jsonString = JSON.stringify(successResponse);
+    return reply.status(200).type('application/json').send(jsonString);
+  });
+}
+```
+
+**Key Requirements:**
+-  **Parameter name**: `server: FastifyInstance` (not `fastify`)
+-  **Method calls**: `server.post()` (not `fastify.post()`)
+-  **preValidation first**: Authorization before schema
+-  **Reusable schemas**: Define schema constants at the top
+-  **Single source**: Same schema for both `body` and `requestBody`
+-  **TypeScript interfaces**: Provide type safety
+-  **Manual JSON serialization**: Use `JSON.stringify()` for responses
+
+### Registration in index.ts
+
+Import and register your route in `src/routes/index.ts`:
+
+```typescript
+// Import your route
+import yourRoute from './your-directory'
+
+export const registerRoutes = (server: FastifyInstance): void => {
+  server.register(async (apiInstance) => {
+    // Register your route
+    await apiInstance.register(yourRoute);
+    
+    // Other route registrations...
+  }, { prefix: '/api' });
+}
+```
+
+### ❌ What NOT to Do
+
+```typescript
+// DON'T: Add routes directly to index.ts
+export const registerRoutes = (server: FastifyInstance): void => {
+  server.register(async (apiInstance) => {
+    // ❌ BAD: Inline route definition
+    apiInstance.get('/my-endpoint', {
+      schema: { /* ... */ }
+    }, async () => {
+      return { message: 'This should be in a separate file!' }
+    });
+  }, { prefix: '/api' });
+}
+```
+
+###  What TO Do
+
+```typescript
+//  GOOD: Import and register separate route files
+import myEndpointRoute from './my-endpoint'
+
+export const registerRoutes = (server: FastifyInstance): void => {
+  server.register(async (apiInstance) => {
+    //  GOOD: Register imported route
+    await apiInstance.register(myEndpointRoute);
+  }, { prefix: '/api' });
+}
+```
+
+### Benefits of This Structure
+
+1. **Maintainability**: Each endpoint is self-contained and easy to find
+2. **Scalability**: Adding new endpoints doesn't clutter the main routes file
+3. **Testing**: Individual route files can be tested in isolation
+4. **Code Organization**: Related functionality is grouped together
+5. **Team Collaboration**: Multiple developers can work on different routes without conflicts
+
+## Content-Type Header Requirements
+
+### When to Include Content-Type Headers
+
+**IMPORTANT**: The `Content-Type: application/json` header is required for specific HTTP methods when sending request body data.
+
+####  ALWAYS Include Content-Type for:
+- **POST** requests with request body data
+- **PUT** requests with request body data  
+- **PATCH** requests with request body data
+
+#### ❌ NEVER Include Content-Type for:
+- **GET** requests (no request body)
+- **DELETE** requests (typically no request body)
+- **HEAD** requests (no request body)
+
+#### Correct Client Implementation Pattern
+
+```javascript
+function makeRequest(method, path, data = null, cookies = null) {
+  const options = {
+    method,
+    headers: { 'Accept': 'application/json' }
+  };
+
+  // Set Content-Type for methods that send request body data
+  if (['POST', 'PUT', 'PATCH'].includes(method.toUpperCase()) && data !== null) {
+    options.headers['Content-Type'] = 'application/json';
+  }
+
+  // Rest of implementation...
+}
+```
+
+#### ❌ Problematic Pattern (Avoid This)
+
+```javascript
+// UNCLEAR: This doesn't indicate WHICH methods need Content-Type
+if (data) {
+  options.headers['Content-Type'] = 'application/json';
+}
+```
+
+### API Specification Content-Type Documentation
+
+When defining route schemas, explicitly document Content-Type requirements for POST/PUT/PATCH endpoints:
+
+```typescript
+// For endpoints that require Content-Type
+const routeSchema = {
+  tags: ['Category'],
+  summary: 'Create new item',
+  description: 'Creates a new item. Requires Content-Type: application/json header when sending request body.',
+  requestBody: {
+    required: true,
+    content: {
+      'application/json': {
+        schema: REQUEST_SCHEMA
+      }
+    }
+  },
+  // ... rest of schema
+};
+```
+
+## Naming Convention
+
+**CRITICAL**: The DeployStack Backend uses **snake_case** for all API request and response field names.
+
+### Examples:
+- Query parameters: `category_id`, `sort_by`, `user_agent`
+- Response fields: `has_more`, `total_requests`, `created_at`
+- Request body fields: `team_id`, `server_id`, `process_id`
+
+### Why snake_case?
+- **Consistency**: Matches database column naming conventions
+- **REST API Standards**: snake_case is common in RESTful APIs
+- **Satellite Integration**: Ensures compatibility with satellite event system
+
+### Examples from Existing Routes:
+```typescript
+// Query parameters (snake_case)
+interface QueryParams {
+  category_id?: string;
+  sort_by?: 'name' | 'github_stars';
+  user_agent?: string;
+}
+
+// Response fields (snake_case)
+interface Response {
+  has_more: boolean;
+  total_requests: number;
+  created_at: string;
+}
+```
+
+**Note**: TypeScript interfaces and JavaScript variables can use camelCase internally, but all external API fields MUST use snake_case.
+
+## Adding Documentation to Routes
+
+The DeployStack Backend uses **reusable JSON Schema constants** for both validation and documentation generation. This approach provides a single source of truth for API schemas.
+
+### Recommended Approach: Reusable Schema Constants
+
+```typescript
+import { type FastifyInstance } from 'fastify';
+
+// 1. Define reusable JSON Schema constants
+const REQUEST_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { 
+      type: 'string', 
+      minLength: 3,
+      description: 'The name of the item (min 3 chars)'
+    },
+    count: { 
+      type: 'number', 
+      minimum: 1,
+      description: 'How many items (must be positive)'
+    },
+    type: { 
+      type: 'string', 
+      enum: ['mysql', 'sqlite'],
+      description: 'Database engine type'
+    }
+  },
+  required: ['name', 'count', 'type'],
+  additionalProperties: false
+} as const;
+
+const SUCCESS_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { 
+      type: 'boolean',
+      description: 'Indicates if the operation was successful'
+    },
+    itemId: { 
+      type: 'string',
+      description: 'The UUID of the created/affected item'
+    },
+    message: { 
+      type: 'string',
+      description: 'Optional success message'
+    }
+  },
+  required: ['success', 'itemId']
+} as const;
+
+const ERROR_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { 
+      type: 'boolean', 
+      default: false,
+      description: 'Indicates failure'
+    },
+    error: { 
+      type: 'string',
+      description: 'Error message detailing what went wrong'
+    }
+  },
+  required: ['success', 'error']
+} as const;
+
+// 2. Define TypeScript interfaces for type safety
+interface RequestBody {
+  name: string;
+  count: number;
+  type: 'mysql' | 'sqlite';
+}
+
+interface SuccessResponse {
+  success: boolean;
+  itemId: string;
+  message?: string;
+}
+
+interface ErrorResponse {
+  success: boolean;
+  error: string;
+}
+
+// 3. Use schemas in route definition
+export default async function yourRoute(server: FastifyInstance) {
+  server.post('/your-route', {
+    preValidation: requirePermission('your.permission'),
+    schema: {
+      tags: ['Category'], // Your API category
+      summary: 'Brief description of your endpoint',
+      description: 'Detailed description of what this endpoint does, its parameters, and expected outcomes. Requires Content-Type: application/json header when sending request body.',
+      security: [{ cookieAuth: [] }], // Include if authentication is required
+      
+      // Single schema for both validation AND documentation
+      body: REQUEST_SCHEMA,
+      
+      // OpenAPI documentation (same schema, reused)
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: REQUEST_SCHEMA
+          }
+        }
+      },
+      
+      response: {
+        200: {
+          ...SUCCESS_RESPONSE_SCHEMA,
+          description: 'Successful operation'
+        },
+        400: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Bad Request - Invalid input'
+        },
+        401: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Unauthorized'
+        },
+        403: {
+          ...ERROR_RESPONSE_SCHEMA,
+          description: 'Forbidden'
+        }
+      }
+    }
+  }, async (request, reply) => {
+    // TypeScript type assertion (Fastify has already validated)
+    const { name, count, type } = request.body as RequestBody;
+    
+    // Your route handler logic here
+    const successResponse: SuccessResponse = { 
+      success: true, 
+      itemId: 'some-uuid-v4-here', 
+      message: `Item ${name} processed successfully with ${count} items using ${type}.` 
+    };
+    const jsonString = JSON.stringify(successResponse);
+    return reply.status(200).type('application/json').send(jsonString);
+  });
+}
+```
+
+### Key Benefits of This Approach
+
+1. **Single Source of Truth**: JSON Schema constants define both validation AND documentation
+2. **Automatic Validation**: Fastify automatically validates requests before your handler runs
+3. **No Manual Validation**: Remove all manual validation calls and field checks
+4. **Better Error Messages**: Fastify provides detailed validation errors automatically
+5. **Type Safety**: Handlers receive properly typed, validated data
+6. **Cleaner Code**: No redundant validation logic in handlers
+7. **Schema Reuse**: Same schema serves both validation and documentation
+
+## JSON Response Serialization Pattern
+
+**CRITICAL**: All API responses must use manual JSON serialization to ensure consistent JSON output.
+
+### Required Response Pattern
+
+```typescript
+//  CORRECT: Manual JSON serialization
+const successResponse: SuccessResponse = {
+  success: true,
+  message: 'Operation completed successfully',
+  data: { /* your data */ }
+};
+const jsonString = JSON.stringify(successResponse);
+return reply.status(200).type('application/json').send(jsonString);
+```
+
+### What NOT to Do
+
+```typescript
+// ❌ WRONG: Direct object response (can cause serialization issues)
+return reply.status(200).send({
+  success: true,
+  message: 'This might not serialize correctly'
+});
+
+// ❌ WRONG: Using reply.send() without JSON.stringify()
+const response = { success: true, message: 'Test' };
+return reply.status(200).send(response);
+```
+
+### Error Response Pattern
+
+All error responses must also use manual JSON serialization:
+
+```typescript
+//  CORRECT: Error response with manual serialization
+const errorResponse: ErrorResponse = {
+  success: false,
+  error: 'Detailed error message'
+};
+const jsonString = JSON.stringify(errorResponse);
+return reply.status(400).type('application/json').send(jsonString);
+```
+
+### Authentication Middleware Pattern
+
+Authentication middleware and hooks must also use this pattern:
+
+```typescript
+//  CORRECT: Authentication error with manual serialization
+const errorResponse = {
+  success: false,
+  error: 'Unauthorized: Authentication required.'
+};
+const jsonString = JSON.stringify(errorResponse);
+return reply.status(401).type('application/json').send(jsonString);
+```
+
+### Why This Pattern is Required
+
+The manual JSON serialization pattern ensures:
+-  Consistent, parseable JSON responses
+-  Proper `success`/`error` properties in all responses
+-  Reliable client-server communication
+-  Passing e2e tests
+-  No `"[object Object]"` serialization issues
+
+### Why Both `body` and `requestBody` Properties?
+
+**Important**: You need BOTH properties for complete functionality:
+
+- **`body`**: Enables Fastify's automatic request validation using the JSON schema
+- **`requestBody`**: Ensures proper OpenAPI specification generation with Content-Type documentation
+
+Without `body`, validation won't work. Without `requestBody`, your API specification won't properly document the `application/json` Content-Type requirement.
+
+### What NOT to Do (Anti-patterns)
+
+❌ **Don't do manual validation in handlers:**
+
+```typescript
+// BAD: Manual validation (redundant)
+if (!request.body.name || !request.body.count) {
+  return reply.status(400).send({ error: 'Required fields missing' });
+}
+
+// BAD: Manual field checks (redundant)
+if (request.body.name.length < 3) {
+  return reply.status(400).send({ error: 'Name too short' });
+}
+
+// BAD: Manual enum validation (redundant)
+if (request.body.type !== 'mysql' && request.body.type !== 'sqlite') {
+  return reply.status(400).send({ error: 'Invalid database type' });
+}
+```
+
+ **Do trust Fastify's automatic validation:**
+
+```typescript
+// GOOD: Trust the validation - if handler runs, data is valid
+const { name, count, type } = request.body as RequestBody; // Already validated by Fastify
+```
+
+### Validation Flow
+
+The validation chain works as follows:
+
+#### JSON Schema → Fastify Validation → Handler
+
+1. **JSON Schema**: Define validation rules using JSON Schema
+2. **Fastify Validation**: Fastify automatically validates incoming requests
+3. **Handler**: Receives validated, typed data
+
+If validation fails, Fastify automatically returns a 400 error **before** your handler runs.
+
+### Real-World Examples
+
+See these files for complete examples of proper validation:
+
+- `src/routes/admin/email/test.ts` - **REFERENCE IMPLEMENTATION** showing complete reusable schema constants approach
+- `src/routes/db/setup.ts` - Database setup with enum validation
+- `src/routes/db/status.ts` - Simple GET endpoint with response schemas
+- `src/routes/auth/loginEmail.ts` - Login with required string fields
+- `src/routes/auth/registerEmail.ts` - Registration with complex validation rules
+
+## Example: Logout Route Documentation
+
+The logout route (`/api/auth/logout`) demonstrates proper documentation:
+
+```typescript
+const LOGOUT_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { 
+      type: 'boolean',
+      description: 'Indicates if the logout operation was successful'
+    },
+    message: { 
+      type: 'string',
+      description: 'Human-readable message about the logout result'
+    }
+  },
+  required: ['success', 'message'],
+  examples: [
+    {
+      success: true,
+      message: 'Logged out successfully.'
+    }
+  ]
+} as const;
+
+const logoutSchema = {
+  tags: ['Authentication'],
+  summary: 'User logout',
+  description: 'Invalidates the current user session and clears authentication cookies',
+  security: [{ cookieAuth: [] }],
+  response: {
+    200: LOGOUT_RESPONSE_SCHEMA
+  }
+};
+```
+
+## Configuration
+
+### Fastify Server Configuration
+
+The Fastify server is configured with custom AJV options to ensure compatibility with JSON Schema validation. This configuration is in `src/server.ts`:
+
+```typescript
+const server = fastify({
+  logger: loggerConfig,
+  disableRequestLogging: true,
+  ajv: {
+    customOptions: {
+      strict: false,        // Allows unknown keywords in schemas
+      strictTypes: false,   // Disables strict type checking  
+      strictTuples: false   // Disables strict tuple checking
+    }
+  }
+})
+```
+
+**Why these AJV options are required:**
+
+- **`strict: false`**: AJV v8+ runs in strict mode by default, which rejects schemas containing unknown keywords. This setting allows more flexible schema definitions.
+- **`strictTypes: false`**: Prevents strict type validation errors that can occur with complex schemas.
+- **`strictTuples: false`**: Allows more flexible tuple handling for array schemas.
+
+**Important**: These settings don't affect validation behavior - they only allow the schema compilation to succeed. All validation rules defined in your JSON schemas still work exactly as expected.
+
+### Swagger Configuration
+
+The Swagger documentation configuration is also in `src/server.ts`:
+
+```typescript
+await server.register(fastifySwagger, {
+  openapi: {
+    openapi: '3.0.0',
+    info: {
+      title: 'DeployStack Backend API',
+      description: 'API documentation for DeployStack Backend',
+      version: '0.20.5'
+    },
+    servers: [
+      {
+        url: 'http://localhost:3000',
+        description: 'Development server'
+      }
+    ],
+    components: {
+      securitySchemes: {
+        cookieAuth: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'auth_session'
+        }
+      }
+    }
+  }
+});
+```
+
+## Troubleshooting
+
+### "Route already declared" Error
+
+This happens when trying to manually add routes that Swagger UI already provides. The `/documentation/json` and `/documentation/yaml` endpoints are automatically created.
+
+### "Failed to fetch API spec" Error
+
+Ensure the server is fully started before trying to fetch the specification. The generation script includes a 2-second delay to allow for complete initialization.
+
+### Missing Route Documentation
+
+Routes without schema definitions will appear in the specification but with minimal documentation. Add schema objects to routes for complete documentation.
+
+## Next Steps
+
+To extend API documentation:
+
+1. Add schema definitions to more routes using reusable constants
+2. Define reusable components in the OpenAPI configuration
+3. Add request body schemas for POST/PUT endpoints
+4. Include error response schemas (400, 401, 500, etc.)
+5. Add parameter validation schemas
+
+## Plugin API Routes
+
+### Plugin Route Structure
+
+All plugin routes are automatically namespaced under `/api/plugin/<plugin-name>/` for security and isolation:
+
+- **Core Routes**: `/api/auth/*`, `/api/users/*`, `/api/settings/*` (protected from plugins)
+- **Plugin Routes**: `/api/plugin/<plugin-name>/*` (isolated per plugin)
+
+### Example Plugin Routes
+
+For a plugin with ID `example-plugin`:
+
+```bash
+GET    /api/plugin/example-plugin/examples
+GET    /api/plugin/example-plugin/examples/:id
+POST   /api/plugin/example-plugin/examples
+PUT    /api/plugin/example-plugin/examples/:id
+DELETE /api/plugin/example-plugin/examples/:id
+```
+
+### Security Benefits
+
+1. **Route Isolation**: Plugins cannot interfere with core routes or each other
+2. **Predictable Structure**: All plugin APIs follow the same pattern
+3. **Easy Identification**: Plugin ownership is clear from the URL
+4. **Automatic Namespacing**: No manual prefix management required
+
+### Plugin Route Registration
+
+Plugins register routes using the `PluginRouteManager`:
+
+```typescript
+// In plugin's routes.ts file
+export async function registerRoutes(routeManager: PluginRouteManager, db: AnyDatabase | null) {
+  // This becomes /api/plugin/my-plugin/data
+  routeManager.get('/data', async () => {
+    return { message: 'Hello from plugin!' };
+  });
+}
+```
+
+## Files Generated
+
+- `api-spec.json` - Complete OpenAPI 3.0 specification in JSON format
+- `api-spec.yaml` - Complete OpenAPI 3.0 specification in YAML format
+- Interactive documentation available at `/documentation` when server is running

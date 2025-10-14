@@ -1,0 +1,138 @@
+---
+title: MCP Team Installation and Configuration
+description: Learn how team administrators configure MCP server installations, manage shared team settings, and control user access through lock/unlock controls.
+sidebarTitle: MCP Team Installation
+---
+
+# MCP Team Installation and Configuration
+
+Team administrators install MCP servers from the catalog and configure shared team settings that all team members inherit. You control what users can customize through lock/unlock settings.
+
+## Overview
+
+As a team administrator, you:
+
+- **Install MCP servers** from the catalog into your team workspace
+- **Configure shared settings** like API keys and common parameters
+- **Control user access** through lock/unlock settings
+- **Manage team credentials** securely for all team members
+
+For an overview of the three-tier system, see [MCP Configuration System](/mcp-configuration). For details on how global administrators create the schemas that define your configuration options, see [Admin Schema Workflow](/mcp-admin-schema-workflow).
+
+## Installation Process
+
+**The Installation Flow:**
+
+1. **Browse Catalog** - Find MCP servers in the global catalog (includes both official registry servers synced from registry.modelcontextprotocol.io and manually created servers)
+2. **Select Server** - Choose a server that meets your team's needs
+3. **Configure Team Settings** - Set shared credentials and parameters
+4. **Set Lock Controls** - Decide what users can and cannot modify
+5. **Deploy Installation** - Make the server available to team members
+
+Each installation gets a meaningful name like "DevOps Team Filesystem" or "Customer Support Database" to help team members understand its purpose.
+
+**Server Sources**: When browsing the catalog, you'll see servers from multiple sources - official registry servers (automatically synced and marked with badges) and manually created custom integrations. Both types work identically with DeployStack's three-tier configuration system.
+
+The configuration options available to you are determined by how the global administrator categorized elements during schema creation. You can only configure elements that were designated as "Team Configurable" in the original schema definition.
+
+## Lock/Unlock Controls
+
+The lock/unlock system gives you granular control over what team members can modify, working within the boundaries established by global administrator schema categorization:
+
+**Your Control Scope:**
+- You can only configure elements categorized as "Team Configurable" by the global administrator
+- You can lock/unlock elements for team members (if the schema allows it)
+- You cannot modify "Template" elements (locked forever by global admin)
+- You cannot access "User Configurable" elements (managed by individual users)
+
+**Lock States:**
+- **🔒 Locked** - Users cannot modify this setting (team-controlled)
+- **🔓 Unlocked** - Users can customize this setting (user-controlled)
+
+**When to Lock:**
+- **Security** - API keys and sensitive credentials
+- **Standardization** - Settings that should be consistent across team
+- **Compliance** - Organizational policy requirements
+
+**When to Unlock:**
+- **Personal Workflow** - Individual customization needs
+- **User Preferences** - Personal productivity settings
+
+## Team Configuration Example
+
+**Team Web Search Server:**
+
+```
+Installation Name: "Team Web Search"
+
+Template Configuration (Set by Global Admin, Cannot Change):
+├─ Command: "npx" (🔒 Locked Forever)
+├─ Package: "@brightdata/mcp-server-web-search" (🔒 Locked Forever)
+├─ System Flag: "-y" (🔒 Locked Forever)
+
+Team Configuration (You Control):
+├─ API_KEY: "••••• (encrypted secret)" (🔒 Locked)
+├─ SEARCH_QUOTA: "1000 queries/day" (🔒 Locked)
+├─ CONTENT_FILTERS: "enabled" (🔒 Locked)
+
+User Controls (You Decide Lock/Unlock):
+├─ Default Search Engine: 🔓 Unlocked (users choose preference)
+├─ Results Per Page: 🔓 Unlocked (individual preference)
+├─ Cache Settings: 🔓 Unlocked (performance tuning)
+```
+
+**Result:** Team members automatically inherit template configuration and team API credentials with quota limits, but can customize their search preferences and performance settings within the boundaries you set.
+
+## Credential Management
+
+**Security Features:**
+- All team credentials are encrypted in the database
+- Team administrators can configure and modify credentials
+- Team members can use credentials but may not see actual values
+
+**Credential Visibility:**
+- **Secret Fields** - Users see `*****` and use them automatically (for API keys, tokens)
+- **Visible Fields** - Users can see actual values (for service URLs, non-sensitive settings)
+
+For complete details on how secret fields are encrypted and protected, see [Security and Privacy](/security).
+
+**Updates:**
+- Update credentials without affecting user configurations
+- Changes automatically apply to all team members
+- No downtime during credential updates
+
+## Security and Isolation
+
+**Team Boundaries:**
+- Your team's installations are completely separate from other teams
+- No cross-team access to configurations or credentials
+- Only team administrators can modify team installations
+
+**Configuration Inheritance:**
+- Team settings automatically flow to all team members
+- Users build on top of team configuration
+- Clean separation between shared and personal settings
+
+## What Team Members Experience
+
+Based on your lock/unlock decisions and the schema boundaries set by global administrators, team members:
+
+- Only see configuration elements they can modify
+- Use team credentials automatically without seeing sensitive values
+- Can customize unlocked elements for their workflow
+- Get consistent behavior across all team members
+- Benefit from satellite-managed remote execution
+
+For details on the user experience, see [MCP User Configuration](/mcp-user-configuration).
+
+## Related Documentation
+
+For complete understanding of team installations in context:
+
+- [MCP Configuration System](/mcp-configuration) - Overview of the three-tier system
+- [Admin Schema Workflow](/mcp-admin-schema-workflow) - How global administrators create the schemas that define your configuration options
+- [MCP User Configuration](/mcp-user-configuration) - How users interact with team installations
+- [Teams](/teams) - Team structure and management
+- [MCP Catalog](/mcp-catalog) - Browsing and selecting MCP servers
+
+Team installation is the critical bridge in DeployStack's three-tier configuration system, enabling secure shared resources while supporting individual team member productivity.

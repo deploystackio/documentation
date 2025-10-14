@@ -1,0 +1,238 @@
+---
+title: MCP Configuration System
+description: Understand DeployStack's three-tier configuration architecture that manages MCP server arguments, environment variables, and credentials with granular lock/unlock controls.
+---
+
+# MCP Configuration System
+
+DeployStack uses a three-tier configuration architecture to manage MCP server arguments, environment variables, and credentials. This system enables secure credential management, team collaboration, and individual customization through sophisticated lock/unlock controls.
+
+## Three-Tier Architecture Overview
+
+The system separates configuration into three distinct layers:
+
+1. **Template Level** - Global schemas and locked elements defined by administrators
+2. **Team Level** - Shared team configurations with lock/unlock controls  
+3. **User Level** - Personal configurations within team-defined boundaries
+
+This architecture enables teams to share common settings like API keys while allowing individual members to customize personal settings like local file paths while maintaining team security and standards.
+
+## How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ TIER 1: TEMPLATE (Global Admin)                                                │
+│ ┌─────────────────────────────────────────────────────────────────────────────┐ │
+│ │ 🔒 Locked Elements: ["-y", "@modelcontextprotocol/server-filesystem"]     │ │
+│ │ 📋 Configuration Schemas: Define what teams/users can configure           │ │
+│ │ 🛡️ Lock/Unlock Rules: Set security boundaries                             │ │
+│ └─────────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ TIER 2: TEAM (Team Admin)                                                      │
+│ ┌─────────────────────────────────────────────────────────────────────────────┐ │
+│ │ 🔧 Team Settings: API keys, shared credentials                             │ │
+│ │ 🔒/🔓 Lock Controls: Decide what users can customize                       │ │
+│ │ 👥 Team Isolation: Secure separation between teams                         │ │
+│ └─────────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ TIER 3: USER (Individual)                                                      │
+│ ┌─────────────────────────────────────────────────────────────────────────────┐ │
+│ │ 🔓 Personal Settings: Local paths, preferences                             │ │
+│ │ 🔗 Automatic Inheritance: Use team credentials seamlessly                  │ │
+│ │ 🛡️ Team Security: Access controlled through team OAuth tokens             │ │
+│ └─────────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ RUNTIME: Final Configuration = Template + Team + User                          │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+## Lock/Unlock Control System
+
+The heart of the system is sophisticated lock/unlock controls with precise categorization:
+
+**Secret Type Support:** Configuration values marked as `type: "secret"` in schemas are automatically encrypted for security. For complete details on secret encryption, masking, and security, see [Security and Privacy](/security).
+
+**Global Administrator Controls:**
+- **Sophisticated Categorization** - Categorize every configuration element into Template/Team/User tiers
+- **Granular Lock/Unlock Controls** - Set default lock states and visibility controls for each element
+- **Security Boundaries** - Define what can never be changed vs. what teams/users can configure
+- **Validation Rules** - Set data types, constraints, and security requirements for configurable elements
+- **Precise Schema Definition** - Create detailed schemas that control the exact configuration experience
+
+**Team Administrator Controls:**
+- **Configure Team Settings** - Set shared credentials and parameters within schema boundaries
+- **Control User Access** - Lock/unlock elements for team members based on organizational needs
+- **Manage Team Credentials** - Securely handle team-wide secrets with appropriate visibility controls
+- **Work Within Schema Boundaries** - Configure only elements designated as "Team Configurable" by global admins
+
+**User Access:**
+- **Personal Customization** - Modify only unlocked elements within boundaries set by global admin categorization
+- **Secure Experience** - No access to locked configuration, team secrets, or template elements
+- **Focused Interface** - See only configuration elements designated as personally configurable
+- **Team Integration** - Access through OAuth team authentication
+
+## User Journey Workflows
+
+Each tier has its own focused workflow:
+
+### For Global Administrators
+**[Admin Schema Workflow](/mcp-admin-schema-workflow)** - Learn how to transform raw MCP configurations into secure three-tier schemas with sophisticated lock/unlock controls through the Configuration Schema Step.
+
+Key workflow: Repository → Claude Desktop Config → **Configuration Schema Categorization** → Basic Info → Catalog Entry
+
+### For Team Administrators  
+**[Team Installation](/mcp-team-installation)** - Learn how to install MCP servers from the catalog, configure shared team settings, and control user access.
+
+Key workflow: Browse Catalog → Configure Team Settings → Set Lock Controls → Deploy Installation
+
+### For Individual Users
+**[User Configuration](/mcp-user-configuration)** - Learn how to configure personal MCP settings and customize your workflow.
+
+Key workflow: Access Team Installation → Configure Personal Settings → Save Configuration
+
+## Official Registry Configuration Mapping
+
+When MCP servers are synced from the official MCP Registry, their environment variables are automatically mapped to the appropriate tier based on their properties:
+
+**Mapping Rules:**
+- **Template Level (Locked)**: Fixed environment variables with preset values
+- **Team Level**: Required credentials marked as secrets (`isRequired: true` + `isSecret: true`)
+- **User Level**: Optional configurations and personal preferences (`isRequired: false`)
+
+This intelligent mapping ensures that synced servers work seamlessly with DeployStack's three-tier system, with credentials at the team level and personal customizations at the user level.
+
+## Configuration Assembly Example
+
+Here's how the three tiers combine into a final runtime configuration:
+
+**Template (Global Admin):**
+```json
+{
+  "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+  "env": {"PROTOCOL_VERSION": "1.0"}
+}
+```
+
+**Team (Team Admin):**
+```json
+{
+  "args": [],
+  "env": {"SHARED_API_KEY": "••••• (encrypted secret)"}
+}
+```
+
+**User (Individual):**
+```json
+{
+  "args": ["/Users/alice/Development", "/Users/alice/Projects"],
+  "env": {"DEBUG": "true"}
+}
+```
+
+**Final Runtime Result:**
+```json
+{
+  "command": "npx",
+  "args": [
+    "-y", 
+    "@modelcontextprotocol/server-filesystem",
+    "/Users/alice/Development", 
+    "/Users/alice/Projects"
+  ],
+  "env": {
+    "PROTOCOL_VERSION": "1.0",
+    "SHARED_API_KEY": "decrypted-secret-for-runtime", 
+    "DEBUG": "true"
+  }
+}
+```
+
+*Note: Secret values are automatically decrypted only for runtime execution. In all other contexts (API responses, user interfaces), secrets appear masked as `*****`.*
+
+### Example: Official Registry Server Configuration
+
+Here's how an official registry server (Context7) is mapped to the three-tier system:
+
+**Official Registry Environment Variables:**
+```json
+[
+  {
+    "name": "UPSTASH_REDIS_URL",
+    "isRequired": true,
+    "isSecret": false
+  },
+  {
+    "name": "UPSTASH_REDIS_TOKEN",
+    "isRequired": true,
+    "isSecret": true
+  },
+  {
+    "name": "DEBUG",
+    "isRequired": false,
+    "default": "false"
+  }
+]
+```
+
+**After Automatic Mapping:**
+
+*Team Level Schema (team_env_schema):*
+- `UPSTASH_REDIS_URL` (required credential)
+- `UPSTASH_REDIS_TOKEN` (required secret, encrypted)
+
+*User Level Schema (user_env_schema):*
+- `DEBUG` (optional personal preference)
+
+This automatic mapping enables synced servers from the official registry to work immediately with DeployStack's security and collaboration features.
+
+## Key Benefits
+
+**Security:** Sensitive credentials managed at appropriate tiers with encryption and access controls
+
+**Simplicity:** Users see only what they can configure, teams share common settings automatically
+
+**Flexibility:** Support for variable-length configurations and individual customization
+
+**Collaboration:** Teams coordinate through shared settings while maintaining individual customization
+
+**Governance:** Clear boundaries and audit trails for organizational compliance, with precise control over configuration inheritance
+
+## Common Use Cases
+
+**Development Teams:** Share Git tokens and project settings while allowing personal directory configurations
+
+**Data Science Teams:** Share database credentials and data lake access while supporting individual analysis workflows  
+
+**Support Teams:** Share customer service API keys while allowing personal workspace customization
+
+## Official Registry Transport Types
+
+Servers synced from the official MCP Registry can use different transport mechanisms:
+
+**STDIO Transport (via packages):**
+Servers that run as local processes using standard input/output. Arguments are configured in the template level (locked), with runtime arguments at team/user levels.
+
+**HTTP/SSE Transport (via remotes):**
+Servers accessed via HTTP endpoints. Headers are mapped to appropriate tiers - authentication headers at team level, optional headers at user level.
+
+The three-tier system adapts automatically based on the transport type detected from the official registry.
+
+## Related Documentation
+
+For complete system understanding:
+
+- [MCP Catalog](/mcp-catalog) - Browse and discover available MCP servers
+- [Teams](/teams) - Team structure and membership management
+- [MCP Installation](/mcp-installation) - Basic MCP server installation concepts
+- [Security and Privacy](/security) - Platform security and data protection
+
+The three-tier configuration system provides secure, scalable MCP server management that grows from individual developers to enterprise teams while maintaining simplicity and security at every level. Global administrators have sophisticated control over configuration boundaries through schema categorization, ensuring appropriate access and customization at each tier. The OAuth-based team authentication ensures enterprise-grade security and governance.

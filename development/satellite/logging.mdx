@@ -1,0 +1,507 @@
+---
+title: Satellite Logging & Log Level Configuration
+description: Complete guide to configuring and using log levels in the DeployStack Satellite for development and production environments.
+---
+
+
+
+# Satellite Log Level Configuration
+
+The DeployStack Satellite uses **Pino** logger with **Fastify** for high-performance, structured logging. This guide covers everything you need to know about configuring and using log levels effectively in the satellite service.
+
+## Overview
+
+The Satellite logging system is identical to the backend implementation, built on industry best practices:
+
+- **Pino Logger**: Ultra-fast JSON logger for Node.js
+- **Fastify Integration**: Native logging support with request correlation
+- **Environment-based Configuration**: Automatic log level adjustment based on NODE_ENV
+- **Structured Logging**: JSON output for production, pretty-printed for development
+
+## Available Log Levels
+
+Log levels are ordered by severity (lowest to highest):
+
+| Level | Numeric Value | Description | When to Use |
+|-------|---------------|-------------|-------------|
+| `trace` | 10 | Very detailed debugging | MCP server process tracing, detailed communication flows |
+| `debug` | 20 | Debugging information | Development debugging, MCP server lifecycle events |
+| `info` | 30 | General information | Satellite startup, team operations, successful MCP calls |
+| `warn` | 40 | Warning messages | Resource limits approached, MCP server restarts |
+| `error` | 50 | Error conditions | MCP server failures, team isolation violations |
+| `fatal` | 60 | Fatal errors | Satellite crashes, critical system failures |
+
+## Configuration
+
+### Environment Variables
+
+Set the log level using the `LOG_LEVEL` environment variable in your `.env` file:
+
+```bash
+# Development - show debug information
+LOG_LEVEL=debug npm run dev
+
+# Production - show info and above
+LOG_LEVEL=info npm run start
+
+# Troubleshooting - show everything
+LOG_LEVEL=trace npm run dev
+
+# Quiet mode - only errors and fatal
+LOG_LEVEL=error npm run start
+```
+
+### Default Behavior
+
+The logger automatically adjusts based on your environment:
+
+```typescript
+// From src/fastify/config/logger.ts
+export const loggerConfig: FastifyServerOptions['logger'] = {
+  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
+  transport: process.env.NODE_ENV !== 'production'
+    ? {
+        target: 'pino-pretty',
+        options: {
+          colorize: true,
+          translateTime: 'SYS:standard',
+          ignore: 'pid,hostname'
+        }
+      }
+    : undefined
+}
+```
+
+**Default Levels:**
+- **Development**: `debug` (shows debug, info, warn, error, fatal)
+- **Production**: `info` (shows info, warn, error, fatal)
+
+## Log Output Formats
+
+### Development Format (Pretty-printed)
+
+```
+[2025-09-09 13:34:50.836 +0200] INFO: 🚀 DeployStack Satellite running on http://0.0.0.0:3001
+[2025-09-09 13:34:50.836 +0200] DEBUG: 🔄 Starting MCP server process manager...
+[2025-09-09 13:35:13.499 +0200] INFO: Hello world endpoint accessed
+    operation: "hello_world"
+    endpoint: "/health/hello"
+```
+
+### Production Format (JSON)
+
+```json
+{"level":30,"time":"2025-09-09T11:34:50.836Z","pid":1234,"hostname":"satellite-01","msg":"DeployStack Satellite running on http://0.0.0.0:3001"}
+{"level":20,"time":"2025-09-09T11:34:50.836Z","pid":1234,"hostname":"satellite-01","msg":"Starting MCP server process manager..."}
+{"level":30,"time":"2025-09-09T11:35:13.499Z","pid":1234,"hostname":"satellite-01","operation":"hello_world","endpoint":"/health/hello","msg":"Hello world endpoint accessed"}
+```
+
+## Satellite-Specific Logging Patterns
+
+### MCP Server Management
+
+```typescript
+// MCP server lifecycle
+server.log.debug({
+  operation: 'mcp_server_spawn',
+  serverId: 'filesystem-server',
+  teamId: 'team-123',
+  command: 'npx @modelcontextprotocol/server-filesystem'
+}, 'Spawning MCP server process');
+
+server.log.info({
+  operation: 'mcp_server_ready',
+  serverId: 'filesystem-server',
+  teamId: 'team-123',
+  pid: 5678,
+  startupTime: '2.3s'
+}, 'MCP server process ready');
+
+server.log.warn({
+  operation: 'mcp_server_restart',
+  serverId: 'filesystem-server',
+  teamId: 'team-123',
+  reason: 'health_check_failed',
+  restartCount: 2
+}, 'Restarting MCP server process');
+```
+
+### Team Isolation Operations
+
+```typescript
+// Team resource management
+server.log.debug({
+  operation: 'team_isolation_setup',
+  teamId: 'team-123',
+  namespace: 'satellite-team-123',
+  cpuLimit: '0.1',
+  memoryLimit: '100MB'
+}, 'Setting up team resource isolation');
+
+server.log.warn({
+  operation: 'resource_limit_approached',
+  teamId: 'team-123',
+  resourceType: 'memory',
+  currentUsage: '85MB',
+  limit: '100MB'
+}, 'Team approaching resource limit');
+```
+
+### Backend Communication
+
+```typescript
+// Backend polling and communication
+server.log.debug({
+  operation: 'backend_poll',
+  backendUrl: 'https://api.deploystack.io',
+  satelliteId: 'satellite-01',
+  responseTime: '150ms'
+}, 'Backend polling completed');
+
+server.log.info({
+  operation: 'configuration_update',
+  satelliteId: 'satellite-01',
+  configVersion: 'v1.2.3',
+  changedKeys: ['teams', 'mcpServers']
+}, 'Configuration updated from backend');
+```
+
+### HTTP Proxy Operations
+
+```typescript
+// MCP client requests
+server.log.debug({
+  operation: 'mcp_request_proxy',
+  clientId: 'vscode-client',
+  teamId: 'team-123',
+  mcpServer: 'filesystem-server',
+  method: 'tools/list',
+  responseTime: '45ms'
+}, 'MCP request proxied successfully');
+
+server.log.error({
+  operation: 'mcp_request_failed',
+  clientId: 'vscode-client',
+  teamId: 'team-123',
+  mcpServer: 'filesystem-server',
+  method: 'tools/call',
+  error: 'Server process not responding',
+  statusCode: 503
+}, 'MCP request failed');
+```
+
+## Logger Parameter Injection Pattern
+
+The Satellite follows the same logger injection pattern as the backend:
+
+### ✅ DO: Pass Logger as Parameter to Services
+
+```typescript
+// ✅ Good - MCP server manager accepts logger
+class McpServerManager {
+  static async spawnServer(config: McpServerConfig, logger: FastifyBaseLogger): Promise<McpServerProcess> {
+    logger.debug({
+      operation: 'mcp_server_spawn',
+      serverId: config.id,
+      teamId: config.teamId,
+      command: config.command
+    }, 'Spawning MCP server process');
+    
+    try {
+      const process = await this.createProcess(config);
+      
+      logger.info({
+        operation: 'mcp_server_spawned',
+        serverId: config.id,
+        teamId: config.teamId,
+        pid: process.pid
+      }, 'MCP server process spawned successfully');
+      
+      return process;
+    } catch (error) {
+      logger.error({
+        operation: 'mcp_server_spawn_failed',
+        serverId: config.id,
+        teamId: config.teamId,
+        error
+      }, 'Failed to spawn MCP server process');
+      throw error;
+    }
+  }
+}
+
+// ✅ Good - Team isolation service accepts logger
+export async function setupTeamIsolation(teamId: string, logger: FastifyBaseLogger): Promise<boolean> {
+  logger.info({
+    operation: 'team_isolation_setup',
+    teamId
+  }, 'Setting up team isolation');
+  
+  try {
+    // ... isolation setup logic
+    logger.info({
+      operation: 'team_isolation_ready',
+      teamId
+    }, 'Team isolation setup completed');
+    return true;
+  } catch (error) {
+    logger.error({
+      operation: 'team_isolation_failed',
+      teamId,
+      error
+    }, 'Failed to setup team isolation');
+    return false;
+  }
+}
+```
+
+### ✅ DO: Use Child Loggers for Persistent Context
+
+```typescript
+// ✅ Good - Create child logger with satellite context
+class SatelliteManager {
+  private logger: FastifyBaseLogger;
+  
+  constructor(baseLogger: FastifyBaseLogger, satelliteId: string) {
+    this.logger = baseLogger.child({ 
+      satelliteId, 
+      component: 'SatelliteManager' 
+    });
+  }
+  
+  async processTeamCommand(teamId: string, command: string) {
+    const teamLogger = this.logger.child({ teamId });
+    
+    teamLogger.debug('Processing team command', { command });
+    teamLogger.info('Team command completed');
+  }
+}
+```
+
+## Satellite-Specific Context Objects
+
+Always include relevant context that helps identify satellite operations:
+
+```typescript
+// ✅ Good - Satellite-specific structured logging
+server.log.info({
+  satelliteId: 'satellite-01',
+  satelliteType: 'global', // or 'team'
+  operation: 'satellite_startup',
+  port: 3001,
+  version: '0.1.0'
+}, 'Satellite service started');
+
+// ✅ Good - Team-aware logging
+server.log.debug({
+  satelliteId: 'satellite-01',
+  teamId: 'team-123',
+  operation: 'mcp_tool_call',
+  toolName: 'read_file',
+  serverId: 'filesystem-server',
+  userId: 'user-456',
+  duration: '120ms'
+}, 'MCP tool call completed');
+
+// ✅ Good - Resource monitoring
+server.log.warn({
+  satelliteId: 'satellite-01',
+  teamId: 'team-123',
+  operation: 'resource_monitoring',
+  cpuUsage: '0.08',
+  memoryUsage: '78MB',
+  processCount: 3,
+  activeConnections: 12
+}, 'Team resource usage update');
+```
+
+**Best Practices for Satellite Context Objects:**
+
+- **Always include `satelliteId`**: Identifies which satellite instance
+- **Include `teamId`** for team-specific operations
+- **Add `operation`**: Consistent field describing the operation
+- **Include `serverId`** for MCP server operations
+- **Add performance metrics**: Duration, resource usage, counts
+- **Use consistent naming**: camelCase and standard field names
+
+## Environment-Specific Configuration
+
+### Development Environment
+
+```bash
+# .env file for development
+NODE_ENV=development
+LOG_LEVEL=debug
+PORT=3001
+```
+
+**Features:**
+- Pretty-printed, colorized output
+- Shows debug and trace information
+- Includes timestamps and context
+- Easier to read during development
+
+### Production Environment
+
+```bash
+# Production environment variables
+NODE_ENV=production
+LOG_LEVEL=info
+PORT=3001
+```
+
+**Features:**
+- Structured JSON output
+- Optimized for log aggregation
+- Excludes debug information
+- Better performance
+
+### Testing Environment
+
+```bash
+# Testing environment
+NODE_ENV=test
+LOG_LEVEL=error
+PORT=3002
+```
+
+**Features:**
+- Minimal log output during tests
+- Only shows errors and fatal messages
+- Reduces test noise
+
+## Common Satellite Logging Patterns
+
+### Satellite Lifecycle
+
+```typescript
+// Satellite startup
+server.log.info({
+  operation: 'satellite_startup',
+  satelliteId: 'satellite-01',
+  port: 3001,
+  version: '0.1.0'
+}, '🚀 DeployStack Satellite starting');
+
+server.log.info({
+  operation: 'satellite_ready',
+  satelliteId: 'satellite-01',
+  endpoints: ['/api/health/hello', '/documentation']
+}, '✅ Satellite service ready');
+```
+
+### MCP Server Operations
+
+```typescript
+// MCP server management
+server.log.debug({
+  operation: 'mcp_servers_discovery',
+  teamId: 'team-123',
+  availableServers: ['filesystem', 'web-search', 'calculator']
+}, 'Discovering available MCP servers');
+
+server.log.info({
+  operation: 'mcp_server_health_check',
+  serverId: 'filesystem-server',
+  teamId: 'team-123',
+  status: 'healthy',
+  responseTime: '25ms'
+}, 'MCP server health check passed');
+```
+
+### Team Management
+
+```typescript
+// Team operations
+server.log.info({
+  operation: 'team_registration',
+  teamId: 'team-123',
+  teamName: 'Engineering Team',
+  memberCount: 5
+}, 'Team registered with satellite');
+
+server.log.warn({
+  operation: 'team_quota_exceeded',
+  teamId: 'team-123',
+  quotaType: 'mcp_requests',
+  currentUsage: 1050,
+  limit: 1000
+}, 'Team exceeded MCP request quota');
+```
+
+## Troubleshooting
+
+### Debug Mode Not Working
+
+If debug logs aren't showing:
+
+1. **Check LOG_LEVEL**: Ensure it's set to `debug` or `trace` in `.env`
+2. **Check NODE_ENV**: Development mode enables debug by default
+3. **Restart Satellite**: Environment changes require restart
+
+```bash
+# Force debug mode
+LOG_LEVEL=debug npm run dev
+```
+
+### Performance Issues
+
+If logging is impacting satellite performance:
+
+1. **Increase Log Level**: Use `info` or `warn` in production
+2. **Remove Excessive Debug Logs**: Clean up verbose debug statements
+3. **Use Async Logging**: Pino handles this automatically
+
+### Log Aggregation
+
+For production satellite monitoring:
+
+```typescript
+// Add correlation IDs for request tracking
+server.addHook('onRequest', async (request) => {
+  request.log = request.log.child({ 
+    requestId: request.id,
+    satelliteId: process.env.SATELLITE_ID || 'unknown',
+    userAgent: request.headers['user-agent']
+  });
+});
+```
+
+## Migration from Console.log
+
+<Warning>
+**Important**: Replace all `console.log` statements with proper Pino logger calls to ensure consistent formatting and log level filtering.
+</Warning>
+
+### Problem: Inconsistent Log Output
+
+```typescript
+// ❌ Problem - Mixed logging approaches
+console.log('✅ [McpServerManager] Server spawned');  // No timestamp or context
+server.log.info('✅ MCP server ready');               // With timestamp and context
+```
+
+### Solution: Use Proper Logger
+
+```typescript
+// ✅ Solution - Consistent logging
+class McpServerManager {
+  private static logger = server.log.child({ component: 'McpServerManager' });
+  
+  static async spawnServer(config: McpServerConfig) {
+    this.logger.debug('Spawning MCP server', { serverId: config.id });
+    this.logger.info('MCP server spawned successfully', { serverId: config.id });
+  }
+}
+```
+
+## Summary
+
+- **Use proper log levels** for satellite operations
+- **Include satellite-specific context** (satelliteId, teamId, serverId)
+- **Follow backend logging patterns** for consistency
+- **Configure LOG_LEVEL** via environment variables
+- **Use child loggers** for persistent context
+- **Avoid console.log** statements in favor of Pino logger
+
+With proper log level configuration, the satellite service will have production-ready logging that scales from development to enterprise deployments, providing the observability needed for managing MCP servers and team isolation.

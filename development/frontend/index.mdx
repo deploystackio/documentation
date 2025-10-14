@@ -1,0 +1,160 @@
+---
+title: Frontend Development Guide
+description: Complete guide to developing and contributing to the DeployStack frontend application built with Vue 3, TypeScript, and Vite.
+sidebarTitle: Overview
+---
+
+# DeployStack Frontend Development
+
+The DeployStack frontend is a modern web application built with Vue 3, TypeScript, and Vite, specifically designed for managing MCP (Model Context Protocol) server configurations. This guide covers everything you need to know to develop and contribute to the frontend.
+
+## Technology Stack
+
+- **Framework**: Vue 3 with Composition API
+- **Language**: TypeScript for type safety
+- **Build Tool**: Vite for fast development and building
+- **Styling**: TailwindCSS with shadcn-vue components
+- **Icons**: Lucide Icons
+- **Internationalization**: Vue I18n
+- **State Management**: Pinia (when needed)
+- **Routing**: Vue Router
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 18 or higher
+- npm 8 or higher
+
+### Development Setup
+
+1. **Navigate to frontend directory**:
+   ```bash
+   cd services/frontend
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Start development server**:
+   ```bash
+   npm run dev
+   ```
+
+4. **Build for production**:
+   ```bash
+   npm run build
+   ```
+
+The development server will start at `http://localhost:5173` with hot module replacement enabled.
+
+## Project Structure
+
+The frontend follows a feature-based modular architecture with clear separation of concerns. For a comprehensive understanding of the application architecture, directory organization, and design patterns, see the [Frontend Architecture Guide](/development/frontend/architecture).
+
+## Development Guidelines
+
+### Code Style
+
+- Use TypeScript for all new code
+- Follow Vue 3 Composition API patterns
+- Use `<script setup>` syntax for components
+- Maintain consistent naming conventions
+- Add proper TypeScript types for all functions and variables
+
+### Component Development
+
+For comprehensive component development guidelines, including Vue SFC best practices, component structure patterns, and implementation standards, see the [Frontend Architecture - Component Implementation Standards](/development/frontend/architecture#component-implementation-standards) section.
+
+For table-specific implementations, refer to the [Table Design System](/development/frontend/ui/-table) guide.
+
+## UI Components and Styling
+
+The frontend uses **TailwindCSS** for styling with **shadcn-vue** component library for consistent UI elements. For comprehensive styling guidelines, component patterns, and design standards, see the [UI Design System](/development/frontend/ui/) documentation.
+
+### ⚠️ **Mandatory Design Patterns**
+
+All structured information displays must follow the **[Structured Data Display Pattern](/development/frontend/ui/-structured-data)**. This includes:
+- User profiles and settings
+- Form layouts 
+- Configuration displays
+- Installation details
+- Any information presented in label-value pairs
+
+This pattern ensures visual consistency across the entire application.
+
+## Environment Configuration
+
+The frontend uses a sophisticated environment variable system that works seamlessly across development and production environments. For complete details on configuring and using environment variables, see the dedicated [Environment Variables Guide](/development/frontend/environment-variables).
+
+### Quick Start
+
+Create environment files in the `services/frontend` directory:
+
+```bash
+# .env (base configuration)
+VITE_DEPLOYSTACK_BACKEND_URL=http://localhost:3000
+VITE_APP_TITLE=DeployStack
+
+# .env.local (local overrides, gitignored)
+VITE_DEPLOYSTACK_BACKEND_URL=http://localhost:3000
+VITE_APP_TITLE=DeployStack (Development)
+```
+
+### Accessing Variables in Code
+
+```typescript
+import { getEnv, getAllEnv } from '@/utils/env'
+
+// Get specific variables
+const backendUrl = getEnv('VITE_DEPLOYSTACK_BACKEND_URL')
+const appTitle = getEnv('VITE_APP_TITLE')
+
+// Get all variables (useful for debugging)
+const allEnvVars = getAllEnv()
+```
+
+## API Integration
+
+The frontend uses a service layer pattern with direct `fetch()` calls for API communication. For complete API integration details including service patterns, implementation examples, and guidelines, see the [Frontend Architecture - API Integration Architecture](/development/frontend/architecture#api-integration-architecture) section.
+
+## Next Steps
+
+Continue reading the detailed guides:
+
+- [Frontend Architecture](/development/frontend/architecture) - Application architecture, patterns, and development principles
+- [UI Design System](/development/frontend/ui/) - Component patterns, styling guidelines, and design standards
+- **[Structured Data Display Pattern](/development/frontend/ui/-structured-data)** - **Mandatory pattern** for consistent information display
+- [Environment Variables](/development/frontend/environment-variables) - Complete environment configuration guide
+- [Global Event Bus](/development/frontend/event-bus) - Cross-component communication system
+- [Internationalization (i18n)](/development/frontend/internationalization) - Multi-language support
+- [Plugin System](/development/frontend/plugins) - Extending functionality
+
+## Docker Development
+
+### Building the Frontend
+
+```bash
+# Build the Docker image
+docker build -t deploystack/frontend:dev .
+
+# Run with development configuration
+docker run -it -p 8080:80 \
+  -e VITE_API_URL="http://localhost:3000" \
+  -e VITE_APP_TITLE="DeployStack (Docker Dev)" \
+  deploystack/frontend:dev
+```
+
+### Production Deployment
+
+The frontend is designed to work seamlessly with the backend service:
+
+```bash
+# Production deployment
+docker run -d -p 8080:80 \
+  -e VITE_API_URL="https://api.your-domain.com" \
+  -e VITE_APP_TITLE="DeployStack" \
+  deploystack/frontend:latest
+```
