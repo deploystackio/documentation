@@ -1,0 +1,285 @@
+---
+title: Team Isolation Implementation
+description: Technical implementation of OAuth-based team separation in DeployStack Satellite for multi-tenant MCP server access control.
+---
+
+
+
+# Team Isolation Implementation
+
+DeployStack Satellite implements OAuth 2.1 Resource Server-based team isolation to provide secure multi-tenant access to MCP servers. This system ensures complete separation of team resources while maintaining a unified MCP client interface.
+
+For OAuth authentication details, see [OAuth Authentication Implementation](/development/satellite/oauth-authentication). For tool discovery mechanics, see [Tool Discovery Implementation](/development/satellite/tool-discovery).
+
+## Technical Architecture
+
+### Team Context Resolution
+
+Team isolation operates through OAuth token introspection that extracts team context from validated Bearer tokens:
+
+```
+MCP Client Request → OAuth Token → Token Introspection → Team Context → Resource Filtering
+     │                   │              │                    │              │
+  Bearer Token      Satellite API    Backend Validation   Team ID      Allowed Servers
+  (team-scoped)     Key Required     5-minute Cache       Extraction    Database Query
+```
+
+**Core Components:**
+- **TokenIntrospectionService**: Validates tokens via Backend introspection endpoint
+- **TeamAwareMcpHandler**: Filters MCP resources based on team permissions
+- **DynamicConfigManager**: Provides team-server mappings from Backend polling
+- **RemoteToolDiscoveryManager**: Caches tools with server association metadata
+
+### Team-Server Mapping Architecture
+
+Team isolation relies on database-backed server instance mappings:
+
+```
+Team "john" → Server Instance "context7-john-R36no6FGoMFEZO9nWJJLT"
+Team "alice" → Server Instance "context7-alice-S47mp8GHpNGFZP0oWKKMU"
+```
+
+**Database Integration:**
+- **mcpServerInstallations Table**: Links teams to specific MCP server instances
+- **Dynamic Configuration**: Backend polling delivers team-server mappings
+- **Server Instance Naming**: Format `{server_slug}-{team_slug}-{installation_id}`
+- **Complete Isolation**: Teams cannot access other teams' server instances
+
+## Tool Discovery Integration
+
+### Friendly Tool Naming
+
+Tool discovery uses `server_slug` for user-friendly tool names while maintaining internal server routing:
+
+**User-Facing Names:**
+- `context7-resolve-library-id`
+- `context7-get-library-docs`
+
+**Internal Server Resolution:**
+- Team "john": Routes to `context7-john-R36no6FGoMFEZO9nWJJLT`
+- Team "alice": Routes to `context7-alice-S47mp8GHpNGFZP0oWKKMU`
+
+**Implementation Details:**
+- **RemoteToolDiscoveryManager**: Creates friendly names using `config.server_slug`
+- **CachedTool Interface**: Stores both `namespacedName` and `serverName` for routing
+- **TeamAwareMcpHandler**: Resolves team context to actual server instances
+
+### Tool Filtering Process
+
+Team-aware tool filtering operates at the MCP protocol level:
+
+```
+tools/list Request → OAuth Team Context → Filter by Team Servers → Return Filtered Tools
+     │                      │                     │                      │
+  Bearer Token        Team ID Extraction    Database Lookup        Team-Specific List
+  Validation          from Token Cache      Allowed Servers        JSON-RPC Response
+```
+
+**Filtering Logic:**
+1. **Token Validation**: Extract team ID from OAuth token introspection
+2. **Server Resolution**: Query team's allowed MCP server instances
+3. **Tool Filtering**: Include only tools from team's server instances
+4. **Response Generation**: Return filtered tool list to MCP client
+
+## OAuth Integration Points
+
+### Authentication Middleware Integration
+
+Team isolation integrates with existing OAuth authentication middleware:
+
+**File References:**
+- `services/satellite/src/middleware/auth-middleware.ts` - Bearer token validation
+- `services/satellite/src/services/token-introspection-service.ts` - Token validation with caching
+- `services/satellite/src/services/team-aware-mcp-handler.ts` - Team-filtered MCP operations
+
+**Authentication Flow:**
+1. **Bearer Token Extraction**: From Authorization header
+2. **Token Introspection**: Backend validation with 5-minute caching
+3. **Team Context Storage**: In `request.auth.team` object
+4. **MCP Request Processing**: Team-aware filtering applied
+
+### Token Introspection Response
+
+Backend token introspection provides team context:
+
+```
+Introspection Response:
+{
+  "active": true,
+  "sub": "user_id",
+  "team_id": "team_uuid",
+  "team_name": "john",
+  "team_role": "admin",
+  "scope": "mcp:read mcp:tools:execute"
+}
+```
+
+**Team Context Fields:**
+- **team_id**: Database UUID for team identification
+- **team_name**: Human-readable team identifier (slug)
+- **team_role**: User's role within the team
+- **scope**: OAuth scopes for permission validation
+
+## Server Instance Resolution
+
+### Dynamic Server Mapping
+
+Team-server mappings are delivered via Backend polling system:
+
+**Configuration Source:**
+- **Backend Database**: `mcpServerInstallations` table
+- **Polling Mechanism**: Existing satellite configuration sync
+- **Update Frequency**: Based on Backend polling intervals
+- **Cache Storage**: In-memory via DynamicConfigManager
+
+### Server Resolution Algorithm
+
+Tool execution resolves team context to specific server instances:
+
+```
+Tool Call "context7-resolve-library-id" + Team "john"
+    ↓
+Find Server: server_slug="context7" AND team_id="john_uuid"
+    ↓
+Resolve to: "context7-john-R36no6FGoMFEZO9nWJJLT"
+    ↓
+Route Request: HTTP proxy to team's server instance
+```
+
+**Resolution Process:**
+1. **Parse Tool Name**: Extract `server_slug` from namespaced tool name
+2. **Team Context**: Get team ID from OAuth token validation
+3. **Server Lookup**: Find server instance matching team + server_slug
+4. **Request Routing**: Proxy to resolved server instance
+
+## Security Implementation
+
+### Complete Team Isolation
+
+Team isolation provides enterprise-grade security:
+
+**Access Control:**
+- **Token-Based**: All requests require valid OAuth Bearer tokens
+- **Team Scoping**: Tokens are issued for specific team contexts
+- **Server Isolation**: Teams cannot access other teams' MCP server instances
+- **Tool Filtering**: Only team's tools visible in discovery
+
+**Security Boundaries:**
+- **Network Level**: HTTP proxy routes to team-specific server instances
+- **Application Level**: TeamAwareMcpHandler enforces team permissions
+- **Data Level**: Complete separation of team resources and configurations
+
+### Audit and Logging
+
+Team isolation includes comprehensive audit logging:
+
+**Log Categories:**
+- **Authentication Events**: Token validation and team context extraction
+- **Access Control**: Team permission checks and access denials
+- **Tool Execution**: Team-scoped tool calls with server resolution
+- **Configuration Changes**: Team-server mapping updates
+
+**Log Format:**
+```
+operation: "team_tool_access_granted"
+team_id: "team_uuid"
+server_name: "context7-john-R36no6FGoMFEZO9nWJJLT"
+namespaced_tool_name: "context7-resolve-library-id"
+```
+
+## Development Integration
+
+### Service Initialization
+
+Team isolation services initialize after satellite registration:
+
+**Initialization Order:**
+1. **Satellite Registration**: Obtain API key from Backend
+2. **OAuth Services**: Initialize TokenIntrospectionService
+3. **Team Handler**: Create TeamAwareMcpHandler instance
+4. **Route Integration**: Apply authentication middleware to MCP endpoints
+
+**File References:**
+- `services/satellite/src/server.ts` - Service initialization
+- `services/satellite/src/routes/mcp.ts` - MCP endpoint authentication
+- `services/satellite/src/routes/sse.ts` - SSE endpoint authentication
+
+### Error Handling
+
+Team isolation implements comprehensive error handling:
+
+**Authentication Errors:**
+- **Invalid Token**: 401 with OAuth 2.1 compliant error response
+- **Insufficient Scope**: 403 with required scope information
+- **Team Access Denied**: 403 with available server list
+
+**Resolution Errors:**
+- **Server Not Found**: Tool execution fails with descriptive error
+- **Team Mapping Missing**: Configuration error with Backend sync status
+- **Tool Not Available**: Clear error with available tool list
+
+## Performance Characteristics
+
+### Token Validation Caching
+
+Token introspection includes 5-minute caching for performance:
+
+**Cache Implementation:**
+- **Memory Storage**: Hashed token keys for security
+- **TTL Management**: 5-minute expiration with automatic cleanup
+- **Cache Hit Rate**: Reduces Backend introspection calls
+- **Security**: No actual token values stored in cache
+
+### Team Filtering Performance
+
+Tool filtering operates with minimal overhead:
+
+**Performance Metrics:**
+- **Tool Filtering**: O(n) where n = total cached tools
+- **Server Resolution**: O(1) hash map lookup
+- **Memory Usage**: Shared tool cache across all teams
+- **Network Overhead**: Single Backend introspection per token
+
+### Scalability Considerations
+
+Team isolation scales efficiently for multi-tenant deployment:
+
+**Scaling Factors:**
+- **Team Limit**: No hard limit, memory-bound by server instances
+- **Tool Cache**: Shared across teams for memory efficiency
+- **Token Cache**: Bounded by active user sessions
+- **Backend Integration**: Leverages existing polling infrastructure
+
+## Integration with Existing Systems
+
+### Backend Communication
+
+Team isolation integrates with existing Backend systems:
+
+**API Integration:**
+- **Token Introspection**: Uses existing OAuth 2.1 introspection endpoint
+- **Configuration Polling**: Leverages existing satellite polling system
+- **Database Schema**: Extends existing `mcpServerInstallations` table
+- **Authentication**: Uses satellite API key for Backend communication
+
+### MCP Client Compatibility
+
+Team isolation maintains full MCP client compatibility:
+
+**Client Requirements:**
+- **OAuth Support**: MCP clients must support OAuth 2.1 authentication
+- **Bearer Tokens**: Standard Authorization header implementation
+- **No Team Awareness**: Clients remain unaware of team concepts
+- **Standard MCP**: Full compliance with MCP protocol specification
+
+<Info>
+**Implementation Status**: Team isolation is fully implemented and operational. The system provides complete team separation while maintaining MCP client compatibility and leveraging existing OAuth 2.1 authentication infrastructure.
+</Info>
+
+## Related Documentation
+
+- [OAuth Authentication Implementation](/development/satellite/oauth-authentication) - OAuth 2.1 Resource Server details
+- [Tool Discovery Implementation](/development/satellite/tool-discovery) - Tool caching and namespacing mechanics
+- [Satellite Architecture Design](/development/satellite/architecture) - Overall satellite architecture
+- [Backend Communication](/development/satellite/backend-communication) - Backend integration patterns
+- [Backend OAuth2 Server Implementation](/development/backend/oauth2-server) - OAuth server implementation

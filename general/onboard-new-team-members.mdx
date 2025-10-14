@@ -1,0 +1,163 @@
+---
+title: Onboard New Team Members
+description: Step-by-step guide to onboard new team members to your DeployStack team and MCP server environment.
+---
+
+# Onboard New Team Members
+
+This guide walks you through adding new developers to your existing DeployStack team. Before starting, ensure you already have:
+
+- A configured team with MCP servers set up
+- Team Administrator privileges
+- The new member's email address
+
+## Prerequisites
+
+Before inviting team members, make sure:
+
+- You have Team Administrator or Team Owner privileges
+- Your team MCP servers are properly configured and tested
+- You're not trying to add members to your default team (personal teams don't support additional members)
+
+## Step 1: New Member Account Setup
+
+The new team member needs to complete these steps first:
+
+<Steps>
+  <Step title="Create DeployStack Account">
+    Go to [cloud.deploystack.io](https://cloud.deploystack.io) and create a new account:
+    
+    - Sign up with their email address
+    - Complete email verification if required
+    - Complete the initial account setup
+  </Step>
+</Steps>
+
+## Step 2: Invite Team Member
+
+### Add Member to Your Team
+
+1. **Navigate to Teams**: Go to your DeployStack dashboard and click on "Teams"
+2. **Select Your Team**: Find the team you want to add members to and click "Manage"
+3. **Add New Member**: Click "Add Member" and enter the new member's email address
+
+Read more about Roles: [Team Roles](/roles)
+
+## Step 3: Complete Team Setup
+
+After the team invitation is accepted, the new member needs to:
+
+<Steps>
+  <Step title="Accept Team Invitation">
+    The new member should:
+    
+    - Check their DeployStack dashboard for the team invitation
+    - Accept the invitation to join the team
+  </Step>
+  
+  <Step title="Create OAuth Credentials">
+    Configure satellite access for the team:
+    
+    1. Navigate to the **Satellite** section in the dashboard
+    2. Select the appropriate team from the team selector
+    3. Click **Create MCP Client Credentials**
+    4. Enter a name for the client (e.g., "VS Code", "Claude Desktop")
+    5. Copy the generated OAuth credentials:
+       - **Client ID**: `deploystack_mcp_client_abc123def456ghi789`
+       - **Client Secret**: `deploystack_mcp_secret_xyz789abc123def456ghi789jkl012`
+  </Step>
+  
+  <Step title="Update MCP Configuration">
+    Replace your VS Code MCP configuration with the DeployStack Satellite:
+    
+    **Before (Individual MCP Servers):**
+    ```json
+    {
+      "mcpServers": {
+        "brightdata": {
+          "command": "npx",
+          "args": ["@brightdata/mcp"],
+          "env": {
+            "API_TOKEN": "user-managed-token"
+          }
+        },
+        "github": {
+          "command": "npx",
+          "args": ["@github/mcp"],
+          "env": {
+            "GITHUB_TOKEN": "user-managed-token"
+          }
+        }
+      }
+    }
+    ```
+    
+    **After (DeployStack Satellite):**
+    ```json
+    {
+      "mcpServers": {
+        "deploystack": {
+          "url": "https://satellite.deploystack.io/mcp",
+          "name": "DeployStack Satellite",
+          "description": "MCP-as-a-Service with zero installation"
+        }
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Step 4: Verify Team Access
+
+### Test MCP Tool Access
+
+1. **Restart VS Code**: Restart VS Code to load the new satellite configuration
+2. **Test MCP Connection**: Use Claude or MCP-compatible tools to verify access
+3. **Verify Available Tools**: All team MCP tools should be instantly available
+4. **Test Functionality**: Confirm tools work without any manual credential setup
+
+## Step 5: Test Team Access
+
+### Verify Team MCP Servers
+
+1. **Open VS Code**: Launch VS Code or restart if already open
+2. **Test MCP Connection**: Use Claude or MCP-compatible tools to verify access
+3. **Check Available Tools**: Confirm all team MCP servers are accessible
+4. **Test Credentials**: Verify that API calls work without manual credential setup
+
+### Confirm Team Resources
+
+- **Team MCP Servers**: Access to all configured team servers
+- **Shared Credentials**: Automatic credential injection (no manual setup required)
+- **Team Environment Variables**: Access to team-wide environment settings
+- **Instant Access**: All tools immediately available through satellite infrastructure
+
+## Step 6: Team Orientation
+
+### Brief New Members On
+
+**Available MCP Servers:**
+- Which servers are configured for the team
+- What each server is used for
+- Any usage guidelines or best practices
+
+**Team Workflows:**
+- How the team uses MCP tools in development
+- Any specific processes or conventions
+- Who to contact for technical support
+
+**Security Guidelines:**
+- Never manually manage API credentials (handled by DeployStack)
+- Always use the DeployStack Satellite for MCP access
+- Report any authentication or access issues immediately
+- Keep OAuth client credentials secure (don't share or commit to version control)
+
+## Next Steps
+
+Once new team members are successfully onboarded:
+
+- **Share Team Documentation**: Provide any team-specific MCP usage guides
+- **Schedule Training**: Consider hands-on training for complex MCP workflows
+- **Gather Feedback**: Collect feedback on the onboarding process for improvements
+
+New team members should now have secure, credential-free access to all team MCP servers through the DeployStack Satellite, enabling them to be productive immediately without any installations or complex credential management.

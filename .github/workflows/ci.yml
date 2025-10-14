@@ -34,10 +34,7 @@ jobs:
         run: npm run lint:md
 
       - name: Run Lint Links
-        run: npm run lint:links
-
-      - name: Run Lint Links
-        run: npm run build        
+        run: npm run lint:links     
 
   release:
     name: Run Release

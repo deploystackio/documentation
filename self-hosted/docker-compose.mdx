@@ -1,0 +1,298 @@
+---
+title: Docker Compose Setup
+description: Deploy DeployStack using Docker Compose for a quick and reliable self-hosted installation.
+---
+
+# Docker Compose Setup
+
+Deploy DeployStack using Docker Compose for a production-ready, self-hosted installation. This method is recommended for most users as it provides a reliable, scalable setup with minimal configuration.
+
+<Info>
+Docker containers are for production hosting or self-hosting. For development contributions, check the [Local Setup](/local-setup) guide.
+</Info>
+
+## Overview
+
+This guide provides step-by-step instructions to install and configure DeployStack using Docker Compose. The setup includes frontend, backend, and **required satellite service** with persistent data storage and proper networking.
+
+<Warning>
+**Satellites are required**: DeployStack cannot manage MCP servers without at least one satellite. This guide includes satellite deployment as a mandatory step.
+</Warning>
+
+**Important:** Only modify settings explicitly mentioned in this guide. Altering other configurations may lead to issues.
+
+## System Requirements
+
+- **RAM**: Ensure your environment has at least 4GB of RAM. Insufficient memory can cause processes to crash.
+- **Docker & Docker Compose**: Make sure both are installed and up-to-date.
+- **Storage**: At least 2GB of available disk space for images and persistent data.
+
+## Beggining the setup for Docker Compose
+
+Follow these steps for a setup with docker compsoe
+
+### Step 1: Download Docker Compose File
+
+Download the `docker-compose.yml` file to your working directory:
+
+```bash
+curl -o docker-compose.yml https://raw.githubusercontent.com/deploystackio/deploystack/main/docker-compose.yml
+```
+
+### Step 2: Generate Encryption Secret
+
+DeployStack requires a secure encryption secret for protecting sensitive data like API keys and credentials.
+
+<CodeGroup>
+```bash Linux/macOS
+# Using OpenSSL (recommended)
+openssl rand -hex 16
+
+# Alternative using Node.js
+node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
+```
+
+```powershell Windows
+# Using PowerShell
+-join ((1..32) | ForEach {'{0:X}' -f (Get-Random -Max 16)})
+
+# Alternative using Node.js (if installed)
+node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
+```
+</CodeGroup>
+
+<Warning>
+**Important:** Keep this secret secure and do not share it. Store it safely as you'll need it for upgrades.
+</Warning>
+
+### Step 3: Set Environment Variables
+
+Create a `.env` file in the same directory as your `docker-compose.yml`:
+
+```bash
+# Create .env file
+cat > .env << EOF
+# DeployStack Configuration
+DEPLOYSTACK_ENCRYPTION_SECRET=your-generated-secret-here
+
+# Satellite Registration (required - obtain from admin panel after setup)
+DEPLOYSTACK_REGISTRATION_TOKEN=
+
+# Optional: Customize ports (default: frontend=8080, backend=3000, satellite=3001)
+# FRONTEND_PORT=8080
+# BACKEND_PORT=3000
+# SATELLITE_PORT=3001
+
+# Optional: Custom app title
+# VITE_APP_TITLE=My DeployStack Instance
+EOF
+```
+
+Replace `your-generated-secret-here` with the secret you generated in Step 2.
+
+<Warning>
+**Important**: Leave `DEPLOYSTACK_REGISTRATION_TOKEN` empty for now. You'll add it after completing the admin setup in Step 6.
+</Warning>
+
+### Step 4: Launch DeployStack
+
+Start the Docker containers:
+
+```bash
+docker-compose up -d
+```
+
+This command will:
+- Pull the latest DeployStack images
+- Create necessary volumes for persistent data
+- Start both frontend and backend services
+- Set up networking between services
+
+### Step 5: Verify Installation
+
+Check that all services are running:
+
+```bash
+docker-compose ps
+```
+
+You should see both `deploystack-frontend` and `deploystack-backend` containers in "Up" status.
+
+### Step 6: Access DeployStack
+
+Open your browser and navigate to:
+- **Frontend**: [http://localhost:8080](http://localhost:8080)
+- **Backend API**: [http://localhost:3000](http://localhost:3000)
+
+### Step 7: Deploy Satellite Service (Required)
+
+<Warning>
+**Satellites are required** - Without at least one satellite, DeployStack cannot manage MCP servers. Complete this step to make your deployment functional.
+</Warning>
+
+The satellite service is **already included** in the docker-compose.yml file. You just need to configure the registration token:
+
+1. **Generate Registration Token** (via admin interface after backend setup):
+   - Log in to DeployStack as admin (complete Step 6 first)
+   - Navigate to Admin → Satellites → Pairing
+   - Click "Generate Token" and copy it
+
+2. **Add token to your `.env` file**:
+   ```bash
+   # Satellite Configuration (required)
+   DEPLOYSTACK_REGISTRATION_TOKEN=deploystack_satellite_global_eyJhbGc...
+   ```
+
+3. **Restart services to apply token**:
+   ```bash
+   docker-compose down
+   docker-compose up -d
+   ```
+
+4. **Verify satellite registration**:
+   ```bash
+   docker logs deploystack-satellite
+   # Should show: ✅ Satellite registered successfully: docker-satellite-001
+   ```
+
+**Note**: After initial registration, the satellite saves its API key to persistent storage and doesn't need the registration token for subsequent starts.
+
+## Configuration
+
+### External Access
+
+By default, DeployStack runs on `localhost`. To access it via an external domain or IP address, you need to configure the environment variables.
+
+#### Understanding URLs
+
+- **Protocol**: Use `http` or `https` depending on your setup
+- **Domain/IP**: The domain name or IP address where your application is accessible
+- **Port**: Include the port number if not using standard ports (80 for http, 443 for https)
+
+#### Configuring for External Access
+
+1. **Update your `.env` file**:
+
+```bash
+# For direct access without reverse proxy
+DEPLOYSTACK_FRONTEND_URL=http://your-domain-or-ip:8080
+VITE_DEPLOYSTACK_BACKEND_URL=http://your-domain-or-ip:3000
+
+# For access via reverse proxy with SSL
+DEPLOYSTACK_FRONTEND_URL=https://your-domain
+VITE_DEPLOYSTACK_BACKEND_URL=https://your-domain/api
+```
+
+2. **Restart the services**:
+
+```bash
+docker-compose down
+docker-compose up -d
+```
+
+### SSL/HTTPS Setup
+
+<Info>
+HTTPS is recommended for production deployments to ensure secure communication and enable all browser features.
+</Info>
+
+For HTTPS setup, we recommend using a reverse proxy like Nginx or Traefik:
+
+```nginx
+# Example Nginx configuration
+server {
+    listen 443 ssl;
+    server_name your-domain.com;
+    
+    # SSL configuration
+    ssl_certificate /path/to/certificate.crt;
+    ssl_certificate_key /path/to/private.key;
+    
+    # Frontend
+    location / {
+        proxy_pass http://localhost:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+    
+    # Backend API
+    location /api/ {
+        proxy_pass http://localhost:3000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+### Data Persistence
+
+DeployStack uses Docker volumes to persist data:
+
+- **deploystack_backend_persistent**: Application database, configuration, and user uploads
+
+#### Backup Your Data
+
+Regularly backup your persistent data:
+
+```bash
+# Create backup directory
+mkdir -p backups/$(date +%Y%m%d)
+
+# Backup volume
+docker run --rm -v deploystack_backend_persistent:/data -v $(pwd)/backups/$(date +%Y%m%d):/backup alpine tar czf /backup/backend_persistent.tar.gz -C /data .
+```
+
+## Environment Variables Reference
+
+### Required Variables
+
+| Variable | Description | Example |
+|----------|-------------|----------|
+| `DEPLOYSTACK_ENCRYPTION_SECRET` | 32-character secret for encrypting sensitive data | `a1b2c3d4e5f6...` |
+
+### Optional Variables
+
+| Variable | Description | Default | Example |
+|----------|-------------|---------|----------|
+| `DEPLOYSTACK_FRONTEND_URL` | URL where frontend is accessible | `http://localhost:8080` | `https://deploystack.company.com` |
+| `VITE_DEPLOYSTACK_BACKEND_URL` | Backend API URL for frontend | `http://localhost:3000` | `https://api.deploystack.company.com` |
+| `VITE_APP_TITLE` | Custom application title | `DeployStack` | `Company DeployStack` |
+| `FRONTEND_PORT` | Frontend port mapping | `8080` | `80` |
+| `BACKEND_PORT` | Backend port mapping | `3000` | `3001` |
+
+### Satellite Variables (Required)
+
+| Variable | Description | Example |
+|----------|-------------|----------|
+| `DEPLOYSTACK_REGISTRATION_TOKEN` | JWT registration token from admin (required for initial satellite pairing) | `deploystack_satellite_global_eyJhbGc...` |
+
+<Info>
+**Note**: The satellite name `docker-satellite-001` is pre-configured in docker-compose.yml. You only need to provide the registration token in your `.env` file.
+</Info>
+
+## Troubleshooting
+
+### Common Issues
+
+#### Services Won't Start
+
+```bash
+# Check logs
+docker-compose logs
+
+# Check specific service
+docker-compose logs backend
+docker-compose logs frontend
+```
+
+### Getting Help
+
+If you encounter issues not covered here:
+
+1. Search existing [GitHub Issues](https://github.com/deploystackio/deploystack/issues)
+2. Join our [Discord community](https://discord.gg/42Ce3S7b3b)
+3. Create a new issue with detailed logs and system information
+
+---
+
+**Need to upgrade?** Check our [Upgrade Guide](/self-hosted/upgrade-guide) for step-by-step instructions.

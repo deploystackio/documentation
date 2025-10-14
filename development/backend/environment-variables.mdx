@@ -1,0 +1,438 @@
+---
+title: Environment Variables
+description: Complete guide to configuring and using environment variables in the DeployStack backend application for both development and production environments.
+---
+
+# Backend Environment Variables
+
+The DeployStack backend uses Node.js environment variables that work seamlessly across development and production environments. This system supports both local `.env` files for development and Docker environment variable injection for production deployments.
+
+## Overview
+
+The backend environment system consists of two main approaches:
+
+1. **Development Environment**: Uses `.env` files loaded via Node.js `--env-file` flag with nodemon
+2. **Production Environment**: Uses Docker environment variables injected at container runtime
+
+This approach ensures that:
+- Developers can work with standard `.env` files during development using `npm run dev`
+- Production deployments can inject variables at runtime without rebuilding the application
+- Environment variables are directly accessible via `process.env` throughout the Node.js application
+- The same codebase works seamlessly in both environments
+
+## Environment Variable Types
+
+### Development Environment Variables
+
+During development, the backend loads environment variables from `.env` files using Node.js's built-in `--env-file` support:
+
+```bash
+# .env
+PORT=3000
+NODE_ENV=development
+DEPLOYSTACK_FRONTEND_URL=http://localhost:5173
+DEPLOYSTACK_ENCRYPTION_SECRET=your-secure-cookie-secret-here
+```
+
+### Production Environment Variables
+
+In production Docker containers, variables are injected at runtime via Docker's environment variable system:
+
+```bash
+# Docker run example
+docker run -e PORT=3000 \
+           -e NODE_ENV=production \
+           -e DEPLOYSTACK_FRONTEND_URL="https://app.deploystack.com" \
+           -e DEPLOYSTACK_ENCRYPTION_SECRET="your-production-secret" \
+           deploystack/backend:latest
+```
+
+## Development Setup
+
+### Environment Files
+
+Create environment files in the `services/backend` directory:
+
+#### `.env` (Base Configuration)
+```bash
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+HOST=localhost
+
+# Frontend Integration
+DEPLOYSTACK_FRONTEND_URL=http://localhost:5173
+
+# Security
+DEPLOYSTACK_ENCRYPTION_SECRET=your-encryption-secret-here
+
+# Logging
+LOG_LEVEL=debug
+
+```
+
+#### `.env.local` (Local Overrides)
+```bash
+# Local development environment variables
+# This file is gitignored and used for local customization
+PORT=3001
+DEPLOYSTACK_FRONTEND_URL=http://localhost:5174
+LOG_LEVEL=info
+```
+
+### Environment File Priority
+
+Node.js with `--env-file` loads environment variables in this order:
+
+1. System environment variables (highest priority)
+2. `.env` file variables
+3. Default values in code (lowest priority)
+
+**Note**: Unlike some frameworks, Node.js `--env-file` doesn't support multiple env files by default. Use `.env.local` by renaming it to `.env` for local development.
+
+### Development Example
+
+```bash
+# Navigate to backend directory
+cd services/backend
+
+# Create your local environment file
+cp .env .env.local
+
+# Edit .env.local with your local settings
+echo "PORT=3001" >> .env.local
+echo "LOG_LEVEL=info" >> .env.local
+
+# Rename for development (or modify .env directly)
+mv .env.local .env
+
+# Start development server
+npm run dev
+```
+
+### Nodemon Configuration
+
+The development server uses nodemon with the following configuration (from `nodemon.json`):
+
+```json
+{
+  "watch": ["src"],
+  "ext": "ts,js,json",
+  "ignore": ["src/**/*.test.ts", "src/**/*.spec.ts", "tests/**/*"],
+  "exec": "node --env-file=.env --require ts-node/register src/index.ts",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "delay": 1000
+}
+```
+
+This configuration:
+- Loads environment variables from `.env` using `--env-file=.env`
+- Sets `NODE_ENV=development` by default
+- Watches TypeScript files for changes
+- Uses ts-node for TypeScript compilation
+
+## Production Deployment
+
+### Docker Environment Variables
+
+The production Docker container accepts environment variables at runtime:
+
+```bash
+# Production deployment
+docker run -d -p 3000:3000 \
+  -e NODE_ENV=production \
+  -e PORT=3000 \
+  -e DEPLOYSTACK_FRONTEND_URL="https://app.deploystack.com" \
+  -e DEPLOYSTACK_ENCRYPTION_SECRET="your-production-secret" \
+  deploystack/backend:latest
+```
+
+### Docker Compose Example
+
+```yaml
+version: '3.8'
+services:
+  backend:
+    image: deploystack/backend:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DEPLOYSTACK_FRONTEND_URL=https://app.deploystack.com
+      - DEPLOYSTACK_ENCRYPTION_SECRET=your-encryption-secret
+
+    volumes:
+      - ./data:/app/data  # For SQLite database persistence
+```
+
+### Dockerfile Environment Handling
+
+The production Dockerfile creates a default `.env` file with basic settings:
+
+```dockerfile
+# Create a default .env file
+RUN echo "NODE_ENV=production" > .env && \
+    echo "PORT=3000" >> .env
+
+# Start with env file
+CMD ["node", "--env-file=.env", "dist/index.js"]
+```
+
+Runtime environment variables will override these defaults.
+
+## Using Environment Variables in Code
+
+### Accessing Variables
+
+Environment variables are directly accessible via `process.env` in Node.js:
+
+```typescript
+// Direct access
+const port = process.env.PORT || '3000'
+const nodeEnv = process.env.NODE_ENV || 'development'
+const frontendUrl = process.env.DEPLOYSTACK_FRONTEND_URL
+
+// Type-safe access with validation
+function getRequiredEnv(key: string): string {
+  const value = process.env[key]
+  if (!value) {
+    throw new Error(`Required environment variable ${key} is not set`)
+  }
+  return value
+}
+
+const encryptionSecret = getRequiredEnv('DEPLOYSTACK_ENCRYPTION_SECRET')
+```
+
+### Server Configuration Example
+
+```typescript
+// src/server.ts
+import fastify from 'fastify'
+
+export const createServer = async () => {
+  const server = fastify({
+    logger: {
+      level: process.env.LOG_LEVEL || 'info'
+    }
+  })
+
+  // Cookie configuration
+  await server.register(fastifyCookie, {
+    secret: process.env.DEPLOYSTACK_ENCRYPTION_SECRET || 'fallback-secret',
+    parseOptions: {}
+  })
+
+  // CORS configuration
+  const frontendUrl = process.env.DEPLOYSTACK_FRONTEND_URL
+  if (frontendUrl) {
+    await server.register(fastifyCors, {
+      origin: frontendUrl,
+      credentials: true
+    })
+  }
+
+  return server
+}
+```
+
+### Database Configuration Example
+
+```typescript
+// src/db/setup.ts
+const setupDatabase = () => {
+  const isTestEnv = process.env.NODE_ENV === 'test'
+  const sqliteDbFileName = isTestEnv ? 'deploystack.test.db' : 'deploystack.db'
+  
+  const dbPath = path.join(process.cwd(), 'data', sqliteDbFileName)
+  
+  return new Database(dbPath)
+}
+```
+
+### Plugin System Configuration
+
+```typescript
+// src/server.ts
+const isDevelopment = process.env.NODE_ENV !== 'production'
+const pluginManager = new PluginManager({
+  paths: [
+    process.env.PLUGINS_PATH || (isDevelopment 
+      ? path.join(process.cwd(), 'src', 'plugins')
+      : path.join(__dirname, 'plugins')),
+  ],
+  plugins: {}
+})
+```
+
+## Adding New Environment Variables
+
+### Step 1: Add to Environment Files
+
+Add the new variable to your `.env` file:
+
+```bash
+# .env
+PORT=3000
+NODE_ENV=development
+DEPLOYSTACK_FRONTEND_URL=http://localhost:5173
+NEW_FEATURE_ENABLED=true
+NEW_API_ENDPOINT=https://api.example.com
+```
+
+### Step 2: Use in Code
+
+Access the variable in your TypeScript code:
+
+```typescript
+// src/config/features.ts
+export const isNewFeatureEnabled = (): boolean => {
+  const value = process.env.NEW_FEATURE_ENABLED
+  return value === 'true' || value === '1'
+}
+
+export const getApiEndpoint = (): string => {
+  return process.env.NEW_API_ENDPOINT || 'https://api.default.com'
+}
+```
+
+### Step 3: Update Production Configuration
+
+Add the variable to your production deployment configuration:
+
+```bash
+# Docker
+docker run -e NEW_FEATURE_ENABLED=true \
+           -e NEW_API_ENDPOINT=https://prod-api.example.com \
+           deploystack/backend:latest
+```
+
+```yaml
+# Docker Compose
+environment:
+  - NEW_FEATURE_ENABLED=true
+  - NEW_API_ENDPOINT=https://prod-api.example.com
+```
+
+### Step 4: Create Type-Safe Helpers (Optional)
+
+For better type safety and validation:
+
+```typescript
+// src/utils/env.ts
+interface EnvironmentConfig {
+  port: number
+  nodeEnv: string
+  frontendUrl: string
+  newFeatureEnabled: boolean
+  newApiEndpoint: string
+}
+
+export function getEnvironmentConfig(): EnvironmentConfig {
+  return {
+    port: parseInt(process.env.PORT || '3000', 10),
+    nodeEnv: process.env.NODE_ENV || 'development',
+    frontendUrl: process.env.DEPLOYSTACK_FRONTEND_URL || 'http://localhost:5173',
+    newFeatureEnabled: process.env.NEW_FEATURE_ENABLED === 'true',
+    newApiEndpoint: process.env.NEW_API_ENDPOINT || 'https://api.default.com'
+  }
+}
+
+// Usage
+import { getEnvironmentConfig } from '@/utils/env'
+
+const config = getEnvironmentConfig()
+if (config.newFeatureEnabled) {
+  // Use new feature
+}
+```
+
+## Environment Variable Naming Conventions
+
+### Backend Environment Variables
+
+- Use `SCREAMING_SNAKE_CASE` format
+- Be descriptive and specific
+- Group related variables with prefixes
+
+```bash
+✅ Good
+PORT=3000
+NODE_ENV=development
+DEPLOYSTACK_FRONTEND_URL=http://localhost:5173
+DEPLOYSTACK_ENCRYPTION_SECRET=secret
+
+
+❌ Bad
+port=3000                    # Wrong case
+URL=http://localhost:5173    # Not descriptive
+SECRET=secret               # Too generic
+```
+
+### Common Patterns
+
+```bash
+# Server Configuration
+PORT=3000
+HOST=localhost
+NODE_ENV=development
+
+# Application Specific (use DEPLOYSTACK_ prefix)
+DEPLOYSTACK_FRONTEND_URL=http://localhost:5173
+DEPLOYSTACK_ENCRYPTION_SECRET=secret
+
+# Third-party Services (use service name prefix)
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+
+# Feature Flags
+ENABLE_SWAGGER_DOCS=true
+ENABLE_DEBUG_MODE=false
+```
+
+## Debugging Environment Variables
+
+### Development Debugging
+
+```typescript
+// Add to your server startup
+logger.info('Environment Variables:')
+logger.info('PORT:', process.env.PORT)
+logger.info('NODE_ENV:', process.env.NODE_ENV)
+logger.info('FRONTEND_URL:', process.env.DEPLOYSTACK_FRONTEND_URL)
+
+// Or create a debug endpoint (development only)
+if (process.env.NODE_ENV === 'development') {
+  server.get('/debug/env', async (request, reply) => {
+    const safeEnvVars = {
+      PORT: process.env.PORT,
+      NODE_ENV: process.env.NODE_ENV,
+      DEPLOYSTACK_FRONTEND_URL: process.env.DEPLOYSTACK_FRONTEND_URL,
+      LOG_LEVEL: process.env.LOG_LEVEL,
+      // Don't expose secrets!
+    }
+    return safeEnvVars
+  })
+}
+```
+
+### Production Debugging
+
+```bash
+# Check environment variables in Docker container
+docker exec -it container-name env | grep DEPLOYSTACK
+
+# Or check specific variables
+docker exec -it container-name printenv PORT
+docker exec -it container-name printenv NODE_ENV
+```
+
+## Related Documentation
+
+- [Backend Development Guide](/development/backend) - Main backend development guide
+- [Database Configuration](/development/backend/database/) - Database setup and configuration
+- [API Documentation](/development/backend/api/) - API development guide
+- [Deploy DeployStack](/self-hosted/docker-compose) - Deploy DeployStack with Docker Compose

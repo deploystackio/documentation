@@ -1,0 +1,416 @@
+---
+title: MCP Configuration Architecture
+description: Developer guide to DeployStack's three-tier MCP server configuration system for arguments and environment variables.
+---
+
+# MCP Configuration Architecture
+
+DeployStack implements a sophisticated three-tier configuration architecture for managing MCP server command line arguments and environment variables. This system supports multi-user teams while maintaining clean separation between fixed template parameters, shared team settings, and individual user configurations.
+
+## Server Sources
+
+MCP servers in the catalog come from two sources, both using the same three-tier configuration architecture:
+
+### Official Registry Servers (Automatic)
+
+- **Source**: Synced automatically from registry.modelcontextprotocol.io
+- **Schema Creation**: Automatic transformation via `RegistrySyncService` and background jobs
+- **Configuration Mapping**: Environment variables from registry automatically categorized into three tiers
+- **Transport Detection**: Automatically derived from `packages` (stdio) or `remotes` (HTTP/SSE)
+- **Maintenance**: Updates sync automatically from official registry
+
+### Manual Servers (Custom)
+
+- **Source**: Created manually by global administrators
+- **Schema Creation**: Manual categorization through Configuration Schema Step
+- **Configuration Mapping**: Precise admin control over every element
+- **Transport**: Explicitly configured by administrator
+- **Maintenance**: Manual updates as needed
+
+**Key Point**: Both server types use the identical three-tier configuration system at runtime. The difference is in how schemas are initially created.
+
+## Architecture Overview
+
+The three-tier system separates MCP server configuration into distinct layers:
+
+1. **Template Level** - Fixed arguments and schemas defined in the MCP catalog
+2. **Team Level** - Shared team configurations and credentials
+3. **User Level** - Personal configurations for individual team members
+
+This architecture solves the fundamental challenge of supporting multiple users within the same team installation while allowing individual customization.
+
+## Lock/Unlock Control System
+
+The system's core feature is sophisticated lock/unlock controls that determine configuration boundaries:
+
+**Global Administrator Controls:**
+- **Categorization**: Classify every config element as Template/Team/User configurable
+- **Lock States**: Set `default_team_locked` and `visible_to_users` controls
+- **Security Boundaries**: Define what can never be changed vs. team/user configurable
+
+**Team Administrator Controls:**
+- **Lock/Unlock Elements**: Control what users can modify within schema boundaries
+- **Credential Management**: Manage team secrets with visibility controls
+
+**Runtime Access:**
+- Users see only unlocked elements they can configure
+- Locked elements are inherited but not modifiable
+
+## Design Problem
+
+### The Multi-User Team Challenge
+
+Traditional MCP configurations assume a single user per installation. DeployStack's team-based approach requires supporting scenarios like:
+
+**Team Setup:**
+- Team: "DevOps Team" 
+- Members: User A, User B
+- Total Configurations: 2 different user configurations for the same MCP server
+
+**User Requirements:**
+- User A needs personal search preferences (Google, 10 results per page)
+- User B needs different preferences (Bing, 20 results per page)
+- Both users share the same team API credentials
+- Each user may have different cache settings
+
+### Solution Architecture
+
+The three-tier system addresses this by:
+
+1. **Template Level**: Defines what arguments are fixed vs configurable
+2. **Team Level**: Manages shared credentials and team-wide settings
+3. **User Level**: Allows individual customization per user
+
+## Database Schema
+
+### Tier 1: MCP Catalog (`mcpServers`)
+
+The catalog defines the configuration structure for each MCP server type:
+
+**Core Configuration Fields:**
+```sql
+-- Template Level (with lock controls)
+template_args: text('template_args')         -- [{value, locked, description}]
+template_env: text('template_env')           -- Fixed environment variables
+template_headers: text('template_headers')   -- Fixed HTTP headers (for remotes)
+
+-- Team Schema (with lock/visibility controls) 
+team_args_schema: text('team_args_schema')   -- Schema with lock controls
+team_env_schema: text('team_env_schema')     -- [{name, type, required, default_team_locked, visible_to_users}]
+team_headers_schema: text('team_headers_schema') -- HTTP headers schema
+
+-- User Schema
+user_args_schema: text('user_args_schema')   -- User-configurable argument schema
+user_env_schema: text('user_env_schema')     -- User-configurable environment schema
+user_headers_schema: text('user_headers_schema') -- User HTTP headers schema
+```
+
+**Transport Configuration:**
+```sql
+transport_type: text('transport_type')       -- 'stdio' | 'http' | 'sse'
+packages: text('packages')                   -- JSON: npm/pip/docker packages (stdio)
+remotes: text('remotes')                     -- JSON: HTTP/SSE endpoints
+```
+
+**Official Registry Tracking Fields:**
+```sql
+official_name: text('official_name')         -- Reverse-DNS name from registry
+synced_from_official_registry: boolean       -- True if synced from registry
+official_registry_server_id: text            -- Registry's server identifier
+official_registry_version_id: text           -- Registry's version identifier
+official_registry_published_at: timestamp    -- Original publication date
+official_registry_updated_at: timestamp      -- Last update in registry
+```
+
+**GitHub Enhancement Fields:**
+```sql
+repository_source: text                      -- 'github' | 'gitlab' | 'bitbucket'
+repository_id: text                          -- Platform-specific repo ID
+repository_subfolder: text                   -- Monorepo subfolder path
+github_account_id: text                      -- For avatar URLs
+github_readme_base64: text                   -- Cached README content
+github_stars: integer                        -- Star count for social proof
+```
+
+### Tier 2: Team Installation (`mcpServerInstallations`)
+
+Team installations manage shared configurations:
+
+```sql
+installation_name: text('installation_name') -- Team-friendly name
+team_args: text('team_args')                 -- Team-level arguments (JSON array)
+team_env: text('team_env')                   -- Team environment variables (JSON object)
+```
+
+### Tier 3: User Configuration (`mcpUserConfigurations`)
+
+Individual user configurations:
+
+```sql
+installation_id: text('installation_id')     -- References team installation
+user_id: text('user_id')                     -- User who owns this config
+
+user_args: text('user_args')                 -- User arguments (JSON array)
+user_env: text('user_env')                   -- User environment variables (JSON object)
+```
+
+## Configuration Flow
+
+### Runtime Assembly
+
+### Configuration Schema Step
+
+Global administrators categorize configuration elements through the Configuration Schema Step:
+
+1. **Extract Elements**: Parse Claude Desktop config for all args and env vars
+2. **Categorize Each Element**: Assign to Template/Team/User tiers
+3. **Set Lock Controls**: Define `default_team_locked` and `visible_to_users`
+4. **Generate Schema**: Create the three-tier schema structure
+
+### Runtime Assembly
+
+At runtime, configurations are assembled by merging all three tiers with lock/unlock controls applied:
+
+```javascript
+const assembleConfiguration = (server, teamInstallation, userConfig) => {
+  const finalArgs = [
+    ...server.template_args.map(arg => arg.value), // Fixed template args
+    ...(teamInstallation.team_args || []),          // Team shared args
+    ...(userConfig.user_args || [])                 // User personal args
+  ];
+  
+  const finalEnv = {
+    ...(server.template_env || {}),                 // Fixed template env
+    ...(teamInstallation.team_env || {}),           // Team shared env
+    ...(userConfig.user_env || {})                  // User personal env
+  };
+  
+  return { args: finalArgs, env: finalEnv };
+};
+```
+
+## Service Layer
+
+### RegistrySyncService
+
+Manages automatic synchronization with the official MCP Registry:
+
+**Key Responsibilities:**
+- Fetches server list from registry.modelcontextprotocol.io
+- Creates job queue batches for progress tracking
+- Schedules individual server sync jobs with rate limiting
+- Coordinates with `McpServerSyncWorker` for transformation
+
+**Sync Process:**
+1. Fetch servers from official registry (with pagination)
+2. Filter out existing servers (if `skipExisting` enabled)
+3. Create job batch for tracking
+4. Create individual jobs with scheduled delays (rate limiting)
+5. Job queue processes sequentially via `McpServerSyncWorker`
+
+**Configuration Options:**
+- `maxServers`: Limit number of servers to sync (for testing)
+- `skipExisting`: Skip servers already in database
+- `forceRefresh`: Force refresh of existing servers
+- `rateLimitDelay`: Seconds between jobs (default: 2)
+
+For complete job queue details, see [Job Queue System](/development/backend/job-queue).
+
+### McpUserConfigurationService
+
+The service layer provides complete CRUD operations for user configurations:
+
+**Key Methods:**
+- `createUserConfiguration()` - Create new user config with validation
+- `getUserConfiguration()` - Retrieve user config with team access control
+- `updateUserConfiguration()` - Update with schema validation
+- `deleteUserConfiguration()` - Remove user config
+- `updateUserArgs()` - Partial update for arguments only
+- `updateUserEnv()` - Partial update for environment variables only
+
+**Security Features:**
+- Team-based access control
+- User isolation (users can only access their own configs)
+- Schema validation against server-defined schemas
+- Input sanitization and type checking
+
+## Automatic Schema Transformation
+
+When servers are synced from the official MCP Registry, their configurations are automatically transformed to the three-tier system:
+
+### Environment Variable Mapping
+
+**Registry Format → DeployStack Tiers:**
+
+- **Template Level**: Fixed values provided in registry
+- **Team Level**: `isRequired: true` + `isSecret: true` → Encrypted team secrets
+- **Team Level**: `isRequired: true` + `isSecret: false` → Required team settings  
+- **User Level**: `isRequired: false` → Optional personal preferences
+
+**Example Transformation:**
+
+Official registry environment variables:
+```json
+[
+  {"name": "API_KEY", "isRequired": true, "isSecret": true},
+  {"name": "DEBUG", "isRequired": false, "default": "false"}
+]
+```
+
+Automatically mapped to:
+- `API_KEY` → `team_env_schema` (encrypted, `default_team_locked: true`, `visible_to_users: false`)
+- `DEBUG` → `user_env_schema` (unlocked, user-configurable)
+
+### Transport Detection
+
+**STDIO Servers (packages):**
+- Command and package name → `template_args` (locked)
+- Runtime arguments → Team/user schemas based on registry metadata
+
+**HTTP/SSE Servers (remotes):**
+- URL → `template_env` or embedded in remotes config (locked)
+- Authentication headers → `team_headers_schema` (secrets)
+- Optional headers → `user_headers_schema` (personal preferences)
+
+The transformation layer (`officialRegistryTransforms.ts`) handles all automatic mapping without admin intervention.
+
+## API Endpoints
+
+## API Endpoints
+
+Configuration management through REST API:
+
+- Team installations: `/api/teams/{teamId}/mcp/installations/`
+- User configurations: `/api/teams/{teamId}/mcp/installations/{installationId}/user-configs/`
+- Schema validation: Built into all endpoints
+
+## Schema Examples
+
+### Manual Server Schema
+
+Configuration schema created manually by global administrator:
+
+```json
+{
+  "name": "Custom Company API",
+  "transport_type": "stdio",
+  "synced_from_official_registry": false,
+  "template_args": [
+    {"value": "-y", "locked": true, "description": ""},
+    {"value": "@company/api-server", "locked": true, "description": ""}
+  ],
+  "team_env_schema": [
+    {
+      "name": "COMPANY_API_KEY",
+      "type": "secret", 
+      "required": true,
+      "default_team_locked": true,
+      "visible_to_users": false,
+      "description": "Company API authentication key"
+    }
+  ],
+  "user_env_schema": [
+    {
+      "name": "DEBUG_MODE",
+      "type": "boolean",
+      "required": false,
+      "default": "false",
+      "description": "Enable debug logging"
+    }
+  ]
+}
+```
+
+### Synced Server Schema
+
+Configuration schema automatically transformed from official registry:
+
+```json
+{
+  "name": "Context7",
+  "official_name": "io.github.upstash/context7",
+  "transport_type": "stdio",
+  "synced_from_official_registry": true,
+  "official_registry_server_id": "srv_abc123",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@upstash/context7",
+      "transport": {
+        "type": "stdio",
+        "command": "npx",
+        "args": ["-y", "@upstash/context7"]
+      },
+      "environmentVariables": [
+        {
+          "name": "UPSTASH_REDIS_URL",
+          "isRequired": true,
+          "isSecret": false
+        },
+        {
+          "name": "UPSTASH_REDIS_TOKEN",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "DEBUG",
+          "isRequired": false,
+          "default": "false"
+        }
+      ]
+    }
+  ],
+  "template_args": [
+    {"value": "-y", "locked": true},
+    {"value": "@upstash/context7", "locked": true}
+  ],
+  "team_env_schema": [
+    {
+      "name": "UPSTASH_REDIS_URL",
+      "type": "string",
+      "required": true,
+      "default_team_locked": true,
+      "visible_to_users": true
+    },
+    {
+      "name": "UPSTASH_REDIS_TOKEN",
+      "type": "secret",
+      "required": true,
+      "default_team_locked": true,
+      "visible_to_users": false
+    }
+  ],
+  "user_env_schema": [
+    {
+      "name": "DEBUG",
+      "type": "boolean",
+      "required": false,
+      "default": "false"
+    }
+  ],
+  "github_stars": 142,
+  "github_account_id": "12345678"
+}
+```
+
+**Key Differences:**
+- Synced servers include `official_name` and registry tracking fields
+- Synced servers have `packages` array with original registry format preserved
+- Schema transformation is automatic based on `isRequired` and `isSecret` properties
+- GitHub metadata automatically populated during sync
+
+
+
+## Related Documentation
+
+For specific implementation details:
+
+- [Backend API](/development/backend/api/) - Complete API endpoint documentation
+- [Database Schema](/development/backend/database/) - Database structure and relationships
+- [Job Queue System](/development/backend/job-queue) - Background job processing for registry sync
+- [Teams](/teams) - Team management and structure
+- [MCP Configuration System](/mcp-configuration) - User-facing configuration guide
+- [MCP Installation](/mcp-installation) - Installation and team setup
+- [MCP Catalog](/mcp-catalog) - Official registry integration details
+
+The three-tier configuration architecture provides a robust foundation for managing complex MCP server configurations in multi-user team environments while maintaining security, flexibility, and ease of use. The system seamlessly handles both manually created custom servers and automatically synced official registry servers.

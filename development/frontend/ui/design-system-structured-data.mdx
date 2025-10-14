@@ -1,0 +1,489 @@
+---
+title: Structured Data Display Pattern
+description: Mandatory design pattern for displaying structured information consistently throughout the DeployStack frontend using description lists.
+---
+
+# Structured Data Display Pattern
+
+This document establishes the **mandatory pattern** for displaying structured information throughout the DeployStack frontend. All structured data displays - whether read-only information or form layouts - must follow this consistent description list pattern.
+
+## Design Principle
+
+**Every piece of structured information must use the same visual pattern**: label on the left, content on the right, with consistent spacing and typography.
+
+This creates a cohesive, professional appearance across the entire application and eliminates visual inconsistency between different pages and components.
+
+## The Mandatory Pattern
+
+All structured data displays must use this HTML structure:
+
+```html
+<div class="px-4 sm:px-0">
+  <h3 class="text-base/7 font-semibold text-gray-900">Section Title</h3>
+  <p class="mt-1 max-w-2xl text-sm/6 text-gray-500">Section description</p>
+</div>
+
+<div class="mt-6 border-t border-gray-100">
+  <dl class="divide-y divide-gray-100">
+    <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+      <dt class="text-sm/6 font-medium text-gray-900">Field Label</dt>
+      <dd class="mt-1 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0">
+        Field Content
+      </dd>
+    </div>
+  </dl>
+</div>
+```
+
+### Pattern Components
+
+| Element | Classes | Purpose |
+|---------|---------|---------|
+| `<dt>` | `text-sm/6 font-medium text-gray-900` | Field label (left column) |
+| `<dd>` | `mt-1 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0` | Field content (right column) |
+| Container | `px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0` | Responsive grid layout |
+| List | `divide-y divide-gray-100` | Visual separation between fields |
+
+## When to Use This Pattern
+
+### ✅ **Required For**
+- User profile information
+- Server configuration details  
+- Installation information
+- Settings pages
+- Form layouts
+- Team management displays
+- Any structured data presentation
+
+### ❌ **Not Required For**
+- Simple text content
+- Marketing pages
+- Dashboard cards (unless showing structured data)
+- Navigation elements
+- Alerts and notifications
+
+## Implementation Examples
+
+### Read-Only Information Display
+
+```html
+<template>
+  <div class="px-4 sm:px-0">
+    <h3 class="text-base/7 font-semibold text-gray-900">Installation Details</h3>
+    <p class="mt-1 max-w-2xl text-sm/6 text-gray-500">
+      Information about this MCP server installation
+    </p>
+  </div>
+
+  <div class="mt-6 border-t border-gray-100">
+    <dl class="divide-y divide-gray-100">
+      <!-- Simple Text Field -->
+      <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+        <dt class="text-sm/6 font-medium text-gray-900">Installation Name</dt>
+        <dd class="mt-1 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0">
+          {{ installation.name }}
+        </dd>
+      </div>
+
+      <!-- With Badge -->
+      <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+        <dt class="text-sm/6 font-medium text-gray-900">Status</dt>
+        <dd class="mt-1 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0">
+          <Badge :variant="getStatusVariant(installation.status)">
+            {{ installation.status }}
+          </Badge>
+        </dd>
+      </div>
+
+      <!-- Multiple Values -->
+      <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+        <dt class="text-sm/6 font-medium text-gray-900">Links</dt>
+        <dd class="mt-1 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0">
+          <div class="space-y-2">
+            <div class="flex items-center gap-1">
+              <Github class="h-4 w-4 text-muted-foreground" />
+              <a :href="server.github_url" class="text-blue-600 hover:underline">
+                Repository <ExternalLink class="inline h-3 w-3 ml-1" />
+              </a>
+            </div>
+          </div>
+        </dd>
+      </div>
+    </dl>
+  </div>
+</template>
+```
+
+### Form Input Layout
+
+```html
+<template>
+  <div class="px-4 sm:px-0">
+    <h3 class="text-base/7 font-semibold text-gray-900">Basic Information</h3>
+    <p class="mt-1 max-w-2xl text-sm/6 text-gray-500">
+      Configure the basic settings for your MCP server
+    </p>
+  </div>
+
+  <div class="mt-6 border-t border-gray-100">
+    <dl class="divide-y divide-gray-100">
+      <!-- Text Input -->
+      <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+        <dt class="text-sm/6 font-medium text-gray-900">Server Name</dt>
+        <dd class="mt-1 sm:col-span-2 sm:mt-0">
+          <Input
+            v-model="formData.name"
+            placeholder="Enter server name"
+            required
+          />
+          <p class="text-xs text-muted-foreground mt-1">
+            A unique name for this MCP server
+          </p>
+        </dd>
+      </div>
+
+      <!-- Textarea -->
+      <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+        <dt class="text-sm/6 font-medium text-gray-900">Description</dt>
+        <dd class="mt-1 sm:col-span-2 sm:mt-0">
+          <Textarea
+            v-model="formData.description"
+            placeholder="Describe what this server does"
+            rows="3"
+          />
+          <p class="text-xs text-muted-foreground mt-1">
+            Brief description of the server's functionality
+          </p>
+        </dd>
+      </div>
+
+      <!-- Select Dropdown -->
+      <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+        <dt class="text-sm/6 font-medium text-gray-900">Category</dt>
+        <dd class="mt-1 sm:col-span-2 sm:mt-0">
+          <Select v-model="formData.category">
+            <SelectTrigger>
+              <SelectValue placeholder="Select a category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="productivity">Productivity</SelectItem>
+              <SelectItem value="development">Development</SelectItem>
+            </SelectContent>
+          </Select>
+          <p class="text-xs text-muted-foreground mt-1">
+            Choose the most appropriate category
+          </p>
+        </dd>
+      </div>
+    </dl>
+  </div>
+</template>
+```
+
+### Complex Field Types
+
+#### Switch/Toggle Fields
+```html
+<div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+  <dt class="text-sm/6 font-medium text-gray-900">Featured Server</dt>
+  <dd class="mt-1 sm:col-span-2 sm:mt-0">
+    <div class="flex items-center space-x-3">
+      <Switch v-model="formData.featured" />
+      <span class="text-sm text-gray-700">
+        {{ formData.featured ? 'Yes' : 'No' }}
+      </span>
+    </div>
+    <p class="text-xs text-muted-foreground mt-1">
+      Featured servers appear prominently in the catalog
+    </p>
+  </dd>
+</div>
+```
+
+#### Tag Management Fields
+```html
+<div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+  <dt class="text-sm/6 font-medium text-gray-900">Tags</dt>
+  <dd class="mt-1 sm:col-span-2 sm:mt-0">
+    <!-- Existing Tags -->
+    <div v-if="formData.tags.length > 0" class="flex flex-wrap gap-2 mb-3">
+      <Badge
+        v-for="tag in formData.tags"
+        :key="tag"
+        variant="secondary"
+        class="flex items-center gap-1"
+      >
+        {{ tag }}
+        <Button
+          variant="ghost"
+          size="sm"
+          class="h-4 w-4 p-0 hover:bg-transparent"
+          @click="removeTag(tag)"
+        >
+          <X class="h-3 w-3" />
+        </Button>
+      </Badge>
+    </div>
+
+    <!-- Add New Tag -->
+    <div class="flex gap-2">
+      <Input
+        v-model="newTag"
+        placeholder="Add a tag"
+        @keydown.enter.prevent="addTag"
+        class="flex-1"
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        @click="addTag"
+        :disabled="!newTag.trim()"
+      >
+        <Plus class="h-4 w-4" />
+      </Button>
+    </div>
+
+    <p class="text-xs text-muted-foreground mt-1">
+      Tags help users discover your server
+    </p>
+  </dd>
+</div>
+```
+
+#### File Upload Fields
+```html
+<div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+  <dt class="text-sm/6 font-medium text-gray-900">Configuration File</dt>
+  <dd class="mt-1 sm:col-span-2 sm:mt-0">
+    <div class="border-2 border-dashed border-gray-300 rounded-md p-4">
+      <div class="text-center">
+        <Upload class="mx-auto h-8 w-8 text-gray-400" />
+        <p class="mt-1 text-sm text-gray-600">
+          Drop your config file here or 
+          <button class="text-blue-600 hover:underline">browse</button>
+        </p>
+      </div>
+    </div>
+    <p class="text-xs text-muted-foreground mt-1">
+      Accepted formats: .json, .yaml, .yml
+    </p>
+  </dd>
+</div>
+```
+
+## Integration with ContentWrapper
+
+When using this pattern within pages that require the ContentWrapper (tabbed content, detail pages), structure it like this:
+
+```html
+<template>
+  <DashboardLayout :title="pageTitle">
+    <!-- Tabs or other navigation -->
+    <DsTabs v-model="activeTab">
+      <DsTabsItem value="information" label="Information">
+        <Info class="h-4 w-4" />
+      </DsTabsItem>
+    </DsTabs>
+
+    <!-- Content within ContentWrapper -->
+    <ContentWrapper>
+      <!-- Use the structured data pattern inside -->
+      <div class="px-4 sm:px-0">
+        <h3 class="text-base/7 font-semibold text-gray-900">Installation Details</h3>
+        <p class="mt-1 max-w-2xl text-sm/6 text-gray-500">
+          Detailed information about this installation
+        </p>
+      </div>
+
+      <div class="mt-6 border-t border-gray-100">
+        <dl class="divide-y divide-gray-100">
+          <!-- Structured data fields -->
+        </dl>
+      </div>
+    </ContentWrapper>
+  </DashboardLayout>
+</template>
+```
+
+For more information about ContentWrapper usage, see the [Layout Design Patterns](/development/frontend/ui/#layout-design-patterns) section.
+
+## Typography and Spacing Standards
+
+### Label Typography (dt)
+- **Font size**: `text-sm/6` (14px with 24px line-height)
+- **Font weight**: `font-medium` (500)
+- **Color**: `text-gray-900` (high contrast for readability)
+
+### Content Typography (dd)
+- **Font size**: `text-sm/6` (14px with 24px line-height)
+- **Font weight**: Regular (400)
+- **Color**: `text-gray-700` (slightly lighter than labels)
+
+### Description Text
+- **Font size**: `text-xs` (12px)
+- **Color**: `text-muted-foreground`
+- **Margin**: `mt-1` (4px top margin)
+
+### Spacing
+- **Vertical padding**: `py-6` (24px top and bottom)
+- **Horizontal padding**: `px-4` on mobile, `px-0` on desktop
+- **Grid gap**: `sm:gap-4` (16px between columns)
+
+## Migration Guide
+
+### From Traditional Form Layout
+
+**Before (Traditional Form):**
+
+```html
+<div class="space-y-6">
+  <div class="space-y-2">
+    <Label for="name">Server Name</Label>
+    <Input id="name" v-model="formData.name" />
+    <p class="text-xs text-muted-foreground">
+      Enter a unique name for the server
+    </p>
+  </div>
+</div>
+```
+
+**After (Structured Data Pattern):**
+```html
+<div class="mt-6 border-t border-gray-100">
+  <dl class="divide-y divide-gray-100">
+    <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+      <dt class="text-sm/6 font-medium text-gray-900">Server Name</dt>
+      <dd class="mt-1 sm:col-span-2 sm:mt-0">
+        <Input v-model="formData.name" />
+        <p class="text-xs text-muted-foreground mt-1">
+          Enter a unique name for the server
+        </p>
+      </dd>
+    </div>
+  </dl>
+</div>
+```
+
+### Migration Steps
+
+1. **Remove Label components** - Labels become `<dt>` elements
+2. **Wrap in description list** - Add `<dl>` container with dividers
+3. **Structure each field** - Use the dt/dd grid pattern
+4. **Update typography classes** - Apply standard text classes
+5. **Move descriptions** - Place help text inside `<dd>` with `mt-1`
+
+## Accessibility Features
+
+### Semantic HTML
+- Uses proper `<dl>`, `<dt>`, `<dd>` elements for screen readers
+- Maintains logical information hierarchy
+- Preserves form labeling with `id` and `for` attributes
+
+### Keyboard Navigation
+- All interactive elements remain keyboard accessible
+- Tab order follows natural reading flow (left to right, top to bottom)
+- Form validation and error states work normally
+
+### Screen Reader Support
+```html
+<!-- Screen readers understand this structure -->
+<dt class="text-sm/6 font-medium text-gray-900">Installation Name</dt>
+<dd class="mt-1 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0">
+  brightdata-mcp
+</dd>
+```
+
+## Common Mistakes to Avoid
+
+### ❌ **Don't Use for Non-Structured Content**
+```html
+<!-- Wrong: Using pattern for simple text -->
+<dt>Welcome Message</dt>
+<dd>Welcome to DeployStack! This is just a paragraph...</dd>
+```
+
+### ❌ **Don't Inconsistent Typography**
+```html
+<!-- Wrong: Using different text classes -->
+<dt class="text-lg font-bold">Field Name</dt>
+<dd class="text-base">Field Value</dd>
+```
+
+### ❌ **Don't Skip the Grid Layout**
+```html
+<!-- Wrong: Missing responsive grid classes -->
+<div class="py-6">
+  <dt>Field Name</dt>
+  <dd>Field Value</dd>
+</div>
+```
+
+### ❌ **Don't Put Labels in dd**
+```html
+<!-- Wrong: Label inside content area -->
+<dt>Field Name</dt>
+<dd>
+  <Label>Field Name</Label>
+  <Input v-model="value" />
+</dd>
+```
+
+## Best Practices
+
+### ✅ **Group Related Fields**
+Use section headers to organize related information:
+
+```html
+<div class="px-4 sm:px-0">
+  <h3 class="text-base/7 font-semibold text-gray-900">Basic Information</h3>
+</div>
+<dl class="divide-y divide-gray-100">
+  <!-- Basic fields -->
+</dl>
+
+<div class="px-4 sm:px-0 mt-8">
+  <h3 class="text-base/7 font-semibold text-gray-900">Advanced Settings</h3>
+</div>
+<dl class="divide-y divide-gray-100">
+  <!-- Advanced fields -->
+</dl>
+```
+
+### ✅ **Consistent Description Text**
+Keep help text concise and consistently formatted:
+
+```html
+<dd class="mt-1 sm:col-span-2 sm:mt-0">
+  <Input v-model="value" />
+  <p class="text-xs text-muted-foreground mt-1">
+    Brief, helpful description of what this field does
+  </p>
+</dd>
+```
+
+### ✅ **Handle Empty States**
+Show appropriate messages for missing data:
+
+```html
+<dd class="mt-1 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0">
+  {{ installation.description || 'No description provided' }}
+</dd>
+```
+
+## Component Examples
+
+For working examples of this pattern, see:
+- **InstallationInfo.vue** - Read-only information display
+- **BasicInfoStep.vue** - Form layout implementation
+- **UserProfile.vue** - Mixed content with badges and links
+
+## Related Documentation
+
+- [UI Design System](/development/frontend/ui/) - Overall design patterns and component guidelines
+- [ContentWrapper Pattern](/development/frontend/ui/#layout-design-patterns) - Mandatory wrapper for tabbed content
+- [Form Design Patterns](/development/frontend/ui/#form-design-patterns) - Additional form styling guidelines
+
+---
+
+This structured data display pattern is **mandatory** for all new structured information displays and should be used when updating existing components to ensure visual consistency across the DeployStack frontend.

@@ -1,0 +1,592 @@
+---
+title: Custom UI Components
+description: Complete guide for creating, managing, and extending custom UI components in the DeployStack frontend, including best practices for integrating with shadcn/vue.
+---
+
+# Custom UI Components
+
+This guide covers creating and managing custom UI components in DeployStack, including extending shadcn/vue components, building new components from scratch, and maintaining consistency across your design system.
+
+## Philosophy and Approach
+
+DeployStack follows the **shadcn/vue philosophy**: components are copied into your codebase and become **yours to own and customize**. This approach provides several key advantages:
+
+- **Full Control**: Direct access to component source code for unlimited customization
+- **No Breaking Changes**: Updates don't break your customizations since you own the code
+- **AI-Friendly**: Open code structure allows AI tools to understand and improve components
+- **Design System Integration**: Components naturally fit together using shared design tokens
+
+### When to Create Custom Components
+
+Create custom components when:
+
+1. **Missing Components**: The component doesn't exist in shadcn/vue
+2. **Complex Compositions**: Combining multiple shadcn components into reusable patterns
+3. **Business Logic**: Components specific to DeployStack's domain (e.g., ServerStatusCard, DeploymentProgress)
+
+## Component Structure and Organization
+
+### Directory Structure
+
+All custom components follow the same structure as shadcn/vue components in `src/components/ui/`:
+
+```bash
+src/components/ui/
+├── button-group/           # Custom component
+│   ├── ButtonGroup.vue
+│   ├── ButtonGroupItem.vue
+│   └── index.ts
+├── file-uploader/          # Custom component
+│   ├── FileUploader.vue
+│   ├── FileUploaderDropzone.vue
+│   ├── FileUploaderList.vue
+│   └── index.ts
+├── button/                 # Existing shadcn component
+├── switch/                 # Customized shadcn component
+└── ...
+```
+
+### Export Pattern
+
+Always follow the shadcn/vue export pattern:
+
+```typescript
+// src/components/ui/button-group/index.ts
+export { default as ButtonGroup } from './ButtonGroup.vue'
+export { default as ButtonGroupItem } from './ButtonGroupItem.vue'
+
+// Usage in components
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group'
+```
+
+## Component Development Guidelines
+
+### 1. Design Token Integration
+
+**✅ Use shadcn/vue design tokens for consistency:**
+
+```vue
+<template>
+  <div :class="[
+    'rounded-md border bg-card text-card-foreground shadow-sm',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  ]">
+    <!-- Uses CSS variables from shadcn theme -->
+  </div>
+</template>
+```
+
+**❌ Avoid hard-coded colors:**
+
+```vue
+<template>
+  <!-- Don't do this -->
+  <div class="bg-blue-500 text-white border-gray-300">
+    Content
+  </div>
+</template>
+```
+
+### 2. Prop Interface Standards
+
+Follow consistent prop patterns across all components:
+
+```vue
+<script setup lang="ts">
+interface Props {
+  // Standard shadcn props
+  variant?: 'default' | 'destructive' | 'outline' | 'ghost'
+  size?: 'sm' | 'md' | 'lg'
+  disabled?: boolean
+  
+  // Component-specific props
+  orientation?: 'horizontal' | 'vertical'
+  allowMultiple?: boolean
+  
+  // Event handlers
+  onSelectionChange?: (value: string[]) => void
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  variant: 'default',
+  size: 'md',
+  disabled: false,
+  orientation: 'horizontal',
+  allowMultiple: false
+})
+</script>
+```
+
+### 3. Class Variance Authority (CVA)
+
+Use CVA for complex styling variants:
+
+```vue
+<script setup lang="ts">
+import { cva } from 'class-variance-authority'
+import { cn } from '@/lib/utils'
+
+const buttonGroupVariants = cva(
+  // Base classes
+  'inline-flex items-center',
+  {
+    variants: {
+      variant: {
+        default: 'bg-primary text-primary-foreground',
+        outline: 'border border-input bg-background',
+        ghost: 'hover:bg-accent hover:text-accent-foreground'
+      },
+      size: {
+        sm: 'h-8 px-2 text-xs',
+        md: 'h-9 px-3 text-sm',
+        lg: 'h-10 px-4'
+      },
+      orientation: {
+        horizontal: 'flex-row [&>*:not(:first-child):not(:last-child)]:rounded-none [&>*:first-child]:rounded-r-none [&>*:last-child]:rounded-l-none',
+        vertical: 'flex-col [&>*:not(:first-child):not(:last-child)]:rounded-none [&>*:first-child]:rounded-b-none [&>*:last-child]:rounded-t-none'
+      }
+    },
+    defaultVariants: {
+      variant: 'default',
+      size: 'md',
+      orientation: 'horizontal'
+    }
+  }
+)
+
+const containerClass = computed(() => 
+  cn(buttonGroupVariants({ variant: props.variant, size: props.size, orientation: props.orientation }))
+)
+</script>
+```
+
+### 4. Accessibility Requirements
+
+Ensure all custom components meet accessibility standards:
+
+```vue
+<script setup lang="ts">
+import { useId } from 'vue'
+
+const id = useId()
+const describedBy = `${id}-description`
+</script>
+
+<template>
+  <div
+    role="group"
+    :aria-labelledby="id"
+    :aria-describedby="describedBy"
+  >
+    <div :id="id" class="sr-only">{{ t('components.buttonGroup.label') }}</div>
+    <div :id="describedBy" class="sr-only">{{ t('components.buttonGroup.description') }}</div>
+    
+    <slot />
+  </div>
+</template>
+```
+
+## Component Types and Examples
+
+### 1. Composite Components
+
+Components that combine multiple shadcn components:
+
+```vue
+<!-- src/components/ui/server-card/ServerCard.vue -->
+<script setup lang="ts">
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+
+interface ServerCardProps {
+  server: {
+    id: string
+    name: string
+    status: 'running' | 'stopped' | 'error'
+    category: string
+    description?: string
+  }
+  onManage: (serverId: string) => void
+  onDeploy: (serverId: string) => void
+}
+
+const props = defineProps<ServerCardProps>()
+
+const statusVariant = computed(() => {
+  switch (props.server.status) {
+    case 'running': return 'default'
+    case 'stopped': return 'secondary'
+    case 'error': return 'destructive'
+    default: return 'outline'
+  }
+})
+</script>
+
+<template>
+  <Card>
+    <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle class="text-sm font-medium">{{ server.name }}</CardTitle>
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button variant="ghost" class="h-8 w-8 p-0">
+            <MoreHorizontal class="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem @click="props.onManage(server.id)">
+            {{ t('actions.manage') }}
+          </DropdownMenuItem>
+          <DropdownMenuItem @click="props.onDeploy(server.id)">
+            {{ t('actions.deploy') }}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </CardHeader>
+    <CardContent>
+      <div class="flex items-center justify-between">
+        <Badge :variant="statusVariant">{{ server.status }}</Badge>
+        <Badge variant="outline" class="font-mono text-xs">{{ server.category }}</Badge>
+      </div>
+      <p v-if="server.description" class="text-sm text-muted-foreground mt-2">
+        {{ server.description }}
+      </p>
+    </CardContent>
+  </Card>
+</template>
+```
+
+### 2. Utility Components
+
+Reusable patterns with business logic:
+
+```vue
+<!-- src/components/ui/deployment-status/DeploymentStatus.vue -->
+<script setup lang="ts">
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import { CheckCircle, AlertCircle, Clock, XCircle } from 'lucide-vue-next'
+
+interface DeploymentStatusProps {
+  status: 'pending' | 'running' | 'success' | 'failed'
+  progress?: number
+  message?: string
+  showProgress?: boolean
+}
+
+const props = withDefaults(defineProps<DeploymentStatusProps>(), {
+  progress: 0,
+  showProgress: true
+})
+
+const statusConfig = computed(() => {
+  switch (props.status) {
+    case 'pending':
+      return { icon: Clock, variant: 'secondary' as const, color: 'text-yellow-600' }
+    case 'running':
+      return { icon: Clock, variant: 'default' as const, color: 'text-blue-600' }
+    case 'success':
+      return { icon: CheckCircle, variant: 'default' as const, color: 'text-green-600' }
+    case 'failed':
+      return { icon: XCircle, variant: 'destructive' as const, color: 'text-red-600' }
+    default:
+      return { icon: AlertCircle, variant: 'outline' as const, color: 'text-muted-foreground' }
+  }
+})
+</script>
+
+<template>
+  <div class="space-y-2">
+    <div class="flex items-center gap-2">
+      <component 
+        :is="statusConfig.icon" 
+        :class="['h-4 w-4', statusConfig.color]" 
+      />
+      <Badge :variant="statusConfig.variant">
+        {{ t(`deployment.status.${status}`) }}
+      </Badge>
+    </div>
+    
+    <Progress 
+      v-if="showProgress && status === 'running'" 
+      :value="progress"
+      class="h-2"
+    />
+    
+    <p v-if="message" class="text-sm text-muted-foreground">
+      {{ message }}
+    </p>
+  </div>
+</template>
+```
+
+### 3. Form Components
+
+Specialized form inputs that extend basic components:
+
+```vue
+<!-- src/components/ui/icon-selector/IconSelector.vue -->
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Button } from '@/components/ui/button'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { Badge } from '@/components/ui/badge'
+import { Check } from 'lucide-vue-next'
+
+interface IconSelectorProps {
+  modelValue?: string
+  placeholder?: string
+  disabled?: boolean
+}
+
+const props = withDefaults(defineProps<IconSelectorProps>(), {
+  placeholder: 'Select icon...',
+  disabled: false
+})
+
+const emit = defineEmits<{
+  'update:modelValue': [value: string]
+}>()
+
+const open = ref(false)
+
+// Available icons - in real implementation, this would be imported from a constants file
+const availableIcons = [
+  { value: '🚀', label: 'Rocket' },
+  { value: '⚡', label: 'Lightning' },
+  { value: '🔧', label: 'Wrench' },
+  { value: '📊', label: 'Chart' },
+  { value: '🗄️', label: 'Database' }
+]
+
+const selectedIcon = computed(() => 
+  availableIcons.find(icon => icon.value === props.modelValue)
+)
+
+function selectIcon(iconValue: string) {
+  emit('update:modelValue', iconValue)
+  open.value = false
+}
+</script>
+
+<template>
+  <Popover v-model:open="open">
+    <PopoverTrigger as-child>
+      <Button
+        variant="outline"
+        role="combobox"
+        :aria-expanded="open"
+        :disabled="disabled"
+        class="w-full justify-between"
+      >
+        <div v-if="selectedIcon" class="flex items-center gap-2">
+          <span>{{ selectedIcon.value }}</span>
+          <span>{{ selectedIcon.label }}</span>
+        </div>
+        <span v-else class="text-muted-foreground">{{ placeholder }}</span>
+        <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent class="w-full p-0">
+      <Command>
+        <CommandInput :placeholder="t('components.iconSelector.search')" />
+        <CommandList>
+          <CommandEmpty>{{ t('components.iconSelector.noResults') }}</CommandEmpty>
+          <CommandGroup>
+            <CommandItem
+              v-for="icon in availableIcons"
+              :key="icon.value"
+              :value="icon.value"
+              @select="selectIcon(icon.value)"
+            >
+              <Check
+                :class="[
+                  'mr-2 h-4 w-4',
+                  modelValue === icon.value ? 'opacity-100' : 'opacity-0'
+                ]"
+              />
+              <span class="mr-2">{{ icon.value }}</span>
+              {{ icon.label }}
+            </CommandItem>
+          </CommandGroup>
+        </CommandList>
+      </Command>
+    </PopoverContent>
+  </Popover>
+</template>
+```
+
+## Customizing Existing shadcn Components
+
+### Replacing Components
+
+To customize an existing shadcn component, simply modify the files in `src/components/ui/[component-name]/`:
+
+```vue
+<!-- src/components/ui/switch/Switch.vue - Custom implementation -->
+<script setup lang="ts">
+interface Props {
+  checked?: boolean
+  disabled?: boolean
+  size?: 'sm' | 'md' | 'lg'
+  variant?: 'default' | 'success' | 'warning'
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  checked: false,
+  disabled: false,
+  size: 'md',
+  variant: 'default'
+})
+
+const emit = defineEmits<{
+  'update:checked': [value: boolean]
+}>()
+
+const sizeClasses = {
+  sm: 'h-4 w-7',
+  md: 'h-6 w-11', 
+  lg: 'h-8 w-14'
+}
+
+const variantClasses = {
+  default: 'data-[state=checked]:bg-primary',
+  success: 'data-[state=checked]:bg-green-600',
+  warning: 'data-[state=checked]:bg-yellow-600'
+}
+</script>
+
+<template>
+  <button
+    type="button"
+    role="switch"
+    :aria-checked="checked"
+    :data-state="checked ? 'checked' : 'unchecked'"
+    :disabled="disabled"
+    :class="[
+      'peer inline-flex shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors',
+      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+      'disabled:cursor-not-allowed disabled:opacity-50',
+      'data-[state=unchecked]:bg-input',
+      sizeClasses[size],
+      variantClasses[variant]
+    ]"
+    @click="!disabled && emit('update:checked', !checked)"
+  >
+    <span
+      :data-state="checked ? 'checked' : 'unchecked'"
+      :class="[
+        'pointer-events-none block rounded-full bg-background shadow-lg ring-0 transition-transform',
+        size === 'sm' ? 'h-3 w-3 data-[state=checked]:translate-x-3 data-[state=unchecked]:translate-x-0' : '',
+        size === 'md' ? 'h-4 w-4 data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0' : '',
+        size === 'lg' ? 'h-6 w-6 data-[state=checked]:translate-x-6 data-[state=unchecked]:translate-x-0' : ''
+      ]"
+    />
+  </button>
+</template>
+```
+
+## Documentation Standards
+
+### Component Documentation
+
+Each custom component should include comprehensive documentation:
+
+```vue
+<!-- src/components/ui/button-group/ButtonGroup.vue -->
+<!--
+@component ButtonGroup
+@description A group of related buttons that can function as a single unit or allow multiple selections.
+
+@example
+<ButtonGroup v-model="selected" variant="outline">
+  <ButtonGroupItem value="left">Left</ButtonGroupItem>
+  <ButtonGroupItem value="center">Center</ButtonGroupItem>
+  <ButtonGroupItem value="right">Right</ButtonGroupItem>
+</ButtonGroup>
+
+@props
+- variant: Visual style variant ('default' | 'outline' | 'ghost')
+- size: Size variant ('sm' | 'md' | 'lg')
+- orientation: Layout orientation ('horizontal' | 'vertical')
+- allowMultiple: Whether multiple items can be selected
+- disabled: Whether the entire group is disabled
+
+@emits
+- update:modelValue: Emitted when selection changes
+- selectionChange: Emitted with detailed selection info
+
+@slots
+- default: ButtonGroupItem components
+
+@accessibility
+- Uses proper ARIA attributes for group semantics
+- Supports keyboard navigation between items
+- Maintains focus management
+-->
+```
+
+### README Documentation
+
+Create a `README.md` for complex component groups:
+
+```markdown
+# Button Group Component
+
+A composable button group component for related actions.
+
+## Features
+
+- Single or multiple selection modes
+- Horizontal and vertical orientations
+- Full keyboard accessibility
+- Consistent with shadcn/vue design system
+
+## Usage
+
+```vue
+<script setup>
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group'
+</script>
+
+<template>
+  <ButtonGroup v-model="selection" allow-multiple>
+    <ButtonGroupItem value="bold">Bold</ButtonGroupItem>
+    <ButtonGroupItem value="italic">Italic</ButtonGroupItem>
+    <ButtonGroupItem value="underline">Underline</ButtonGroupItem>
+  </ButtonGroup>
+</template>
+```
+
+## API Reference
+
+### ButtonGroup Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `string \| string[]` | `undefined` | Selected value(s) |
+| `variant` | `'default' \| 'outline' \| 'ghost'` | `'default'` | Visual style |
+| `orientation` | `'horizontal' \| 'vertical'` | `'horizontal'` | Layout direction |
+
+## Maintenance and Updates
+
+### Migration Strategy
+
+When shadcn/vue adds a component you've built custom:
+
+1. **Evaluate**: Compare features and API design
+2. **Migrate**: If shadcn version is better, plan migration
+3. **Extend**: If your version has unique features, consider contributing back
+4. **Document**: Update migration guides for the team
+
+### Version Control
+
+- Tag component versions in commit messages: `feat(ui): add ButtonGroup component v1.0`
+- Document breaking changes in component README
+- Maintain changelog for significant UI component updates
+
+---
+
+For questions about custom components, refer to the [UI Design System](/development/frontend/ui/) documentation or reach out to the frontend team.
