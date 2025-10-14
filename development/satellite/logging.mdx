@@ -3,8 +3,7 @@ title: Satellite Logging & Log Level Configuration
 description: Complete guide to configuring and using log levels in the DeployStack Satellite for development and production environments.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
-import { CodeBlock } from 'fumadocs-ui/components/codeblock';
+
 
 # Satellite Log Level Configuration
 
@@ -470,9 +469,9 @@ server.addHook('onRequest', async (request) => {
 
 ## Migration from Console.log
 
-<Callout type="warn">
+<Warning>
 **Important**: Replace all `console.log` statements with proper Pino logger calls to ensure consistent formatting and log level filtering.
-</Callout>
+</Warning>
 
 ### Problem: Inconsistent Log Output
 

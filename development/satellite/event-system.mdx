@@ -3,7 +3,7 @@ title: Event System
 description: Real-time event emission from satellite to backend for operational visibility, audit trails, and user feedback.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
+
 
 # Satellite Event System
 
@@ -62,6 +62,9 @@ Satellite Components          EventBus              Backend
 - Handles partial success responses
 
 ## Event Types
+<Note>
+**Naming Convention**: All event data fields use **snake_case** (e.g., `server_id`, `team_id`, `spawn_duration_ms`) to match the backend API convention.
+</Note>
 
 The satellite emits 10 event types across 4 categories:
 
@@ -305,9 +308,9 @@ The in-memory queue holds a maximum of 10,000 events:
 - 10,000 events ≈ 10-20MB RAM
 - Acceptable footprint for satellite process
 
-<Callout type="info">
+<Info>
 Queue is in-memory only. Satellite restarts clear the queue. This is acceptable because events are operational telemetry, not critical data requiring persistence.
-</Callout>
+</Info>
 
 ## Error Handling
 

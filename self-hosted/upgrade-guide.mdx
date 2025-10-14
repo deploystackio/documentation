@@ -3,18 +3,15 @@ title: Upgrade Guide
 description: Keep your self-hosted DeployStack instance up-to-date with the latest features and security patches.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
-import { Steps, Step } from 'fumadocs-ui/components/steps';
-
 # Upgrade Guide
 
 Keep your self-hosted DeployStack instance secure and up-to-date with the latest features, bug fixes, and security patches.
 
 ## General Guidelines
 
-<Callout type="warn">
+<Warning>
   **Always backup your data before starting the upgrade process.** This ensures you can restore your instance if anything goes wrong during the upgrade.
-</Callout>
+</Warning>
 
 ### Backup Your Data
 
@@ -65,17 +62,13 @@ docker-compose up -d
 For most upgrades, follow this simple process:
 
 <Steps>
-  <Step>
-    **Stop DeployStack Services**
-    
+  <Step title="Stop DeployStack Services">
     ```bash
     docker-compose down
     ```
   </Step>
   
-  <Step>
-    **Pull Latest Images**
-    
+  <Step title="Pull Latest Images">
     ```bash
     docker-compose pull
     ```
@@ -83,17 +76,13 @@ For most upgrades, follow this simple process:
     This downloads the latest versions of both frontend and backend images.
   </Step>
   
-  <Step>
-    **Start Updated Services**
-    
+  <Step title="Start Updated Services">
     ```bash
     docker-compose up -d
     ```
   </Step>
   
-  <Step>
-    **Verify Upgrade**
-    
+  <Step title="Verify Upgrade">
     Check that services are running properly:
     
     ```bash
@@ -162,9 +151,9 @@ services:
 
 Starting from v1.0.0, DeployStack follows semantic versioning and includes automatic database migrations.
 
-<Callout type="info">
+<Info>
   No manual intervention required for standard upgrades. The application handles database migrations automatically on startup.
-</Callout>
+</Info>
 
 ### Pre-v1.0.0 Versions
 
@@ -172,9 +161,9 @@ For versions before v1.0.0, some manual steps may be required. Check the specifi
 
 ## Upgrading Across Multiple Versions
 
-<Callout type="warn">
+<Warning>
   When upgrading across multiple major versions (e.g., from v0.8.x to v1.2.x), upgrade sequentially through each major version to ensure proper data migration.
-</Callout>
+</Warning>
 
 ### Sequential Upgrade Process
 
@@ -243,17 +232,13 @@ diff docker-compose.yml docker-compose.yml.new
 If an upgrade fails or causes issues:
 
 <Steps>
-  <Step>
-    **Stop Current Services**
-    
+  <Step title="Stop Current Services">
     ```bash
     docker-compose down
     ```
   </Step>
   
-  <Step>
-    **Restore Previous Configuration**
-    
+  <Step title="Restore Previous Configuration">
     ```bash
     # Restore from backup
     cp backups/BACKUP_DATE/.env .
@@ -261,9 +246,7 @@ If an upgrade fails or causes issues:
     ```
   </Step>
   
-  <Step>
-    **Restore Data (if needed)**
-    
+  <Step title="Restore Data (if needed)">
     ```bash
     # Only if data corruption occurred
     docker volume rm deploystack_backend_persistent
@@ -276,9 +259,7 @@ If an upgrade fails or causes issues:
     ```
   </Step>
   
-  <Step>
-    **Start Previous Version**
-    
+  <Step title="Start Previous Version">
     ```bash
     docker-compose up -d
     ```

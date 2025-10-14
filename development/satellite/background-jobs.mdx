@@ -3,7 +3,7 @@ title: Background Jobs System
 description: Cron-like job system for managing recurring background tasks in DeployStack Satellite with automatic error handling and monitoring.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
+
 
 # Background Jobs System
 
@@ -107,9 +107,9 @@ jobManager.register(new ProcessHealthJob(server.log));
 await jobManager.startAll();
 ```
 
-<Callout type="info">
+<Info>
 That's it! Your job will start running immediately and then execute every 2 minutes automatically.
-</Callout>
+</Info>
 
 ## Job Intervals
 
@@ -587,6 +587,6 @@ Planned improvements to the job system:
 - 🚧 Job status API endpoint
 - 🚧 Advanced monitoring features
 
-<Callout type="info">
+<Info>
 The job system is production-ready and actively used for the heartbeat service. The pattern has proven stable and is ready for additional jobs.
-</Callout>
+</Info>

@@ -1,13 +1,13 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "DeployStack - Enterprise Control Plane for MCP",
   "colors": {
     "primary": "#16A34A",
     "light": "#07C983",
     "dark": "#15803D"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "/favicon.png",
   "navigation": {
     "tabs": [
       {
@@ -68,6 +68,137 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "Frontend Development",
+        "groups": [
+          {
+            "group": "Basics",
+            "pages": [
+              "/development/frontend/index",
+              "/development/frontend/architecture",
+              "/development/frontend/environment-variables",
+              "/development/frontend/event-bus",
+              "/development/frontend/global-settings",
+              "/development/frontend/internationalization",
+              "/development/frontend/plugins",
+              "/development/frontend/router-optimization",
+              "/development/frontend/storage"
+            ]
+          },
+          {
+            "group": "UI System",
+            "pages": [
+              "/development/frontend/ui/index",
+              "/development/frontend/ui/design-button-loading",
+              "/development/frontend/ui/design-charts",
+              "/development/frontend/ui/design-global-sonner",
+              "/development/frontend/ui/design-syntax-highlighter",
+              "/development/frontend/ui/design-system-pagination",
+              "/development/frontend/ui/design-system-structured-data",
+              "/development/frontend/ui/design-system-table",
+              "/development/frontend/ui/custom-ui-components"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Backend Development",
+        "groups": [
+          {
+            "group": "Basics",
+            "pages": [
+              "/development/backend/index",
+              "/development/backend/environment-variables",
+              "/development/backend/plugins",
+              "/development/backend/security",
+              "/development/backend/logging",
+              "/development/backend/test"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "/development/backend/user-preferences-system",
+              "/development/backend/events",
+              "/development/backend/global-settings",
+              "/development/backend/job-queue",
+              "/development/backend/mail",
+              "/development/backend/cloud-credentials"              
+            ]
+          },          
+          {
+            "group": "API",
+            "pages": [
+              "/development/backend/api/index",
+              "/development/backend/api/security",
+              "/development/backend/api/pagination"
+            ]
+          },
+          {
+            "group": "Database",
+            "pages": [
+              "/development/backend/database/index",
+              "/development/backend/database/sqlite",
+              "/development/backend/database/turso"
+            ]
+          },
+          {
+            "group": "Auth",
+            "pages": [
+              "/development/backend/roles",
+              "/development/backend/auth",
+              "/development/backend/oauth-providers",
+              "/development/backend/oauth2-server"
+            ]
+          },
+          {
+            "group": "Satellite",
+            "pages": [
+              "/development/backend/satellite/communication",
+              "/development/backend/satellite/events"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Satellite Development",
+        "groups": [
+          {
+            "group": "Basics",
+            "pages": [
+              "/development/satellite/index",
+              "/development/satellite/architecture",
+              "/development/satellite/logging"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "/development/satellite/background-jobs",
+              "/development/satellite/oauth-authentication"
+            ]
+          },
+          {
+            "group": "MCP Server Management",
+            "pages": [
+              "/development/satellite/mcp-transport",
+              "/development/satellite/process-management",
+              "/development/satellite/team-isolation",
+              "/development/satellite/tool-discovery"
+            ]
+          },
+          {
+            "group": "Backend Communication",
+            "pages": [
+              "/development/satellite/backend-communication",
+              "/development/satellite/event-system",
+              "/development/satellite/polling",
+              "/development/satellite/commands",
+              "/development/satellite/registration"
+            ]
+          }
+        ]
       }
     ],
     "global": {
@@ -86,20 +217,20 @@
     }
   },
   "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
+    "light": "/assets/images/logo/light.webp",
+    "dark": "/assets/images/logo/dark.webp"
   },
   "navbar": {
     "links": [
       {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
+        "label": "Changelog",
+        "href": "https://deploystack.io/changelog"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
+      "href": "https://cloud.deploystack.io/"
     }
   },
   "contextual": {

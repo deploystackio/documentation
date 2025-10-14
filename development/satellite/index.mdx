@@ -1,10 +1,10 @@
 ---
 title: Satellite Development
 description: Complete guide to developing and contributing to DeployStack Satellite - edge workers that manage MCP servers with team isolation and enterprise security.
+sidebarTitle: Overview
 ---
 
-import { Card, Cards } from 'fumadocs-ui/components/card';
-import { Cloud, Shield, Plug, Settings, Network, TestTube, Wrench, BookOpen, Terminal, Users, Timer } from 'lucide-react';
+
 
 # DeployStack Satellite Development
 
@@ -92,103 +92,103 @@ npm run release  # Release management
 
 ## Development Guides
 
-<Cards>
+<CardGroup cols={2}>
   <Card 
-    icon={<BookOpen />} 
-    href="/development/satellite/architecture" 
     title="Architecture Design"
+    icon="book-open"
+    href="/development/satellite/architecture"
   >
     Learn the satellite system architecture, current implementation, and planned features.
   </Card>
   
   <Card 
-    icon={<Network />} 
-    href="/development/satellite/mcp-transport" 
     title="MCP Transport Protocols"
+    icon="network"
+    href="/development/satellite/mcp-transport"
   >
     External communication endpoints for MCP client integration - SSE, Streamable HTTP, and Direct HTTP.
   </Card>
   
   <Card 
-    icon={<Terminal />} 
-    href="/development/satellite/logging" 
     title="Logging & Configuration"
+    icon="terminal"
+    href="/development/satellite/logging"
   >
     Pino logging setup, log levels, environment configuration, and development patterns.
   </Card>
   
   <Card 
-    icon={<Cloud />} 
-    href="/development/satellite/global-satellites" 
     title="Global Satellites"
+    icon="cloud"
+    href="/development/satellite/global-satellites"
   >
     Managed satellite infrastructure, auto-scaling, multi-region deployment, and freemium model.
   </Card>
   
   <Card 
-    icon={<Users />} 
-    href="/development/satellite/team-satellites" 
     title="Team Satellites"
+    icon="users"
+    href="/development/satellite/team-satellites"
   >
     Enterprise on-premise deployment, internal resource access, and complete team isolation.
   </Card>
   
   <Card 
-    icon={<Shield />} 
-    href="/development/satellite/security" 
     title="Security & Isolation"
+    icon="shield"
+    href="/development/satellite/security"
   >
     Resource jailing, team isolation, credential management, and enterprise security features.
   </Card>
   
   <Card 
-    icon={<Plug />} 
-    href="/development/satellite/mcp-servers" 
     title="MCP Server Management"
+    icon="plug"
+    href="/development/satellite/mcp-servers"
   >
     Satellite-hosted MCP servers, process management, and tool availability.
   </Card>
   
   <Card 
-    icon={<Settings />} 
-    href="/development/satellite/configuration" 
     title="Configuration Management"
+    icon="settings"
+    href="/development/satellite/configuration"
   >
     Satellite configuration, team settings, and deployment parameters.
   </Card>
   
   <Card 
-    icon={<TestTube />} 
-    href="/development/satellite/testing" 
     title="Testing Strategy"
+    icon="flask"
+    href="/development/satellite/testing"
   >
     Testing satellite infrastructure, deployment validation, and integration testing.
   </Card>
   
   <Card 
-    icon={<Wrench />} 
-    href="/development/satellite/deployment" 
     title="Deployment & Operations"
+    icon="wrench"
+    href="/development/satellite/deployment"
   >
     Satellite deployment patterns, monitoring, scaling, and operational considerations.
   </Card>
   
   <Card 
-    icon={<Timer />} 
-    href="/development/satellite/background-jobs" 
     title="Background Jobs"
+    icon="clock"
+    href="/development/satellite/background-jobs"
   >
     Cron-like job system for recurring tasks with automatic error handling and monitoring.
   </Card>
   
   <Card 
-    icon={<Network />} 
-    href="/development/satellite/event-system" 
     title="Event System"
+    icon="network"
+    href="/development/satellite/event-system"
   >
     Real-time event emission from satellite to backend with automatic batching and error handling.
   </Card>
-</Cards>
+</CardGroup>
 
 ## Current Features
 

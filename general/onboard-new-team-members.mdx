@@ -3,8 +3,6 @@ title: Onboard New Team Members
 description: Step-by-step guide to onboard new team members to your DeployStack team and MCP server environment.
 ---
 
-import { Steps, Step } from 'fumadocs-ui/components/steps';
-
 # Onboard New Team Members
 
 This guide walks you through adding new developers to your existing DeployStack team. Before starting, ensure you already have:
@@ -26,9 +24,7 @@ Before inviting team members, make sure:
 The new team member needs to complete these steps first:
 
 <Steps>
-  <Step>
-    **Create DeployStack Account**
-    
+  <Step title="Create DeployStack Account">
     Go to [cloud.deploystack.io](https://cloud.deploystack.io) and create a new account:
     
     - Sign up with their email address
@@ -52,18 +48,14 @@ Read more about Roles: [Team Roles](/roles)
 After the team invitation is accepted, the new member needs to:
 
 <Steps>
-  <Step>
-    **Accept Team Invitation**
-    
+  <Step title="Accept Team Invitation">
     The new member should:
     
     - Check their DeployStack dashboard for the team invitation
     - Accept the invitation to join the team
   </Step>
   
-  <Step>
-    **Create OAuth Credentials**
-    
+  <Step title="Create OAuth Credentials">
     Configure satellite access for the team:
     
     1. Navigate to the **Satellite** section in the dashboard
@@ -75,9 +67,7 @@ After the team invitation is accepted, the new member needs to:
        - **Client Secret**: `deploystack_mcp_secret_xyz789abc123def456ghi789jkl012`
   </Step>
   
-  <Step>
-    **Update MCP Configuration**
-    
+  <Step title="Update MCP Configuration">
     Replace your VS Code MCP configuration with the DeployStack Satellite:
     
     **Before (Individual MCP Servers):**

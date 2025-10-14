@@ -3,7 +3,7 @@ title: Email Integration Documentation
 description: Complete email system with Nodemailer, Pug templates, SMTP configuration, background job integration, and type-safe helper methods for DeployStack Backend.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
+
 
 # Email Integration Documentation
 
@@ -21,9 +21,9 @@ The email system provides a comprehensive solution for sending templated emails 
 
 ## Recommended: Sending Emails via Background Jobs
 
-<Callout type="info">
+<Info>
 **For all user-facing email operations, use the background job queue instead of direct email sending.**
-</Callout>
+</Info>
 
 The background job approach provides significant benefits over direct email sending:
 
@@ -114,9 +114,9 @@ For complete details on the job queue system, see the [Background Job Queue Docu
 
 ## Direct Email Sending (Advanced)
 
-<Callout type="warn">
+<Warning>
 **Direct email sending is only recommended for specific use cases requiring immediate feedback.**
-</Callout>
+</Warning>
 
 ### When to Use Direct Sending
 
@@ -225,7 +225,7 @@ To create custom templates:
 
 #### Color Guidelines
 
-When adding colors to email templates, follow the official DeployStack color system to maintain brand consistency. See the [UI Design System](/development/frontend/ui-design-system) page for color specifications.
+When adding colors to email templates, follow the official DeployStack color system to maintain brand consistency. See the [UI Design System](/development/frontend/ui/) page for color specifications.
 
 ## Advanced Email Options
 
@@ -404,7 +404,7 @@ for (let i = 0; i < users.length; i++) {
 
 - [Background Job Queue](/development/backend/job-queue) - Complete job queue system documentation
 - [Global Settings](/development/backend/global-settings) - SMTP and system configuration
-- [API Documentation](/development/backend/api) - REST API patterns and standards
+- [API Documentation](/development/backend/api/) - REST API patterns and standards
 
 ## Summary
 

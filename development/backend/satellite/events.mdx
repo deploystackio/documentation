@@ -1,6 +1,7 @@
 ---
 title: Satellite Events System
 description: Real-time event processing from satellites to backend with convention-based handler architecture and business logic routing.
+sidebarTitle: Events
 ---
 
 # Satellite Events System
@@ -93,7 +94,7 @@ export interface EventHandler {
 
 **Authentication**: Satellite API key (Bearer token via `requireSatelliteAuth()` middleware)
 
-**Request Schema**:
+**Request Schema** (uses snake_case for all fields):
 ```json
 {
   "events": [
@@ -101,12 +102,14 @@ export interface EventHandler {
       "type": "mcp.server.started",
       "timestamp": "2025-01-10T10:30:45.123Z",
       "data": {
-        "processId": "proc-123",
-        "serverId": "filesystem-team-xyz",
-        "serverName": "Filesystem MCP",
-        "teamId": "team-xyz",
+        "process_id": "proc-123",
+        "server_id": "filesystem-team-xyz",
+        "server_slug": "filesystem",
+        "team_id": "team-xyz",
         "pid": 12345,
-        "localPort": 8080
+        "transport": "stdio",
+        "tool_count": 0,
+        "spawn_duration_ms": 234
       }
     }
   ]
@@ -173,18 +176,18 @@ Updates `satelliteProcesses` table when server successfully spawns.
 
 **Business Logic**: Sets status='running', records start time and process PID.
 
-**Required Fields**: `processId`, `serverId`, `serverName`, `teamId`
+**Required Fields** (snake_case): `process_id`, `server_id`, `server_slug`, `team_id`, `transport`, `tool_count`, `spawn_duration_ms`
 
-**Optional Fields**: `pid`, `localPort`
+**Optional Fields**: `pid` (OS process ID)
 
 #### mcp.server.crashed
 Updates `satelliteProcesses` table when server exits unexpectedly.
 
 **Business Logic**: Sets status='failed', logs error details and exit code.
 
-**Required Fields**: `processId`, `serverId`, `serverName`, `teamId`
+**Required Fields** (snake_case): `process_id`, `server_id`, `server_slug`, `team_id`, `exit_code`, `signal`, `uptime_seconds`, `crash_count`, `will_restart`
 
-**Optional Fields**: `exitCode`, `signal`, `errorMessage`, `stackTrace`
+**Optional Fields**: None (all fields required for proper crash tracking)
 
 ### Tool Execution
 
@@ -193,13 +196,15 @@ Inserts record into `satelliteUsageLogs` for analytics and audit trails.
 
 **Business Logic**: Logs tool execution with metrics, user context, and performance data.
 
-**Required Fields**: `toolName`, `serverId`, `teamId`
+**Required Fields** (snake_case): `tool_name`, `server_id`, `team_id`, `duration_ms`, `success`
 
-**Optional Fields**: `processId`, `userId`, `durationMs`, `statusCode`, `errorMessage`, `requestSizeBytes`, `responseSizeBytes`, `userAgent`, `ipAddress`
+**Optional Fields**: `error_message` (string, only present when success=false)
 
 ## Creating New Event Handlers
 
 ### Handler Template
+
+**CRITICAL**: All event data fields MUST use **snake_case** naming convention to match satellite event emission and backend API standards.
 
 Create a new file in `services/backend/src/events/satellite/`:
 
@@ -213,23 +218,24 @@ export const EVENT_TYPE = 'your.event.type';
 export const SCHEMA = {
   type: 'object',
   properties: {
-    requiredField: {
+    required_field: {
       type: 'string',
       minLength: 1,
       description: 'Description of this field'
     },
-    optionalField: {
+    optional_field: {
       type: 'number',
       description: 'Optional numeric field'
     }
   },
-  required: ['requiredField'],
+  required: ['required_field'],
   additionalProperties: true
 } as const;
 
+// TypeScript interface can use camelCase internally
 interface YourEventData {
-  requiredField: string;
-  optionalField?: number;
+  required_field: string;
+  optional_field?: number;
 }
 
 export async function handle(
@@ -246,7 +252,7 @@ export async function handle(
       status: 'updated',
       updated_at: eventTimestamp
     })
-    .where(eq(yourTable.id, data.requiredField));
+    .where(eq(yourTable.id, data.required_field));
 }
 ```
 
@@ -558,6 +564,6 @@ LIMIT 10;
 ## Related Documentation
 
 - [Satellite Event System](/development/satellite/event-system) - Satellite-side event emission
-- [Satellite Communication](/development/backend/satellite-communication) - Full satellite communication architecture
-- [API Documentation](/development/backend/api) - OpenAPI specification generation
-- [Database Management](/development/backend/database) - Schema and migrations
+- [Satellite Communication](/development/backend/satellite/communication) - Full satellite communication architecture
+- [API Documentation](/development/backend/api/) - OpenAPI specification generation
+- [Database Management](/development/backend/database/) - Schema and migrations

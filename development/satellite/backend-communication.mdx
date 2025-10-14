@@ -1,9 +1,10 @@
 ---
 title: Backend Communication
 description: How DeployStack Satellite communicates with the Backend from the satellite perspective - HTTP polling, command processing, and status reporting.
+sidebarTitle: Overview
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
+
 
 # Satellite Backend Communication
 
@@ -102,7 +103,7 @@ if (connectionStatus.connection_status === 'connected') {
 
 Satellite registration is now fully implemented with secure JWT-based token authentication preventing unauthorized satellite connections.
 
-For complete registration documentation, see [Satellite Registration](/development/satellite/registration). For backend token management details, see [Registration Token Authentication](/development/backend/api-security#registration-token-authentication).
+For complete registration documentation, see [Satellite Registration](/development/satellite/registration). For backend token management details, see [Registration Token Authentication](/development/backend/api/security#registration-token-authentication).
 
 ### Phase 3: Heartbeat Authentication ✅
 
@@ -444,6 +445,6 @@ server.log.info({
 4. Add comprehensive monitoring and alerting
 5. End-to-end testing and performance validation
 
-<Callout type="info">
+<Info>
 The satellite communication system is designed for enterprise deployment with complete team isolation, resource management, and audit logging while maintaining the developer experience that defines the DeployStack platform.
-</Callout>
+</Info>

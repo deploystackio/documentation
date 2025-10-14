@@ -1,10 +1,10 @@
 ---
 title: Backend Logging & Log Level Configuration
 description: Complete guide to configuring and using log levels in the DeployStack backend for development and production environments.
+sidebarTitle: Logging
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
-import { CodeBlock } from 'fumadocs-ui/components/codeblock';
+
 
 # Backend Log Level Configuration
 
@@ -379,9 +379,9 @@ server.log.error('Plugin failed to load', { pluginId, error });
 
 ## Fixing Console.log Issues
 
-<Callout type="warn">
+<Warning>
 **Important**: Replace all `console.log` statements with proper Pino logger calls to ensure consistent formatting and log level filtering.
-</Callout>
+</Warning>
 
 ### Problem: Inconsistent Log Output
 

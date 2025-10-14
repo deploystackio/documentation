@@ -3,7 +3,7 @@ title: OAuth Authentication Implementation
 description: Technical implementation of multi-team OAuth 2.1 Resource Server functionality in DeployStack Satellite for MCP client authentication.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
+
 
 # OAuth Authentication Implementation
 
@@ -806,6 +806,6 @@ LOG_LEVEL=debug npm run dev
 
 The OAuth authentication implementation provides enterprise-grade security with complete team isolation while maintaining the existing satellite architecture and performance characteristics. The database-backed storage ensures MCP clients can cache credentials and maintain persistent authentication across sessions.
 
-<Callout type="info">
+<Info>
 **Implementation Status**: OAuth authentication is fully implemented and operational with database-backed dynamic client registration. The system successfully authenticates MCP clients (including VS Code, Cursor, Claude.ai, and Cline) with team-aware access control, filters tools based on team permissions, and maintains complete team isolation while preserving all existing satellite functionality. Dynamic client registration enables seamless MCP client integration with persistent authentication.
-</Callout>
+</Info>

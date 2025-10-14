@@ -3,8 +3,7 @@ title: Development Guide
 description: Complete development documentation for DeployStack - the first MCP-as-a-Service platform with satellite infrastructure and cloud control plane.
 ---
 
-import { Card, Cards } from 'fumadocs-ui/components/card';
-import { Code2, Server, Cloud, Users } from 'lucide-react';
+
 
 # DeployStack Development
 
@@ -22,9 +21,9 @@ DeployStack implements an MCP-as-a-Service architecture that eliminates installa
 
 ## Development Areas
 
-<Cards>
+<CardGroup cols={3}>
   <Card 
-    icon={<Code2 />} 
+    icon="code" 
     href="/development/frontend" 
     title="Frontend Development"
   >
@@ -32,7 +31,7 @@ DeployStack implements an MCP-as-a-Service architecture that eliminates installa
   </Card>
   
   <Card 
-    icon={<Server />} 
+    icon="server" 
     href="/development/backend" 
     title="Backend Development"
   >
@@ -40,13 +39,13 @@ DeployStack implements an MCP-as-a-Service architecture that eliminates installa
   </Card>
   
   <Card 
-    icon={<Cloud />} 
+    icon="cloud" 
     href="/development/satellite" 
     title="Satellite Development"
   >
     MCP-as-a-Service infrastructure with global satellites, team satellites, zero-installation access, and enterprise-grade security.
   </Card>
-</Cards>
+</CardGroup>
 
 ## Getting Started
 

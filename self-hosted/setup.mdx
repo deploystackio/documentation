@@ -3,32 +3,26 @@ title: Platform Setup
 description: Configure your self-hosted DeployStack instance with global settings, email functionality, and platform features.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Steps, Step } from 'fumadocs-ui/components/steps';
-
 # Platform Setup
 
 Configure your self-hosted DeployStack instance with essential settings to customize functionality, enable features, and optimize the platform for your organization.
 
-<Callout type="info">
+<Info>
   Platform setup is performed through the web interface after your DeployStack instance is running. All settings are optional but recommended for production deployments.
-</Callout>
+</Info>
 
 ## Initial Setup Process
 
-<Callout type="info">
+<Info>
   **For Developers**: The initial setup consists of two parts:
   1. **Database Setup**: Completed via the frontend wizard at `/setup` which calls `POST /api/db/setup`
   2. **Platform Configuration**: Done through the Settings interface after database initialization
-</Callout>
+</Info>
 
 ## Accessing Platform Settings
 
 <Steps>
-  <Step>
-    **Complete Initial Setup**
-    
+  <Step title="Complete Initial Setup">
     If this is a fresh installation, first visit `https://<your-frontend-url>/setup` to complete the database initialization wizard. This creates:
     
     **For Docker deployments:**
@@ -40,21 +34,15 @@ Configure your self-hosted DeployStack instance with essential settings to custo
     - `services/backend/persistent_data/database/deploystack.db` (if using SQLite)
   </Step>
   
-  <Step>
-    **Log in as Administrator**
-    
+  <Step title="Log in as Administrator">
     After database setup, access your DeployStack instance and log in with an administrator account.
   </Step>
   
-  <Step>
-    **Navigate to Settings**
-    
+  <Step title="Navigate to Settings">
     Go to **Settings** → **Global Settings** to access all configuration options.
   </Step>
   
-  <Step>
-    **Configure Settings**
-    
+  <Step title="Configure Settings">
     Use the tabs to configure different aspects of your DeployStack instance.
   </Step>
 </Steps>
@@ -82,9 +70,9 @@ Configure core platform functionality and features.
 
 Configure email functionality to enable notifications, password resets, and user communications.
 
-<Callout type="info">
+<Info>
   Email configuration is **optional** but highly recommended for production deployments. Without email, users cannot reset passwords or receive notifications.
-</Callout>
+</Info>
 
 ### Why Configure Email?
 
@@ -119,80 +107,68 @@ Navigate to **Settings** → **Global Settings** → **SMTP Mail Settings** tab.
 
 ### Email Provider Setup
 
-<Tabs items={['Gmail', 'Outlook', 'SendGrid', 'Custom SMTP']}>
-  <Tab value="Gmail">
-    **Gmail Configuration:**
-    
-    1. **Enable 2-Factor Authentication** at [Google Account Security](https://myaccount.google.com/security)
-    2. **Generate App Password** at [App Passwords](https://myaccount.google.com/apppasswords)
-    3. **Configure in DeployStack:**
-    
-    ```
-    SMTP Host: smtp.gmail.com
-    SMTP Port: 587
-    Username: your-email@gmail.com
-    Password: [16-character app password]
-    Use SSL/TLS: Yes
-    ```
-    
-    <Callout type="warn">
-      Use the app password, not your regular Gmail password.
-    </Callout>
-  </Tab>
-  
-  <Tab value="Outlook">
-    **Outlook/Office 365 Configuration:**
-    
-    ```
-    SMTP Host: smtp-mail.outlook.com (or smtp.office365.com)
-    SMTP Port: 587
-    Username: your-email@outlook.com
-    Password: [your password or app password]
-    Use SSL/TLS: Yes
-    ```
-  </Tab>
-  
-  <Tab value="SendGrid">
-    **SendGrid Configuration:**
-    
-    1. **Create API Key** in SendGrid dashboard
-    2. **Configure in DeployStack:**
-    
-    ```
-    SMTP Host: smtp.sendgrid.net
-    SMTP Port: 587
-    Username: apikey
-    Password: [your SendGrid API key]
-    Use SSL/TLS: Yes
-    ```
-    
-    <Callout type="info">
-      The username is literally "apikey" for SendGrid.
-    </Callout>
-  </Tab>
-  
-  <Tab value="Custom SMTP">
-    **Other Providers:**
-    
-    **Mailgun:**
-    ```
-    SMTP Host: smtp.mailgun.org
-    SMTP Port: 587
-    Username: [Mailgun SMTP username]
-    Password: [Mailgun SMTP password]
-    Use SSL/TLS: Yes
-    ```
-    
-    **Amazon SES:**
-    ```
-    SMTP Host: email-smtp.[region].amazonaws.com
-    SMTP Port: 587
-    Username: [SES SMTP username]
-    Password: [SES SMTP password]
-    Use SSL/TLS: Yes
-    ```
-  </Tab>
-</Tabs>
+<CodeGroup>
+```text Gmail
+Gmail Configuration:
+
+1. Enable 2-Factor Authentication at https://myaccount.google.com/security
+2. Generate App Password at https://myaccount.google.com/apppasswords
+3. Configure in DeployStack:
+
+SMTP Host: smtp.gmail.com
+SMTP Port: 587
+Username: your-email@gmail.com
+Password: [16-character app password]
+Use SSL/TLS: Yes
+```
+
+```text Outlook
+Outlook/Office 365 Configuration:
+
+SMTP Host: smtp-mail.outlook.com (or smtp.office365.com)
+SMTP Port: 587
+Username: your-email@outlook.com
+Password: [your password or app password]
+Use SSL/TLS: Yes
+```
+
+```text SendGrid
+SendGrid Configuration:
+
+1. Create API Key in SendGrid dashboard
+2. Configure in DeployStack:
+
+SMTP Host: smtp.sendgrid.net
+SMTP Port: 587
+Username: apikey
+Password: [your SendGrid API key]
+Use SSL/TLS: Yes
+
+Note: The username is literally "apikey" for SendGrid.
+```
+
+```text Custom SMTP
+Other Providers:
+
+Mailgun:
+SMTP Host: smtp.mailgun.org
+SMTP Port: 587
+Username: [Mailgun SMTP username]
+Password: [Mailgun SMTP password]
+Use SSL/TLS: Yes
+
+Amazon SES:
+SMTP Host: email-smtp.[region].amazonaws.com
+SMTP Port: 587
+Username: [SES SMTP username]
+Password: [SES SMTP password]
+Use SSL/TLS: Yes
+```
+</CodeGroup>
+
+<Warning>
+  **Gmail Users**: Use the app password, not your regular Gmail password.
+</Warning>
 
 ### Testing Email Configuration
 
@@ -208,9 +184,7 @@ After configuring SMTP settings:
 Follow this recommended setup workflow for new DeployStack instances:
 
 <Steps>
-  <Step>
-    **Initial Database Setup**
-    
+  <Step title="Initial Database Setup">
     - Navigate to `https://<your-frontend-url>/setup` (Docker: `http://localhost:8080/setup` by default)
     - Complete the database setup wizard (SQLite or Turso)
     - This initializes the database and saves configuration
@@ -218,41 +192,31 @@ Follow this recommended setup workflow for new DeployStack instances:
     - Log in to the platform
   </Step>
   
-  <Step>
-    **Configure Global Settings**
-    
+  <Step title="Configure Global Settings">
     - Set the correct Frontend URL for your domain
     - Configure login and registration preferences
     - Disable API documentation for production
   </Step>
   
-  <Step>
-    **Set Up Email (Recommended)**
-    
+  <Step title="Set Up Email (Recommended)">
     - Configure SMTP settings for your email provider
     - Test email delivery
     - Enable email sending in Global Settings
   </Step>
   
-  <Step>
-    **Verify Configuration**
-    
+  <Step title="Verify Configuration">
     - Test user registration (if enabled)
     - Test password reset functionality
     - Verify email notifications work
   </Step>
   
-  <Step>
-    **Create Users and Teams**
-    
+  <Step title="Create Users and Teams">
     - Invite team members
     - Set up user roles and permissions
     - Configure team workspaces
   </Step>
   
-  <Step>
-    **Set Up Satellites**
-    
+  <Step title="Set Up Satellites">
     - Navigate to Admin → Satellites → Pairing
     - Generate registration tokens for new satellites
     - Deploy satellite services with registration tokens
@@ -264,9 +228,9 @@ Follow this recommended setup workflow for new DeployStack instances:
 
 ## Satellite Administration
 
-<Callout type="warn">
+<Warning>
   Satellites are **required** for DeployStack to function. Without satellites, you cannot manage MCP servers. Deploy at least one satellite after completing the platform setup.
-</Callout>
+</Warning>
 
 ### Generating Registration Tokens
 
@@ -391,60 +355,50 @@ Configure different settings for different environments:
 
 ### Backup Configuration
 
-<Tabs items={['Docker Deployment', 'Local Development']}>
-  <Tab value="Docker Deployment">
-    **Docker Volume Backup:**
-    
-    Your data is stored in the Docker volume `deploystack_backend_persistent`. To backup:
-    
-    ```bash
-    # Create a backup of the Docker volume
-    docker run --rm -v deploystack_backend_persistent:/data \
-      -v $(pwd):/backup alpine \
-      tar czf /backup/deploystack-backup-$(date +%Y%m%d).tar.gz /data
-    ```
-    
-    **Restore from backup:**
-    ```bash
-    # Restore the Docker volume from backup
-    docker run --rm -v deploystack_backend_persistent:/data \
-      -v $(pwd):/backup alpine \
-      tar xzf /backup/deploystack-backup-20250108.tar.gz -C /
-    ```
-    
-    The volume contains:
-    - `database/deploystack.db` - SQLite database (if using SQLite)
-    - `db.selection.json` - Database type configuration
-    - Any other persistent application data
-  </Tab>
-  
-  <Tab value="Local Development">
-    **File System Backup:**
-    
-    Your data is stored in `services/backend/persistent_data/`. To backup:
-    
-    ```bash
-    # Create a backup archive
-    tar czf deploystack-backup-$(date +%Y%m%d).tar.gz \
-      services/backend/persistent_data/
-    ```
-    
-    **Restore from backup:**
-    ```bash
-    # Restore from backup archive
-    tar xzf deploystack-backup-20250108.tar.gz
-    ```
-    
-    The directory contains:
-    - `database/deploystack.db` - SQLite database (if using SQLite)
-    - `db.selection.json` - Database type configuration
-    - Any other persistent application data
-  </Tab>
-</Tabs>
+<CodeGroup>
+```bash Docker Deployment
+# Docker Volume Backup:
+# Your data is stored in the Docker volume deploystack_backend_persistent. To backup:
 
-<Callout type="warn">
+# Create a backup of the Docker volume
+docker run --rm -v deploystack_backend_persistent:/data \
+  -v $(pwd):/backup alpine \
+  tar czf /backup/deploystack-backup-$(date +%Y%m%d).tar.gz /data
+
+# Restore from backup:
+# Restore the Docker volume from backup
+docker run --rm -v deploystack_backend_persistent:/data \
+  -v $(pwd):/backup alpine \
+  tar xzf /backup/deploystack-backup-20250108.tar.gz -C /
+
+# The volume contains:
+# - database/deploystack.db - SQLite database (if using SQLite)
+# - db.selection.json - Database type configuration
+# - Any other persistent application data
+```
+
+```bash Local Development
+# File System Backup:
+# Your data is stored in services/backend/persistent_data/. To backup:
+
+# Create a backup archive
+tar czf deploystack-backup-$(date +%Y%m%d).tar.gz \
+  services/backend/persistent_data/
+
+# Restore from backup:
+# Restore from backup archive
+tar xzf deploystack-backup-20250108.tar.gz
+
+# The directory contains:
+# - database/deploystack.db - SQLite database (if using SQLite)
+# - db.selection.json - Database type configuration
+# - Any other persistent application data
+```
+</CodeGroup>
+
+<Warning>
   **Important**: Always backup the complete data directory/volume, not just the database file, as it contains critical configuration like database type selection.
-</Callout>
+</Warning>
 
 - **Document custom settings** for disaster recovery
 - **Test restore procedures** in non-production environments

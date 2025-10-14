@@ -3,15 +3,13 @@ title: Tool Discovery Implementation
 description: Technical implementation of MCP server tool discovery in DeployStack Satellite - unified architecture supporting both HTTP/SSE remote servers and stdio subprocess servers.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
-
 # Tool Discovery Implementation
 
 DeployStack Satellite implements automatic tool discovery from MCP servers across both HTTP/SSE remote endpoints and stdio subprocess servers. This unified system provides dynamic tool availability without manual configuration, enabling MCP clients to discover and execute tools through the satellite's interface.
 
-<Callout type="info">
+<Info>
 **Current Implementation**: Tool discovery fully supports both HTTP/SSE remote MCP servers and stdio subprocess servers through a unified architecture. The `UnifiedToolDiscoveryManager` coordinates discovery across both transport types, merging tools into a single cache for seamless client access.
-</Callout>
+</Info>
 
 For information about the overall satellite architecture, see [Satellite Architecture Design](/development/satellite/architecture). For details about the MCP transport protocols that expose discovered tools, see [MCP Transport Protocols](/development/satellite/mcp-transport).
 
@@ -242,9 +240,9 @@ curl http://localhost:3001/api/status/debug
 - Discovery statistics for both managers
 - Process status for stdio servers
 
-<Callout type="warn">
+<Warning>
 **Security Notice**: The debug endpoint exposes detailed system information. Disable in production with `DEPLOYSTACK_STATUS_SHOW_MCP_DEBUG_ROUTE=false`.
-</Callout>
+</Warning>
 
 ### Testing Strategies
 
@@ -290,9 +288,9 @@ curl -X POST http://localhost:3001/mcp \
 - HTTP: Limited by network connection pool
 - stdio: Limited by system process limits
 
-<Callout type="info">
+<Info>
 **Implementation Status**: Tool discovery is fully operational for both HTTP/SSE remote servers and stdio subprocess servers. The unified manager successfully coordinates discovery, merges tools, and routes execution requests to the appropriate transport.
-</Callout>
+</Info>
 
 ## Future Enhancements
 

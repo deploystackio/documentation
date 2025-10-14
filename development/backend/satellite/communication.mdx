@@ -1,6 +1,7 @@
 ---
 title: Satellite Communication
 description: Backend API endpoints for satellite registration, command orchestration, and configuration management with team-aware MCP server distribution.
+sidebarTitle: Communication
 ---
 
 # Satellite Communication
@@ -89,7 +90,7 @@ The system uses three distinct communication patterns:
 - Satellites emit events when actions occur, batched every 3 seconds
 - Contains: Point-in-time occurrences with precise timestamps
 - Used for: Real-time UI updates, audit trails, user notifications
-- See [Satellite Events](/development/backend/satellite-events) for detailed implementation
+- See [Satellite Events](/development/backend/satellite/events) for detailed implementation
 
 ### Dual Deployment Models
 
@@ -105,7 +106,7 @@ The system uses three distinct communication patterns:
 
 ### Security Architecture
 
-The satellite pairing process implements a secure **two-phase JWT-based authentication system** that prevents unauthorized satellite connections. For complete implementation details, see [API Security - Registration Token Authentication](/development/backend/api-security#registration-token-authentication).
+The satellite pairing process implements a secure **two-phase JWT-based authentication system** that prevents unauthorized satellite connections. For complete implementation details, see [API Security - Registration Token Authentication](/development/backend/api/security#registration-token-authentication).
 
 **Phase 1: Token Generation**
 - Administrators generate temporary registration tokens through admin APIs
@@ -488,13 +489,13 @@ sqlite3 services/backend/persistent_data/database/deploystack.db
 
 ## API Documentation
 
-For detailed API endpoints, request/response formats, and authentication patterns, see the [API Specification](/development/backend/api) generated from the backend OpenAPI schema.
+For detailed API endpoints, request/response formats, and authentication patterns, see the [API Specification](/development/backend/api/) generated from the backend OpenAPI schema.
 
 ## Related Documentation
 
 For detailed satellite architecture and implementation:
 
-- [Satellite Events](/development/backend/satellite-events) - Real-time event processing system
-- [API Security](/development/backend/api-security) - Security patterns and authorization  
-- [Database Management](/development/backend/database) - Schema and data management
+- [Satellite Events](/development/backend/satellite/events) - Real-time event processing system
+- [API Security](/development/backend/api/security) - Security patterns and authorization
+- [Database Management](/development/backend/database/) - Schema and data management
 - [OAuth2 Server](/development/backend/oauth2-server) - OAuth2 implementation details

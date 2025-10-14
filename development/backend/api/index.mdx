@@ -1,6 +1,7 @@
 ---
 title: API Documentation Generation
 description: Complete guide to generating OpenAPI specifications, Swagger documentation, and API testing tools for DeployStack Backend development.
+sidebarTitle: Overview
 ---
 
 # API Documentation Generation
@@ -18,7 +19,7 @@ The DeployStack Backend uses Fastify with Swagger plugins to automatically gener
 
 ## Security First
 
-**IMPORTANT**: Before developing any protected API endpoints, read the [API Security Best Practices](/development/backend/api-security) documentation. It covers critical security patterns including:
+**IMPORTANT**: Before developing any protected API endpoints, read the [API Security Best Practices](/development/backend/api/security) documentation. It covers critical security patterns including:
 
 - **Authorization Before Validation**: Why `preValidation` must be used instead of `preHandler` for authorization
 - **Proper Error Responses**: Ensuring unauthorized users get 403 Forbidden, not validation errors
@@ -543,6 +544,39 @@ const routeSchema = {
   // ... rest of schema
 };
 ```
+
+## Naming Convention
+
+**CRITICAL**: The DeployStack Backend uses **snake_case** for all API request and response field names.
+
+### Examples:
+- Query parameters: `category_id`, `sort_by`, `user_agent`
+- Response fields: `has_more`, `total_requests`, `created_at`
+- Request body fields: `team_id`, `server_id`, `process_id`
+
+### Why snake_case?
+- **Consistency**: Matches database column naming conventions
+- **REST API Standards**: snake_case is common in RESTful APIs
+- **Satellite Integration**: Ensures compatibility with satellite event system
+
+### Examples from Existing Routes:
+```typescript
+// Query parameters (snake_case)
+interface QueryParams {
+  category_id?: string;
+  sort_by?: 'name' | 'github_stars';
+  user_agent?: string;
+}
+
+// Response fields (snake_case)
+interface Response {
+  has_more: boolean;
+  total_requests: number;
+  created_at: string;
+}
+```
+
+**Note**: TypeScript interfaces and JavaScript variables can use camelCase internally, but all external API fields MUST use snake_case.
 
 ## Adding Documentation to Routes
 

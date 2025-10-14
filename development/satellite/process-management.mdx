@@ -3,7 +3,7 @@ title: Process Management
 description: Technical implementation of stdio subprocess management for local MCP servers in DeployStack Satellite.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
+
 
 # stdio Process Management
 
@@ -40,9 +40,9 @@ The system automatically selects the appropriate spawning mode based on environm
 - Non-root user (99999:99999)
 - Network access enabled
 
-<Callout type="info">
+<Info>
 **Mode Selection**: The system uses `process.env.NODE_ENV === 'production' && process.platform === 'linux'` to determine isolation mode. This ensures development works seamlessly on all platforms while production deployments get full security.
-</Callout>
+</Info>
 
 ### Process Configuration
 
@@ -177,9 +177,9 @@ The system detects crashes based on exit conditions:
 4. Attempt restart via `spawnProcess()`
 5. Emit 'processRestarted' or 'restartLimitExceeded' event
 
-<Callout type="warn">
+<Warning>
 **Permanently Failed State**: After 3 failed restart attempts, processes enter a permanently_failed state and are tracked separately for reporting. They will not be restarted automatically and require manual intervention.
-</Callout>
+</Warning>
 
 ## RuntimeState Integration
 

@@ -3,8 +3,6 @@ title: Background Job Queue
 description: Database-backed job processing system with persistent storage, automatic retries, and rate limiting for long-running background tasks in DeployStack.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
-
 # Background Job Queue System
 
 The DeployStack backend includes a custom background job queue system for processing long-running tasks that cannot be completed within a typical HTTP request/response cycle. The system uses database-backed persistence with automatic retries and rate limiting.
@@ -51,9 +49,9 @@ Built-in support through the `scheduled_for` field. Jobs scheduled for future ex
 
 ## When to Use Job Queue vs Events
 
-<Callout type="info">
+<Info>
 The job queue system complements rather than replaces the [Global Event Bus](/development/backend/events).
-</Callout>
+</Info>
 
 **Use Job Queue for:**
 - Long-running operations (>30 seconds)
@@ -410,9 +408,9 @@ GROUP BY b.id;
 
 ## Database Schema
 
-<Callout type="info">
+<Info>
 For the complete database schema, see [schema.sqlite.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/db/schema.sqlite.ts) in the backend directory.
-</Callout>
+</Info>
 
 ### Jobs Table
 
@@ -504,10 +502,10 @@ Worker interface remains compatible, simplifying migration.
 
 ## Related Documentation
 
-- [Database Management](/development/backend/database) - Database configuration and schema
+- [Database Management](/development/backend/database/) - Database configuration and schema
 - [Global Event Bus](/development/backend/events) - Event system for real-time notifications
 - [Logging](/development/backend/logging) - Logging best practices and patterns
-- [API Documentation](/development/backend/api) - REST API endpoints and patterns
+- [API Documentation](/development/backend/api/) - REST API endpoints and patterns
 
 ## Common Use Cases
 

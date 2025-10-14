@@ -3,9 +3,7 @@ title: Architecture Overview
 description: Complete architectural overview of DeployStack's Control Plane / Data Plane system for enterprise MCP management
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
-import { Card, Cards } from 'fumadocs-ui/components/card';
-import { Zap, Shield, Monitor, Cloud, Settings, Users } from 'lucide-react';
+
 
 # DeployStack Architecture
 
@@ -52,28 +50,28 @@ DeployStack introduces a **Control Plane / Satellite architecture** that brings 
 
 ## Core Components
 
-<Cards>
+<CardGroup cols={3}>
   <Card 
-    icon={<Cloud />} 
     title="Control Plane"
+    icon="cloud"
   >
     **cloud.deploystack.io** - Centralized management platform for teams, credentials, and MCP server configurations
   </Card>
   
   <Card 
-    icon={<Shield />} 
     title="Satellite Infrastructure"
+    icon="shield"
   >
     **Global & Team Satellites** - Managed MCP infrastructure providing instant access with zero installation
   </Card>
   
   <Card 
-    icon={<Monitor />} 
     title="Developer Interface"
+    icon="monitor"
   >
     **Simple URL Configuration** - VS Code, Claude, and other MCP clients connect via HTTPS URL with OAuth
   </Card>
-</Cards>
+</CardGroup>
 
 ### Control Plane: cloud.deploystack.io
 
@@ -286,9 +284,9 @@ DeployStack supports multiple team memberships with instant context switching:
 - **Instant Deployment**: Push configuration changes to all team members (coming soon)
 - **Operational Insights**: Real-time monitoring and analytics (coming soon)
 
-<Callout type="info">
+<Info>
   **MCP-as-a-Service**: DeployStack transforms MCP from individual developer tools into enterprise-ready infrastructure with zero installation friction, providing the security, governance, and operational control that organizations need while maintaining the developer experience that teams love.
-</Callout>
+</Info>
 
 ---
 

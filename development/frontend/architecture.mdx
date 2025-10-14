@@ -1,6 +1,7 @@
 ---
 title: Frontend Architecture
 description: Comprehensive guide to DeployStack frontend application architecture, design patterns, and development principles
+sidebarTitle: Architecture
 ---
 
 # Frontend Architecture
@@ -67,7 +68,7 @@ Components are **reusable UI building blocks** that encapsulate specific functio
 
 #### Component Categories
 
-1. **UI Components** (`/ui`): Generic, design-system components - read the [UI Design System](/development/frontend/ui-design-system)
+1. **UI Components** (`/ui`): Generic, design-system components - read the [UI Design System](/development/frontend/ui/)
    - Examples: Buttons, Modals, Inputs
    - Stateless and focused on presentation
    - Use shadcn-vue components where applicable
@@ -372,7 +373,7 @@ export function createColumns(): ColumnDef[] {
 
 ### Table Components
 
-For table implementations, use the shadcn-vue Table components as documented in the [Table Design System](/development/frontend/ui-design-system-table). Never use raw HTML table elements.
+For table implementations, use the shadcn-vue Table components as documented in the [Table Design System](/development/frontend/ui/-table). Never use raw HTML table elements.
 
 ## Component Communication Patterns
 

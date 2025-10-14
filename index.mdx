@@ -1,10 +1,8 @@
 ---
-title: DeployStack Documentation
+title: DeployStack - Enterprise Control Plane for MCP Dcs
 description: Official DeployStack documentation - The Enterprise Control Plane for MCP servers. Secure, centralized management of your organization's AI tool landscape with the DeployStack Satellite.
+sidebarTitle: Overview
 ---
-
-import { Card, Cards } from 'fumadocs-ui/components/card';
-import { Plug, Settings, Users, Code2, Server, Zap, Shield, Wrench, Terminal, Container, BookOpenText, FileText, MessageCircleHeart } from 'lucide-react';
 
 # DeployStack - Enterprise Control Plane for MCP
 
@@ -12,9 +10,9 @@ DeployStack is the **Enterprise Control Plane for the Model Context Protocol (MC
 
 ## User Guides
 
-<Cards>
+<CardGroup cols={2}>
   <Card 
-    icon={<Terminal />} 
+    icon="terminal" 
     href="/quick-start" 
     title="DeployStack Quick Start"
   >
@@ -22,7 +20,7 @@ DeployStack is the **Enterprise Control Plane for the Model Context Protocol (MC
   </Card>
 
   <Card 
-    icon={<Users />} 
+    icon="users" 
     href="/onboard-new-team-members" 
     title="Onboard New Team Members"
   >
@@ -30,7 +28,7 @@ DeployStack is the **Enterprise Control Plane for the Model Context Protocol (MC
   </Card>  
 
   <Card 
-    icon={<Server />} 
+    icon="server" 
     href="/self-hosted/quick-start"
     title="Self-Hosted DeployStack"
   >
@@ -38,21 +36,21 @@ DeployStack is the **Enterprise Control Plane for the Model Context Protocol (MC
   </Card>  
   
   <Card 
-    icon={<Shield />} 
+    icon="shield" 
     href="/security" 
     title="Security & Governance"
   >
     Understand how DeployStack eliminates credential sprawl and provides enterprise security
   </Card>
-</Cards>
+</CardGroup>
 
 ## Developer Documentation
 
 **For developers** extending or contributing to DeployStack:
 
-<Cards>
+<CardGroup cols={2}>
   <Card 
-    icon={<Code2 />} 
+    icon="code" 
     href="/development/frontend" 
     title="Frontend Development"
   >
@@ -60,7 +58,7 @@ DeployStack is the **Enterprise Control Plane for the Model Context Protocol (MC
   </Card>
   
   <Card 
-    icon={<Code2 />} 
+    icon="code" 
     href="/development/backend" 
     title="Backend Development"
   >
@@ -68,43 +66,44 @@ DeployStack is the **Enterprise Control Plane for the Model Context Protocol (MC
   </Card>
   
   <Card 
-    icon={<Plug />} 
+    icon="plug" 
     href="/development/satellite" 
     title="Satellite Development"
   >
     Build and extend the DeployStack Satellite for secure MCP server management
   </Card>
-</Cards>
-
-## User Guides
-
-**For administrators and team members** using DeployStack:
-
-
+</CardGroup>
 
 ## Our Repository Structure
 
 DeployStack consists of several integrated components that work together to provide enterprise-grade MCP server management:
 
-<Cards>
-<Card icon={<Container className="text-primary" />} title="deploystack" href="https://github.com/deploystackio/deploystack">
-The main platform providing centralized MCP server management, team collaboration, and secure credential storage
-</Card>
-<Card icon={<FileText className="text-primary" />} title="documentation" href="https://github.com/deploystackio/documentation">
-Comprehensive guides for MCP server management, security, and team collaboration
-</Card>
-</Cards>
+<CardGroup cols={2}>
+  <Card 
+    icon="box" 
+    title="deploystack" 
+    href="https://github.com/deploystackio/deploystack"
+  >
+    The main platform providing centralized MCP server management, team collaboration, and secure credential storage
+  </Card>
+  
+  <Card 
+    icon="file-text" 
+    title="documentation" 
+    href="https://github.com/deploystackio/documentation"
+  >
+    Comprehensive guides for MCP server management, security, and team collaboration
+  </Card>
+</CardGroup>
 
 ## Community & Resources
 
-<Cards>
+<CardGroup cols={2}>
   <Card 
-    icon={<Users />} 
+    icon="users" 
     href="https://discord.gg/UjFWwByB" 
     title="Join our Discord"
-    external
   >
     Get help and connect with the DeployStack community
   </Card>
-
-</Cards>
+</CardGroup>

@@ -3,24 +3,21 @@ title: Docker Compose Setup
 description: Deploy DeployStack using Docker Compose for a quick and reliable self-hosted installation.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-
 # Docker Compose Setup
 
 Deploy DeployStack using Docker Compose for a production-ready, self-hosted installation. This method is recommended for most users as it provides a reliable, scalable setup with minimal configuration.
 
-<Callout type="info">
-  Docker containers are for production hosting or self-hosting. For development contributions, check the [Local Setup](/local-setup) guide.
-</Callout>
+<Info>
+Docker containers are for production hosting or self-hosting. For development contributions, check the [Local Setup](/local-setup) guide.
+</Info>
 
 ## Overview
 
 This guide provides step-by-step instructions to install and configure DeployStack using Docker Compose. The setup includes frontend, backend, and **required satellite service** with persistent data storage and proper networking.
 
-<Callout type="warn">
-  **Satellites are required**: DeployStack cannot manage MCP servers without at least one satellite. This guide includes satellite deployment as a mandatory step.
-</Callout>
+<Warning>
+**Satellites are required**: DeployStack cannot manage MCP servers without at least one satellite. This guide includes satellite deployment as a mandatory step.
+</Warning>
 
 **Important:** Only modify settings explicitly mentioned in this guide. Altering other configurations may lead to issues.
 
@@ -46,35 +43,27 @@ curl -o docker-compose.yml https://raw.githubusercontent.com/deploystackio/deplo
 
 DeployStack requires a secure encryption secret for protecting sensitive data like API keys and credentials.
 
-<Tabs items={['Linux/macOS', 'Windows']}>
-  <Tab value="Linux/macOS">
-    Generate a secure 32-character secret:
-    
-    ```bash
-    # Using OpenSSL (recommended)
-    openssl rand -hex 16
-    
-    # Alternative using Node.js
-    node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
-    ```
-  </Tab>
-  
-  <Tab value="Windows">
-    Generate a secure secret using PowerShell:
-    
-    ```powershell
-    # Using PowerShell
-    -join ((1..32) | ForEach {'{0:X}' -f (Get-Random -Max 16)})
-    
-    # Alternative using Node.js (if installed)
-    node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
-    ```
-  </Tab>
-</Tabs>
+<CodeGroup>
+```bash Linux/macOS
+# Using OpenSSL (recommended)
+openssl rand -hex 16
 
-<Callout type="warn">
-  **Important:** Keep this secret secure and do not share it. Store it safely as you'll need it for upgrades.
-</Callout>
+# Alternative using Node.js
+node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
+```
+
+```powershell Windows
+# Using PowerShell
+-join ((1..32) | ForEach {'{0:X}' -f (Get-Random -Max 16)})
+
+# Alternative using Node.js (if installed)
+node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
+```
+</CodeGroup>
+
+<Warning>
+**Important:** Keep this secret secure and do not share it. Store it safely as you'll need it for upgrades.
+</Warning>
 
 ### Step 3: Set Environment Variables
 
@@ -101,9 +90,9 @@ EOF
 
 Replace `your-generated-secret-here` with the secret you generated in Step 2.
 
-<Callout type="warn">
-  **Important**: Leave `DEPLOYSTACK_REGISTRATION_TOKEN` empty for now. You'll add it after completing the admin setup in Step 6.
-</Callout>
+<Warning>
+**Important**: Leave `DEPLOYSTACK_REGISTRATION_TOKEN` empty for now. You'll add it after completing the admin setup in Step 6.
+</Warning>
 
 ### Step 4: Launch DeployStack
 
@@ -137,9 +126,9 @@ Open your browser and navigate to:
 
 ### Step 7: Deploy Satellite Service (Required)
 
-<Callout type="warn">
-  **Satellites are required** - Without at least one satellite, DeployStack cannot manage MCP servers. Complete this step to make your deployment functional.
-</Callout>
+<Warning>
+**Satellites are required** - Without at least one satellite, DeployStack cannot manage MCP servers. Complete this step to make your deployment functional.
+</Warning>
 
 The satellite service is **already included** in the docker-compose.yml file. You just need to configure the registration token:
 
@@ -203,9 +192,9 @@ docker-compose up -d
 
 ### SSL/HTTPS Setup
 
-<Callout type="info">
-  HTTPS is recommended for production deployments to ensure secure communication and enable all browser features.
-</Callout>
+<Info>
+HTTPS is recommended for production deployments to ensure secure communication and enable all browser features.
+</Info>
 
 For HTTPS setup, we recommend using a reverse proxy like Nginx or Traefik:
 
@@ -277,9 +266,9 @@ docker run --rm -v deploystack_backend_persistent:/data -v $(pwd)/backups/$(date
 |----------|-------------|----------|
 | `DEPLOYSTACK_REGISTRATION_TOKEN` | JWT registration token from admin (required for initial satellite pairing) | `deploystack_satellite_global_eyJhbGc...` |
 
-<Callout type="info">
-  **Note**: The satellite name `docker-satellite-001` is pre-configured in docker-compose.yml. You only need to provide the registration token in your `.env` file.
-</Callout>
+<Info>
+**Note**: The satellite name `docker-satellite-001` is pre-configured in docker-compose.yml. You only need to provide the registration token in your `.env` file.
+</Info>
 
 ## Troubleshooting
 
