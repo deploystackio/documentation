@@ -113,6 +113,10 @@ All communication uses newline-delimited JSON following JSON-RPC 2.0 specificati
 
 ## Process Lifecycle
 
+<Info>
+**Idle Process Management**: Processes that remain inactive for extended periods are automatically terminated and respawned on-demand to optimize memory usage. See [Idle Process Management](/development/satellite/idle-process-management) for details on automatic termination, dormant state tracking, and respawning.
+</Info>
+
 ### Lifecycle States
 
 **starting:**
@@ -371,6 +375,7 @@ LOG_LEVEL=debug npm run dev
 ## Related Documentation
 
 - [Satellite Architecture Design](/development/satellite/architecture) - Overall system architecture
+- [Idle Process Management](/development/satellite/idle-process-management) - Automatic termination and respawning of idle processes
 - [Tool Discovery Implementation](/development/satellite/tool-discovery) - How tools are discovered from processes
 - [Team Isolation Implementation](/development/satellite/team-isolation) - Team-based access control
 - [Backend Communication](/development/satellite/backend-communication) - Integration with Backend commands

@@ -1,0 +1,472 @@
+---
+title: Idle Process Management
+description: Automatic termination and respawning of idle stdio subprocess MCP servers to optimize memory usage and resource utilization in DeployStack Satellite.
+---
+
+# Idle Process Management
+
+DeployStack Satellite implements intelligent idle process management for stdio subprocess MCP servers. This system automatically terminates processes that remain inactive for extended periods and respawns them on-demand, optimizing memory usage while maintaining instant availability for users.
+
+<Info>
+**Purpose**: Idle process management reduces memory consumption from constantly running MCP servers by terminating inactive processes. When a client needs a dormant server, the system automatically respawns it within 1-3 seconds, providing a balance between resource efficiency and user experience.
+</Info>
+
+## Overview
+
+Idle process management works through three coordinated systems:
+
+- **Idle Process Cleanup Job**: Monitors running processes and terminates those exceeding idle timeout
+- **Dormant State Tracking**: RuntimeState maintains configurations of terminated processes for quick respawning
+- **Automatic Respawning**: ProcessManager respawns dormant processes when clients request them
+
+## Idle Detection & Termination
+
+### Idle Timeout Configuration
+
+Processes are considered idle based on inactivity duration:
+
+**Default Timeout**: 180 seconds (3 minutes)
+
+**Configuration**:
+```bash
+# Set custom idle timeout (in seconds)
+export MCP_PROCESS_IDLE_TIMEOUT_SECONDS=300  # 5 minutes
+```
+
+**Activity Tracking**:
+- `lastActivity` timestamp updated on every message sent or received
+- Idle duration calculated as: `now - lastActivity`
+- Only stdio transport processes are subject to idle termination
+
+### Idle Process Cleanup Job
+
+The cleanup job runs automatically every 30 seconds:
+
+**Operation Flow**:
+1. Retrieve all running stdio processes from ProcessManager
+2. Check each process against idle criteria
+3. Terminate idle processes and mark as dormant
+4. Update RuntimeState with dormant configurations
+
+**Idle Criteria Checks**:
+- Process status must be 'running' (skips 'starting', 'terminating', etc.)
+- Process age must exceed spawn grace period (60 seconds)
+- No active requests in flight
+- Idle duration exceeds configured timeout (180 seconds default)
+
+### Spawn Grace Period
+
+Newly spawned processes receive protection from immediate termination:
+
+**Grace Period**: 60 seconds (configurable)
+
+**Configuration**:
+```bash
+# Set custom grace period (in seconds)
+export MCP_PROCESS_SPAWN_GRACE_PERIOD_SECONDS=90
+```
+
+**Protection Rules**:
+- Processes younger than grace period cannot be marked idle
+- Allows time for MCP handshake completion
+- Prevents termination during tool discovery
+- Ensures processes become fully operational before idle monitoring begins
+
+<Warning>
+**Grace Period Purpose**: Without the grace period, processes could be terminated during initialization, causing race conditions where the handshake completes but the process is immediately marked idle and terminated. The 60-second default provides ample time for handshake, tool discovery, and initial activity.
+</Warning>
+
+### Termination Process
+
+When a process exceeds the idle timeout:
+
+**Steps**:
+1. Log idle duration and last activity timestamp
+2. Store process configuration in dormant map (RuntimeState)
+3. Emit `mcp.server.dormant` event to Backend
+4. Execute graceful process termination
+5. **Tools remain cached** for fast respawn (not cleared)
+6. Remove from active process tracking maps
+
+**Event Emission**:
+```typescript
+{
+  type: 'mcp.server.dormant',
+  data: {
+    server_id: string,
+    server_slug: string,
+    team_id: string,
+    process_id: number,
+    idle_duration_seconds: number,
+    last_activity_at: string (ISO 8601)
+  }
+}
+```
+
+## Dormant State Management
+
+### Dormant Configuration Storage
+
+RuntimeState maintains a separate map of dormant process configurations:
+
+**Stored Information**:
+- Complete MCPServerConfig (command, args, env, installation details)
+- Allows identical respawn without Backend communication
+- Remains in memory until process respawns or satellite restarts
+
+**Map Structure**:
+```typescript
+// Installation name → MCPServerConfig
+Map<string, MCPServerConfig>
+```
+
+### Dormant vs Active Tracking
+
+**Active Processes**:
+- Tracked in ProcessManager maps (by ID, by name)
+- Have active ProcessInfo with status, metrics, handlers
+- Consume memory for process overhead and buffers
+
+**Dormant Processes**:
+- Only configuration stored in RuntimeState
+- No active process or handlers
+- Minimal memory footprint (~1-2KB per config)
+- **Tools remain in cache** for instant availability
+
+### Dormant Process Queries
+
+RuntimeState provides methods for dormant process inspection:
+
+**Query Methods**:
+- `getDormantConfig(installationName)`: Retrieve specific config
+- `getDormantCount()`: Count total dormant processes
+- `getAllDormantConfigs()`: List all dormant configurations
+
+**Heartbeat Reporting**:
+- Dormant count included in heartbeat data
+- Enables Backend visibility into idle process management
+- Tracks dormant vs active process ratio
+
+## Automatic Respawning
+
+### Respawn Trigger
+
+Dormant processes respawn automatically when clients request them:
+
+**Trigger Points**:
+1. MCP client calls `tools/list` and process is dormant
+2. MCP client calls `tools/call` for tool on dormant server
+3. Any MCP request targeting dormant installation name
+
+**Detection**:
+```typescript
+// ProcessManager checks for dormant config
+const dormantConfig = runtimeState.getDormantConfig(installationName);
+if (dormantConfig) {
+  // Respawn process
+}
+```
+
+### Respawn Process Flow
+
+The respawn process follows the same path as initial spawn:
+
+```
+Request → Check Active → Check Dormant → Spawn Process → Handshake → Ready (tools already cached)
+    │           │              │              │              │              │
+  Client    Not Found    Config Found    child_process   Initialize   Serve
+```
+
+**Timing**:
+- Respawn duration: 1-2 seconds (faster - no tool discovery needed)
+- Includes handshake only (tools already cached)
+- Client experiences minimal delay on first request after dormancy
+
+### Concurrent Respawn Prevention
+
+Multiple concurrent requests to the same dormant process are handled safely:
+
+**Respawn Lock Mechanism**:
+- First request initiates respawn and stores Promise in map
+- Subsequent requests await the same Promise
+- All requests resolve when respawn completes
+- Prevents duplicate spawning of same process
+
+**Implementation**:
+```typescript
+// ProcessManager tracks in-progress respawns
+private respawningProcesses = new Map<string, Promise<ProcessInfo>>();
+```
+
+### Post-Respawn Cleanup
+
+After successful respawn:
+
+**Cleanup Operations**:
+1. Remove configuration from dormant map
+2. Add ProcessInfo to active tracking maps
+3. Emit `mcp.server.respawned` event
+4. **Tools already cached** (no rediscovery needed)
+5. Remove respawn Promise from tracking
+
+**Event Emission**:
+```typescript
+{
+  type: 'mcp.server.respawned',
+  data: {
+    server_id: string,
+    server_slug: string,
+    team_id: string,
+    process_id: number,
+    dormant_duration_seconds: number,
+    respawn_duration_ms: number
+  }
+}
+```
+
+## Performance Characteristics
+
+### Memory Savings
+
+Idle process management provides significant memory benefits:
+
+**Per-Process Savings**:
+- Active process: ~10-20MB (base Node.js + application)
+- Dormant config: ~1-2KB (configuration only)
+- Reduction: ~99% memory per idle process
+
+**Example Scenario**:
+- 100 MCP servers installed
+- 10 actively used (100MB memory)
+- 90 dormant (180KB memory)
+- Total: ~100MB vs ~1.5GB if all active
+
+### Timing Impact
+
+**User Experience**:
+- Active process: Instant response (~10-50ms latency)
+- Dormant process first request: 1-2 second delay (faster - no tool discovery)
+- Subsequent requests: Instant (process remains active)
+
+**Respawn Timing Breakdown**:
+- Process spawn: 500-1000ms
+- MCP handshake: 500-1000ms
+- Total: 1000-2000ms (tools already cached, no discovery needed)
+
+### Cleanup Efficiency
+
+**Job Performance**:
+- Runs every 30 seconds
+- Checks all processes: \<1ms per process
+- Termination overhead: ~100ms per process
+- Minimal CPU impact during normal operation
+
+## Configuration Best Practices
+
+### Idle Timeout Selection
+
+Choose timeout based on usage patterns:
+
+**Short Timeout (60-120 seconds)**:
+- High memory constraints
+- Predictable usage patterns
+- Acceptable respawn delay
+- Many infrequently used servers
+
+**Medium Timeout (180-300 seconds)** (Default):
+- Balanced memory vs experience
+- Mixed usage patterns
+- Occasional bursty activity
+- Recommended for most deployments
+
+**Long Timeout (600+ seconds)**:
+- Ample memory available
+- Continuous or frequent usage
+- Minimal respawn tolerance
+- Mission-critical low latency
+
+### Grace Period Tuning
+
+Adjust grace period based on environment:
+
+**Shorter Grace Period (30-45 seconds)**:
+- Fast network connections
+- Simple MCP servers (quick handshake)
+- Aggressive memory optimization
+
+**Standard Grace Period (60 seconds)** (Default):
+- Recommended for production
+- Accounts for npx package downloads
+- Handles slow network conditions
+- Prevents initialization race conditions
+
+**Longer Grace Period (90-120 seconds)**:
+- Slow network environments
+- Complex MCP servers (large dependencies)
+- Extra safety margin
+
+<Tip>
+**Monitoring Recommendation**: Track `mcp.server.dormant` and `mcp.server.respawned` events to tune idle timeout. If processes frequently dormant but respawn shortly after, increase timeout. If processes stay dormant for long periods, timeout is well-tuned.
+</Tip>
+
+## Monitoring & Observability
+
+### Event-Based Monitoring
+
+Track idle process management through Backend events:
+
+**Key Metrics**:
+- **mcp.server.dormant**: Count of processes entering dormant state
+- **mcp.server.respawned**: Count of successful respawns
+- **idle_duration_seconds**: Time process was inactive before termination
+- **dormant_duration_seconds**: Time process spent dormant before respawn
+
+### Log Analysis
+
+Important log operations to monitor:
+
+**Idle Detection**:
+```
+[DEBUG] Skipping process in grace period: server-name (age: 25s)
+[DEBUG] Skipping process with active requests: server-name
+[INFO] Idle check: terminated 2 idle process(es)
+```
+
+**Dormant Marking**:
+```
+[INFO] Marking process as dormant due to inactivity: server-name
+[INFO] Process marked as dormant and terminated: server-name
+```
+
+**Respawning**:
+```
+[INFO] Respawning dormant process: server-name
+[INFO] Dormant process respawned successfully: server-name
+```
+
+### Heartbeat Data
+
+Satellite heartbeat includes dormant process information:
+
+**Reported Metrics**:
+- Total active process count
+- Total dormant process count
+- Processes by status (running, starting, terminating, failed)
+
+## Error Handling
+
+### Respawn Failures
+
+If respawn fails, standard error handling applies:
+
+**Failure Scenarios**:
+- Process spawn error
+- Handshake timeout
+- Invalid configuration
+
+**Error Flow**:
+1. Respawn attempt logs error
+2. Dormant config remains in map
+3. Next request triggers another respawn attempt
+4. Auto-restart logic applies (3 attempts max)
+
+### Termination Failures
+
+Idle termination handles edge cases:
+
+**Process Not Found**:
+- Logs warning (non-critical)
+- Process already terminated externally
+- Cleanup continues normally
+
+**Graceful Shutdown Timeout**:
+- SIGTERM sent first (10-second wait)
+- SIGKILL sent if timeout exceeded
+- Force termination ensures cleanup
+
+## Development Testing
+
+### Manual Idle Testing
+
+Test idle process management locally:
+
+**Force Idle Termination**:
+```bash
+# Set short idle timeout for testing
+export MCP_PROCESS_IDLE_TIMEOUT_SECONDS=30
+
+# Start satellite
+npm run dev
+
+# Spawn process via Backend command
+# Wait 30 seconds without activity
+# Process should terminate and become dormant
+```
+
+**Test Respawning**:
+```bash
+# After process is dormant, make MCP request
+curl -X POST http://localhost:3001/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/list","params":{}}'
+
+# Process should respawn automatically
+# Check logs for respawn confirmation
+```
+
+### Grace Period Testing
+
+Verify grace period protection:
+
+```bash
+# Set very short idle timeout and standard grace period
+export MCP_PROCESS_IDLE_TIMEOUT_SECONDS=10
+export MCP_PROCESS_SPAWN_GRACE_PERIOD_SECONDS=60
+
+# Spawn process
+# Process should NOT be terminated within first 60 seconds
+# Even if idle timeout is only 10 seconds
+```
+
+## Production Considerations
+
+### Memory Planning
+
+Calculate expected memory usage:
+
+**Formula**:
+```
+Total Memory = (Active Processes × 15MB) + (Dormant Processes × 2KB)
+```
+
+**Example**:
+- 200 total MCP servers
+- 20 actively used (20 × 15MB = 300MB)
+- 180 dormant (180 × 2KB = 360KB)
+- Total: ~300MB vs ~3GB without idle management
+
+### Monitoring Alerts
+
+Configure alerts for idle process health:
+
+**Alert Conditions**:
+- High respawn rate (>10 per minute): Timeout too aggressive
+- High dormant count (>80% of total): Consider longer timeout
+- Respawn failures: Configuration or resource issues
+- Grace period violations: System overload or timing bugs
+
+### Resource Limits
+
+Coordinate with nsjail resource limits:
+
+**Production Limits**:
+- Per-process memory: 50MB (nsjail limit)
+- System memory: Plan for peak active processes
+- Dormant processes: Negligible memory impact
+
+## Related Documentation
+
+- [Process Management](/development/satellite/process-management) - Core stdio subprocess management
+- [Background Jobs](/development/satellite/background-jobs) - Job system architecture
+- [Event System](/development/satellite/event-system) - Event emission and tracking
+- [Tool Discovery](/development/satellite/tool-discovery) - How tool caching interacts with dormancy

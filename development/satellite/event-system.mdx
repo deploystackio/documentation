@@ -66,7 +66,7 @@ Satellite Components          EventBus              Backend
 **Naming Convention**: All event data fields use **snake_case** (e.g., `server_id`, `team_id`, `spawn_duration_ms`) to match the backend API convention.
 </Note>
 
-The satellite emits 10 event types across 4 categories:
+The satellite emits 12 event types across 4 categories:
 
 ### MCP Server Lifecycle
 
@@ -147,6 +147,46 @@ Emitted when server exhausts all 3 restart attempts.
   failed_at: string;           // ISO 8601 timestamp
 }
 ```
+
+#### `mcp.server.dormant`
+Emitted when idle stdio process is terminated to save resources.
+
+**Data Structure:**
+```typescript
+{
+  server_id: string;
+  server_slug: string;
+  team_id: string;
+  process_id: number;
+  idle_duration_seconds: number;
+  last_activity_at: string;    // ISO 8601 timestamp
+}
+```
+
+**Purpose:**
+- Track resource optimization (memory/CPU savings)
+- Monitor process sleep patterns
+- Alert on unexpected idle behavior
+
+#### `mcp.server.respawned`
+Emitted when dormant process is automatically respawned on API call.
+
+**Data Structure:**
+```typescript
+{
+  server_id: string;
+  server_slug: string;
+  team_id: string;
+  process_id: number;
+  dormant_duration_seconds: number;
+  respawn_duration_ms: number;
+}
+```
+
+**Purpose:**
+- Track transparent process respawning
+- Measure respawn latency (1-3s typical)
+- Monitor usage patterns after idle periods
 
 ### Client Connections
 
