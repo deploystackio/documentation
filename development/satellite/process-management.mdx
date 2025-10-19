@@ -144,16 +144,159 @@ All communication uses newline-delimited JSON following JSON-RPC 2.0 specificati
 
 ### Graceful Termination
 
-Termination follows a two-phase approach:
+Process termination follows a two-phase graceful shutdown approach to ensure clean process exit and proper resource cleanup.
 
-1. **SIGTERM Phase**: Send graceful shutdown signal
-2. **SIGKILL Phase**: Force kill if timeout exceeded (default 10s)
+#### Termination Phases
 
-**Cleanup Operations:**
-- Cancel all active requests with rejection
-- Clear active requests map
-- Remove from tracking maps (by ID, by name, by team)
-- Emit 'processTerminated' event
+**Phase 1: SIGTERM (Graceful Shutdown)**
+- Send SIGTERM signal to the process
+- Process has 10 seconds (default timeout) to shut down gracefully
+- Process can complete in-flight operations and cleanup resources
+- Wait for process to exit voluntarily
+
+**Phase 2: SIGKILL (Force Termination)**
+- If process doesn't exit within timeout period
+- Send SIGKILL signal to force immediate termination
+- Guaranteed process termination (cannot be caught or ignored)
+- Used as last resort for unresponsive processes
+
+#### Termination Types
+
+The system handles three types of intentional terminations differently:
+
+**1. Manual Termination**
+- Triggered by explicit restart or stop commands
+- Status set to `'terminating'` before sending signals
+- No auto-restart triggered
+- Standard graceful shutdown with SIGTERM → SIGKILL
+
+**2. Idle/Dormant Termination**
+- Triggered by idle timeout (default: 180 seconds of inactivity)
+- Process marked with `isDormantShutdown` flag
+- Configuration stored in dormant map for fast respawn
+- Tools remain cached for instant availability
+- No auto-restart triggered (intentional shutdown)
+- See [Idle Process Management](/development/satellite/idle-process-management) for details
+
+**3. Uninstall Termination**
+- Triggered when server removed from configuration
+- Process marked with `isUninstallShutdown` flag
+- Complete cleanup: process, dormant config, tools, restart tracking
+- No auto-restart triggered (intentional removal)
+- Invoked via `removeServerCompletely()` method
+
+#### Crash Detection vs Intentional Shutdown
+
+The system distinguishes between crashes and intentional shutdowns:
+
+**Crash Detection Logic:**
+```typescript
+// Process is considered crashed if:
+// 1. Exit code is non-zero (e.g., 1, 143)
+// 2. Status is NOT 'terminating'
+// 3. NOT marked as intentional shutdown (isDormantShutdown or isUninstallShutdown)
+const wasCrash = code !== 0 && code !== null && 
+                 processInfo.status !== 'terminating' &&
+                 !processInfo.isDormantShutdown &&
+                 !processInfo.isUninstallShutdown;
+```
+
+**Why This Matters:**
+- SIGTERM exit code is 143 (non-zero)
+- Without flags, graceful termination would trigger auto-restart
+- Flags prevent unwanted restarts for intentional shutdowns
+
+#### Cleanup Operations
+
+During termination, the following cleanup operations occur:
+
+1. **Active Request Cancellation**
+   - All pending JSON-RPC requests are rejected
+   - Active requests map is cleared
+   - Clients receive termination error
+
+2. **State Cleanup**
+   - Remove from processes map (by process ID)
+   - Remove from processIdsByName map (by installation name)
+      - Remove from team tracking sets
+   - Clear dormant config if exists (for uninstall)
+
+3. **Resource Tracking**
+   - Restart attempts cleared (for uninstall)
+   - Respawn promises cleared
+   - Process metrics finalized
+
+4. **Event Emission**
+   - Emit `processTerminated` internal event
+   - Emit `processExit` with exit code and signal
+   - Emit `mcp.server.crashed` if crash detected (Backend event)
+
+#### Complete Server Removal
+
+The `removeServerCompletely()` method provides comprehensive cleanup for server uninstall:
+
+**Method Signature:**
+```typescript
+async removeServerCompletely(
+  installationName: string,
+  timeout: number = 10000
+): Promise<{ active: boolean; dormant: boolean }>
+```
+
+**Operation Flow:**
+1. Check for active process
+   - If found: Set `isUninstallShutdown` flag
+   - Terminate with graceful shutdown
+   - Return `active: true`
+
+2. Check for dormant config
+   - If found: Remove from dormant map
+   - Return `dormant: true`
+
+3. Clear restart tracking
+   - Delete restart attempts history
+   - Prevent any future restart attempts
+
+**Usage Example:**
+```typescript
+// Called when server removed from configuration
+const result = await processManager.removeServerCompletely(
+  'sequential-thinking-team-name-abc123'
+);
+
+// Result: { active: true, dormant: false }
+// - Active process was terminated
+// - No dormant config existed
+```
+
+**Logging Output:**
+```
+INFO: Removing server completely: sequential-thinking-team-name-abc123
+INFO: Terminating active process: sequential-thinking-team-name-abc123
+DEBUG: Sent SIGTERM to sequential-thinking-team-name-abc123
+INFO: Process terminated for uninstall (not a crash)
+INFO: Server removed completely (active: true, dormant: false)
+```
+
+#### Termination Timing
+
+**Normal Termination:**
+- SIGTERM sent: ~1ms
+- Process cleanup: 10-500ms (application-dependent)
+- Total time: 11-501ms
+
+**Forced Termination:**
+- SIGTERM sent: ~1ms
+- Timeout wait: 10,000ms
+- SIGKILL sent: ~1ms
+- Immediate kill: ~10ms
+- Total time: ~10,012ms
+
+**Best Practices:**
+- MCP servers should handle SIGTERM gracefully
+- Complete in-flight requests within timeout
+- Close file handles and network connections
+- Exit with code 0 for clean shutdown
 
 ## Auto-Restart System
 
