@@ -124,7 +124,9 @@
               "/development/backend/global-settings",
               "/development/backend/job-queue",
               "/development/backend/mail",
-              "/development/backend/cloud-credentials"              
+              "/development/backend/cloud-credentials",
+              "/development/backend/cron",
+              "/development/backend/metrics"
             ]
           },          
           {
@@ -185,7 +187,8 @@
               "/development/satellite/mcp-transport",
               "/development/satellite/process-management",
               "/development/satellite/team-isolation",
-              "/development/satellite/tool-discovery"
+              "/development/satellite/tool-discovery",
+              "/development/satellite/idle-process-management"
             ]
           },
           {
