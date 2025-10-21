@@ -1,0 +1,230 @@
+---
+title: Cron Job Scheduling
+description: Schedule recurring background tasks using cron expressions with the DeployStack job queue system.
+sidebarTitle: Cron
+---
+
+# Cron Job Scheduling
+
+DeployStack includes a cron job scheduling system that integrates seamlessly with the [Background Job Queue](/development/backend/job-queue). This allows you to schedule recurring tasks using standard cron expressions, with all the benefits of the job queue system including persistence, retries, and monitoring.
+
+## Architecture
+
+The cron system follows a two-tier architecture:
+
+1. **Cron Scheduler**: Uses `node-cron` to schedule tasks based on cron expressions
+2. **Job Queue**: Processes the actual work with persistence and retry capabilities
+
+```
+Cron Expression → Scheduler fires → Creates job in queue → Worker processes job
+```
+
+This separation provides:
+- **Reliability**: Jobs persist even if the server restarts
+- **Visibility**: All jobs are logged and trackable in the database
+- **Rate Limiting**: Built-in queue management prevents system overload
+- **Monitoring**: Track success/failure rates and execution history
+
+## Creating a Cron Job
+
+### Step 1: Define the Cron Job
+
+Create a new file in `src/cron/jobs/`:
+
+```typescript
+// src/cron/jobs/dailyCleanup.ts
+import type { CronJob } from '../cronManager';
+import type { JobQueueService } from '../../services/jobQueueService';
+
+export function createDailyCleanupJob(jobQueueService: JobQueueService): CronJob {
+  return {
+    name: 'daily-cleanup',
+    schedule: '0 2 * * *', // Every day at 2 AM
+    
+    task: async () => {
+      await jobQueueService.createJob('cleanup_old_data', {
+        daysToKeep: 30
+      });
+    }
+  };
+}
+```
+
+### Step 2: Create the Worker
+
+Create a worker to process the job in `src/workers/`:
+
+```typescript
+// src/workers/cleanupWorker.ts
+import type { AnyDatabase } from '../db';
+import type { FastifyBaseLogger } from 'fastify';
+import type { Worker, WorkerResult } from './types';
+
+interface CleanupPayload {
+  daysToKeep: number;
+}
+
+export class CleanupWorker implements Worker {
+  constructor(
+    private readonly db: AnyDatabase,
+    private readonly logger: FastifyBaseLogger
+  ) {}
+
+  async execute(payload: unknown, jobId: string): Promise<WorkerResult> {
+    const { daysToKeep } = payload as CleanupPayload;
+
+    this.logger.info({ 
+      jobId, 
+      daysToKeep,
+      operation: 'cleanup_old_data'
+    }, 'Starting cleanup job');
+
+    try {
+      // Your cleanup logic here
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+
+      // Example: Delete old records
+      // const result = await this.db.delete(oldRecordsTable)
+      //   .where(lt(oldRecordsTable.createdAt, cutoffDate));
+
+      this.logger.info({ 
+        jobId,
+        operation: 'cleanup_old_data'
+      }, 'Cleanup completed successfully');
+
+      return {
+        success: true,
+        message: 'Cleanup completed successfully'
+      };
+    } catch (error) {
+      this.logger.error({ jobId, error }, 'Cleanup job failed');
+      throw error; // Triggers retry logic
+    }
+  }
+}
+```
+
+### Step 3: Register the Worker
+
+Add the worker to `src/workers/index.ts`:
+
+```typescript
+import { CleanupWorker } from './cleanupWorker';
+
+export function registerWorkers(
+  processor: JobProcessorService,
+  db: AnyDatabase,
+  logger: FastifyBaseLogger
+): void {
+  // ... existing workers ...
+  
+  processor.registerWorker(
+    'cleanup_old_data',
+    new CleanupWorker(db, logger)
+  );
+}
+```
+
+### Step 4: Register the Cron Job
+
+Add the cron job to `src/cron/index.ts`:
+
+```typescript
+import { createDailyCleanupJob } from './jobs/dailyCleanup';
+
+export function initializeCronJobs(
+  jobQueueService: JobQueueService,
+  logger: FastifyBaseLogger
+): CronManager {
+  const cronManager = new CronManager(logger);
+
+  cronManager.register(createDailyCleanupJob(jobQueueService));
+
+  return cronManager;
+}
+```
+
+## Cron Expression Syntax
+
+The system uses standard cron syntax with 5 or 6 fields:
+
+```
+┌────────────── second (optional, 0-59)
+│ ┌──────────── minute (0-59)
+│ │ ┌────────── hour (0-23)
+│ │ │ ┌──────── day of month (1-31)
+│ │ │ │ ┌────── month (1-12)
+│ │ │ │ │ ┌──── day of week (0-7, 0 or 7 = Sunday)
+│ │ │ │ │ │
+* * * * * *
+```
+
+### Common Examples
+
+```typescript
+'*/2 * * * *'       // Every 2 minutes
+'0 * * * *'         // Every hour (at minute 0)
+'0 0 * * *'         // Daily at midnight
+'0 2 * * *'         // Daily at 2 AM
+'0 9 * * 1-5'       // Weekdays at 9 AM
+'*/30 * * * *'      // Every 30 minutes
+'0 */6 * * *'       // Every 6 hours
+'0 0 1 * *'         // First day of every month
+'0 0 * * 0'         // Every Sunday at midnight
+```
+
+## Integration with Job Queue
+
+The cron system is designed to work with the job queue system. This provides several benefits:
+
+**Persistence**: Jobs created by cron are stored in the database and survive server restarts.
+
+**Retry Logic**: Failed jobs are automatically retried with exponential backoff.
+
+**Rate Limiting**: The job queue processes jobs sequentially, preventing system overload.
+
+**Monitoring**: Track job execution history, success rates, and failures.
+
+For more details on the job queue system, see the [Background Job Queue](/development/backend/job-queue) documentation.
+
+## Example: Complete Implementation
+
+Here's a complete example showing how to create a cron job that sends a daily email digest:
+
+```typescript
+// src/cron/jobs/dailyDigest.ts
+import type { CronJob } from '../cronManager';
+import type { JobQueueService } from '../../services/jobQueueService';
+
+export function createDailyDigestJob(jobQueueService: JobQueueService): CronJob {
+  return {
+    name: 'daily-digest-email',
+    schedule: '0 8 * * *', // Every day at 8 AM
+    
+    task: async () => {
+      // Create job to send digest email
+      await jobQueueService.createJob('send_email', {
+        to: 'admin@example.com',
+        subject: 'Daily Activity Digest',
+        template: 'daily_digest',
+        variables: {
+          date: new Date().toISOString().split('T')[0]
+        }
+      });
+    }
+  };
+}
+```
+
+The `send_email` worker (already registered in the system) will process this job using the existing [Email System](/development/backend/mail).
+
+## Lifecycle Management
+
+The cron system is automatically initialized during server startup and gracefully shut down when the server stops:
+
+**Startup**: All registered cron jobs are scheduled and begin running according to their expressions.
+
+**Shutdown**: When the server receives a shutdown signal, cron jobs stop creating new jobs, allowing the job queue to finish processing existing jobs.
+
+This ensures no jobs are lost during server restarts or deployments.

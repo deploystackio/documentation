@@ -1,0 +1,481 @@
+---
+title: Time-Series Metrics System
+description: Developer guide for adding new time-series metrics to DeployStack using the generic metrics infrastructure.
+sidebarTitle: Metrics System
+---
+
+# Time-Series Metrics System
+
+DeployStack includes a generic time-series metrics system for collecting and querying bucketed activity data. This guide shows you how to add new metric types (like server installations, tool executions, satellite health, etc.) following the established pattern.
+
+## Architecture Overview
+
+The metrics system uses a **generic base service with specific implementations** pattern:
+
+```bash
+TimeSeriesMetricsService (abstract base class)
+    ↓ extends
+McpClientActivityMetricsService (concrete implementation)
+    ↓ queries
+mcpClientActivityMetrics (database table)
+    ↓ populated by
+Event Handler or Data Collection (writes buckets)
+    ↓ cleaned by
+Cleanup Worker (cron job + background worker)
+```
+
+**Key Components**:
+- **Base Service**: Generic time-series query logic (bucket generation, gap filling, response formatting)
+- **Metric Service**: Table-specific query logic (extends base service)
+- **Database Table**: Stores pre-aggregated time buckets
+- **Data Collection**: Populates buckets (event handlers, cron jobs, etc.)
+- **Cleanup System**: Removes old data based on retention policy
+- **API Endpoint**: Exposes metrics via REST API with permission checks
+- **Permissions**: Role-based access control for metrics viewing
+
+## Reference Implementation
+
+**MCP Client Activity Metrics** serves as the complete reference implementation. All files are in place and can be used as templates for new metric types.
+
+**Key Files**:
+- Database: `src/db/schema.sqlite.ts` (table: `mcpClientActivityMetrics`)
+- Base Service: `src/services/metrics/TimeSeriesMetricsService.ts`
+- Metric Service: `src/services/metrics/McpClientActivityMetricsService.ts`
+- Event Handler: `src/events/satellite/mcp-client-activity.ts`
+- Cleanup Worker: `src/workers/mcpClientActivityMetricsCleanupWorker.ts`
+- Cron Job: `src/cron/jobs/mcpClientActivityMetricsCleanup.ts`
+- API Endpoint: `src/routes/users/me/metrics/mcp/client-activity.ts`
+- Permissions: `src/permissions/index.ts` (permission: `metrics.mcp_client_activity_metrics.view`)
+
+## Adding a New Metric Type
+
+Follow these steps to add a new metric type to the system. Each step includes code examples you can copy and modify.
+
+### Step 1: Define Your Metric Requirements
+
+Before writing code, answer these questions:
+
+**Data Collection**:
+- What events/actions trigger data collection?
+- What counters will you track? (requests, tool calls, errors, duration, etc.)
+- What dimensions do you need? (user_id, team_id, server_id, etc.)
+- How frequently will data be collected? (every 30 seconds, on user action, etc.)
+
+**Time Buckets**:
+- What bucket intervals? (`15m`, `1h`, `1d`)
+- What retention period? (3 days, 30 days, 90 days)
+- What cleanup frequency? (every 30 minutes, daily, weekly)
+
+**Query Patterns**:
+- Who can view the metrics? (users viewing their own, admins viewing all)
+- What filters are needed? (by team, by server, by satellite, etc.)
+- What time ranges? (1h, 3h, 24h, 7d, 30d)
+
+**Example: Server Installation Metrics**
+```
+Data: Track when MCP servers are installed/uninstalled
+Counters: installation_count, uninstallation_count
+Dimensions: user_id, team_id, server_id, satellite_id
+Intervals: 15m and 1h buckets
+Retention: 30 days
+Cleanup: Daily at 3 AM
+Permissions: Users view their own, admins view all
+```
+
+### Step 2: Create Database Table
+
+Create your metrics table in `src/db/schema.sqlite.ts` following the `mcpClientActivityMetrics` table pattern.
+
+**Critical Requirements**:
+- Use `bucket_timestamp` (integer, Unix seconds)
+- Use `bucket_interval` with enum constraint
+- Include `created_at` timestamp
+- Add composite unique constraint for UPSERT
+- Create indexes for common query patterns
+- Use foreign keys with `onDelete: 'cascade'`
+- Use snake_case for all field names
+
+For schema patterns and migration generation, see [Database Management](/development/backend/database/).
+
+### Step 3: Generate and Apply Migration
+
+Generate your migration:
+
+```bash
+cd services/backend
+npm run db:generate
+```
+
+Migrations apply automatically on server startup. For detailed migration workflows, see [Database Management](/development/backend/database/).
+
+### Step 4: Create Metric Service
+
+Create a service that extends the base `TimeSeriesMetricsService`:
+
+**File**: `src/services/metrics/ServerInstallMetricsService.ts`
+
+```typescript
+import { eq, gte, lte, and, sql } from 'drizzle-orm';
+import type { LibSQLDatabase } from 'drizzle-orm/libsql';
+import { TimeSeriesMetricsService } from './TimeSeriesMetricsService';
+import { serverInstallMetrics } from '../../db/schema.sqlite';
+import type { 
+  QueryParams, 
+  BucketData, 
+  StandardResponse 
+} from './TimeSeriesMetricsService';
+
+interface ServerInstallBucket extends BucketData {
+  timestamp: number;
+  installation_count: number;
+  uninstallation_count: number;
+}
+
+export class ServerInstallMetricsService extends TimeSeriesMetricsService {
+  private db: LibSQLDatabase;
+  
+  constructor(db: LibSQLDatabase) {
+    super();
+    this.db = db;
+  }
+  
+  // Return metric type identifier
+  getMetricType(): string {
+    return 'server_installations';
+  }
+  
+  // Query database for buckets
+  async queryBuckets(params: QueryParams): Promise<BucketData[]> {
+    const { startTime, endTime, interval, filters } = params;
+    
+    const startTimestamp = Math.floor(startTime.getTime() / 1000);
+    const endTimestamp = Math.floor(endTime.getTime() / 1000);
+    
+    // Build query with filters
+    const whereConditions = [
+      eq(serverInstallMetrics.user_id, filters.user_id),
+      eq(serverInstallMetrics.team_id, filters.team_id),
+      eq(serverInstallMetrics.bucket_interval, interval),
+      gte(serverInstallMetrics.bucket_timestamp, startTimestamp),
+      lte(serverInstallMetrics.bucket_timestamp, endTimestamp)
+    ];
+    
+    // Optional filters
+    if (filters.server_id) {
+      whereConditions.push(eq(serverInstallMetrics.server_id, filters.server_id));
+    }
+    
+    if (filters.satellite_id) {
+      whereConditions.push(eq(serverInstallMetrics.satellite_id, filters.satellite_id));
+    }
+    
+    // Query with aggregation (handle multiple satellites/servers per bucket)
+    const results = await this.db
+      .select({
+        bucket_timestamp: serverInstallMetrics.bucket_timestamp,
+        installation_count: sql<number>`SUM(${serverInstallMetrics.installation_count})`,
+        uninstallation_count: sql<number>`SUM(${serverInstallMetrics.uninstallation_count})`
+      })
+      .from(serverInstallMetrics)
+      .where(and(...whereConditions))
+      .groupBy(serverInstallMetrics.bucket_timestamp)
+      .orderBy(serverInstallMetrics.bucket_timestamp);
+    
+    return results.map(row => ({
+      timestamp: row.bucket_timestamp,
+      installation_count: row.installation_count,
+      uninstallation_count: row.uninstallation_count
+    }));
+  }
+  
+  // Public method for API endpoint
+  async getServerInstallMetrics(
+    userId: string,
+    teamId: string,
+    timeRange: string,
+    interval: string,
+    serverId?: string,
+    satelliteId?: string
+  ): Promise<StandardResponse> {
+    // Parse time range
+    const { start, end } = this.parseTimeRange(timeRange);
+    
+    // Validate interval
+    this.validateInterval(interval);
+    
+    // Generate bucket timestamps
+    const timestamps = this.generateBucketTimestamps(start, end, interval);
+    
+    // Build filters
+    const filters: Record<string, string> = {
+      user_id: userId,
+      team_id: teamId
+    };
+    
+    if (serverId) filters.server_id = serverId;
+    if (satelliteId) filters.satellite_id = satelliteId;
+    
+    // Query actual data
+    const buckets = await this.queryBuckets({
+      startTime: start,
+      endTime: end,
+      interval,
+      filters
+    });
+    
+    // Fill missing buckets with zeros
+    const filledBuckets = this.fillMissingBuckets(buckets, timestamps);
+    
+    // Calculate summary statistics
+    const summary = this.calculateSummary(filledBuckets);
+    
+    // Format standardized response
+    return this.formatResponse({
+      metricType: this.getMetricType(),
+      timeRange: { start, end, interval },
+      filters,
+      buckets: filledBuckets,
+      summary
+    });
+  }
+}
+```
+
+**Key Points**:
+- Extends `TimeSeriesMetricsService`
+- Implements `getMetricType()` and `queryBuckets()`
+- Uses `SUM()` and `GROUP BY` for aggregation
+- Handles optional filters (server_id, satellite_id, etc.)
+- Orchestrates full flow in public method
+
+### Step 5: Add Permissions
+
+Add the metric permission to `src/permissions/index.ts`:
+
+```typescript
+export const ROLE_DEFINITIONS = {
+  global_user: [
+    // ... existing permissions
+    'metrics.server_install_metrics.view',  // Add your metric permission
+  ],
+  global_admin: [
+    // ... existing permissions
+    'metrics.server_install_metrics.view',  // Also add to admin if needed
+  ],
+  // ... other roles
+} as const;
+```
+
+**Permission Naming Convention**: `metrics.<table_name>.view`
+
+For detailed information about the permission system, role hierarchy, and access control patterns, see [Role Management](/development/backend/roles).
+
+### Step 6: Create API Endpoint
+
+Create your API endpoint following the established patterns:
+
+**File Structure**: `src/routes/users/me/metrics/your-metric.ts`
+
+**Key Requirements**:
+- Use `preValidation` for authorization (requires permission check)
+- Accept query parameters: `team_id` (required), `time_range`, `interval`, optional filters
+- Return standardized time-series response from service
+- Manual JSON serialization with `JSON.stringify()`
+
+**Reference Implementation**: `src/routes/users/me/metrics/mcp/client-activity.ts`
+
+**Complete Patterns**:
+- Authorization: [API Security Best Practices](/development/backend/api/security)
+- Request/Response schemas: [API Documentation](/development/backend/api/)
+- Query parameters: Use reusable schema constants pattern from reference implementation
+
+**Basic Handler Structure**:
+```typescript
+export default async function yourMetricsRoute(server: FastifyInstance) {
+  server.get('/users/me/metrics/your-metric', {
+    preValidation: requirePermission('metrics.your_table_name.view'),
+    schema: {
+      tags: ['Metrics'],
+      summary: 'Get your metrics',
+      security: [{ cookieAuth: [] }],
+      querystring: QUERY_PARAMS_SCHEMA,  // Define your schema constants
+      response: {
+        200: SUCCESS_RESPONSE_SCHEMA,
+        400: ERROR_RESPONSE_SCHEMA,
+        401: ERROR_RESPONSE_SCHEMA,
+        403: ERROR_RESPONSE_SCHEMA
+      }
+    }
+  }, async (request, reply) => {
+    const userId = request.user!.id;
+    const query = request.query as QueryParams;
+    
+    const db = getDb();
+    const metricsService = new YourMetricsService(db);
+    
+    const result = await metricsService.getYourMetrics(
+      userId,
+      query.team_id,
+      query.time_range || '24h',
+      query.interval || '1h'
+      // ... optional filters
+    );
+    
+    const response = { success: true, data: result.data };
+    const jsonString = JSON.stringify(response);
+    return reply.status(200).type('application/json').send(jsonString);
+  });
+}
+```
+
+**Register the route** in `src/routes/users/me/metrics/index.ts`.
+
+### Step 7: Set Up Data Collection
+
+Write data to your metrics table from the appropriate source. Common patterns:
+
+#### Pattern A: Event Handler (Real-Time Collection)
+
+For real-time metrics collection from satellite events, follow the `mcp-client-activity.ts` event handler pattern:
+- Calculate bucket timestamps for your intervals (15m, 1h)
+- Use UPSERT with composite unique constraint
+- Write to multiple bucket intervals simultaneously
+- Non-fatal error handling (log errors, don't block event processing)
+
+**Reference**: `src/events/satellite/mcp-client-activity.ts`
+
+#### Pattern B: Cron Job (Periodic Aggregation)
+
+For periodic aggregation from existing data, use the cron + worker pattern:
+- Create cron job definition in `src/cron/jobs/`
+- Create worker in `src/workers/` to implement aggregation logic
+- Register both in `src/cron/index.ts` and `src/workers/index.ts`
+
+For detailed patterns, see [Cron Scheduling](/development/backend/cron) and [Background Job Queue](/development/backend/job-queue).
+
+### Step 8: Add Cleanup System
+
+Create a cleanup worker and cron job following the MCP client activity cleanup pattern:
+
+**Key Components**:
+- Cleanup worker in `src/workers/` implementing the `Worker` interface
+- Cron job definition in `src/cron/jobs/` scheduling the cleanup
+- Registration in `src/workers/index.ts` and `src/cron/index.ts`
+
+**Cleanup Pattern**:
+- Calculate cutoff timestamp based on retention period
+- Delete old buckets using time-based index: `lt(table.bucket_timestamp, cutoffTimestamp)`
+- Handle both database drivers: `(result.changes || result.rowsAffected || 0)`
+- Log deletion statistics for monitoring
+
+**Reference Implementation**: 
+- Worker: `src/workers/mcpClientActivityMetricsCleanupWorker.ts`
+- Cron Job: `src/cron/jobs/mcpClientActivityMetricsCleanup.ts`
+
+For detailed patterns and scheduling, see [Cron Scheduling](/development/backend/cron) and [Background Job Queue](/development/backend/job-queue).
+
+## Metrics-Specific Patterns
+
+### Bucket Timestamp Calculation
+
+Always round down to bucket boundaries for alignment:
+
+```typescript
+// Unix seconds, not milliseconds
+const unixSeconds = Math.floor(eventTime.getTime() / 1000);
+
+// Round down to bucket start
+const bucketStart = Math.floor(unixSeconds / intervalSeconds) * intervalSeconds;
+
+// Example: 10:07:30 with 15m interval (900s)
+// floor(1736512050 / 900) * 900 = 1736512000 (10:00:00)
+```
+
+### Service Aggregation Pattern
+
+Always aggregate multiple records per bucket using `SUM()` and `GROUP BY`:
+
+```typescript
+// CORRECT - Aggregates multiple satellites/servers per bucket
+const results = await this.db
+  .select({
+    bucket_timestamp: metrics.bucket_timestamp,
+    total_count: sql<number>`SUM(${metrics.count})`
+  })
+  .from(metrics)
+  .where(conditions)
+  .groupBy(metrics.bucket_timestamp)
+  .orderBy(metrics.bucket_timestamp);
+```
+
+### Database Driver Compatibility
+
+Handle both SQLite (`changes`) and Turso (`rowsAffected`):
+
+```typescript
+const deletedCount = (result.changes || result.rowsAffected || 0);
+```
+
+For more details, see [Database Driver Compatibility](/development/backend/database/#database-driver-compatibility).
+
+
+
+## Common Pitfalls
+
+### ❌ Using milliseconds instead of seconds
+```typescript
+// WRONG
+const timestamp = Date.now(); // Returns milliseconds
+
+// CORRECT
+const timestamp = Math.floor(Date.now() / 1000); // Convert to seconds
+```
+
+### ❌ Not aggregating buckets
+```typescript
+// WRONG - Returns multiple rows per bucket
+const results = await db.select()
+  .from(metrics)
+  .where(conditions);
+
+// CORRECT - Aggregates multiple records per bucket
+const results = await db.select({
+  bucket_timestamp: metrics.bucket_timestamp,
+  total_count: sql<number>`SUM(${metrics.count})`
+})
+.from(metrics)
+.where(conditions)
+.groupBy(metrics.bucket_timestamp);
+```
+
+### ❌ Not handling both database drivers
+```typescript
+// WRONG - Only works with SQLite
+const deletedCount = result.changes;
+
+// CORRECT - Works with both SQLite and Turso
+const deletedCount = (result.changes || result.rowsAffected || 0);
+```
+
+## Related Documentation
+
+- [Database Management](/development/backend/database/) - Schema design, migrations, Drizzle ORM
+- [API Security](/development/backend/api/security) - Authorization patterns and security best practices
+- [Role Management](/development/backend/roles) - Permission system details
+- [Background Job Queue](/development/backend/job-queue) - Worker and job queue system
+- [Cron Scheduling](/development/backend/cron) - Scheduled task management
+
+## Summary
+
+Adding a new metric type involves:
+
+1. **Define requirements** (counters, dimensions, intervals, retention)
+2. **Create database table** with proper indexes and constraints
+3. **Generate and apply migration**
+4. **Create metric service** extending `TimeSeriesMetricsService`
+5. **Add permissions** to roles system
+6. **Create API endpoint** with security checks
+7. **Set up data collection** (event handlers or cron jobs)
+8. **Add cleanup system** (worker + cron job)
+
+The generic infrastructure handles bucket generation, gap filling, and response formatting - you only write table-specific query logic. Follow the MCP Client Activity Metrics implementation as your reference template.
