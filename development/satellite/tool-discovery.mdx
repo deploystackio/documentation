@@ -60,7 +60,7 @@ Tool discovery operates through three coordinated managers that handle different
 **StdioToolDiscoveryManager:**
 - Discovers tools from stdio subprocess MCP servers
 - Executes discovery after process spawn and handshake
-- Automatically clears tools on process termination
+- **Tools persist in cache even when processes go dormant**
 - Tracks tools by server with namespacing
 
 ## Discovery Process by Transport Type
@@ -97,7 +97,7 @@ Process Spawn → Handshake → Running → Discover Tools → Cache → Auto-Cl
 2. MCP handshake completes (initialize + initialized)
 3. Discovery triggered automatically after handshake
 4. Tools cached with namespacing (`server_slug-tool_name`)
-5. Tools cleared automatically on process termination
+5. **Tools persist in cache** even when process terminates (for fast respawn)
 
 ### Discovery Timing Differences
 
@@ -109,7 +109,7 @@ Process Spawn → Handshake → Running → Discover Tools → Cache → Auto-Cl
 **stdio (Lazy):**
 - Discovered after process spawn completes
 - Tools become available post-handshake
-- Process termination removes tools automatically
+- **Tools persist even when process goes dormant** (enables fast respawn)
 
 ## Tool Caching Strategy
 
@@ -132,7 +132,7 @@ interface UnifiedCachedTool {
 **Cache Characteristics:**
 - **Unified Namespace**: Same format across both transport types
 - **Memory Storage**: No persistent storage or database
-- **Automatic Cleanup**: stdio tools removed on process exit
+- **Persistent Caching**: stdio tools remain cached even when processes go dormant
 - **Conflict Prevention**: server_slug ensures unique names
 
 ### Namespacing Strategy
@@ -217,12 +217,18 @@ Both managers implement graceful failure handling:
 
 ### Automatic Cleanup
 
-stdio tools are automatically managed:
+stdio tools persist in cache for optimal performance:
 
 **Process Lifecycle:**
 - **Spawn**: Tools discovered after handshake
 - **Running**: Tools available for execution
-- **Terminate**: Tools removed from cache automatically
+- **Idle/Dormant**: Process terminated, **tools remain cached** for fast respawn
+- **Respawn**: Process restarts automatically, tools already available (no rediscovery)
+- **Uninstall**: Tools cleared only when server is explicitly removed
+
+<Info>
+**Idle Process Management**: stdio processes that remain inactive for the configured idle timeout (default: 3 minutes) are automatically terminated to save memory. However, **tools remain cached** so when a client requests them, the process respawns instantly without needing to rediscover tools. This reduces respawn time from 1-3 seconds to 1-2 seconds. See [Idle Process Management](/development/satellite/idle-process-management) for details.
+</Info>
 
 ## Development Considerations
 
@@ -275,10 +281,10 @@ curl -X POST http://localhost:3001/mcp \
 
 ### stdio Performance
 
-- **Discovery Time**: 1-2 seconds post-spawn
-- **Memory**: ~1KB per tool
-- **Overhead**: Single JSON-RPC request per process
-- **Caching**: Automatic cleanup on process exit
+- **Discovery Time**: 1-2 seconds post-spawn (first time only)
+- **Memory**: ~1KB per tool (persists even when process dormant)
+- **Overhead**: Single JSON-RPC request per process (cached for respawns)
+- **Caching**: Persistent - tools remain even when process goes dormant
 
 ### Scalability
 

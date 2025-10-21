@@ -378,43 +378,6 @@ Configuration → Spawn → Monitor → Health Check → Restart/Terminate
 - **Automatic Recovery**: Restart failed processes
 - **Resource Limits**: Enforce team quotas
 
-## Development Roadmap
-
-### Phase 1: MCP Transport Implementation ✅ COMPLETED
-- **SSE Transport**: Server-Sent Events with session management
-- **SSE Messaging**: JSON-RPC message sending via sessions
-- **Streamable HTTP**: Direct HTTP communication with optional streaming
-- **Session Management**: Cryptographically secure session handling
-- **JSON-RPC 2.0**: Full protocol compliance with error handling
-
-### Phase 2: MCP Server Process Management ✅ COMPLETED
-- **Process Lifecycle**: Spawn, monitor, terminate MCP servers with auto-restart
-- **stdio Communication**: JSON-RPC 2.0 over stdin/stdout with buffer-based parsing
-- **Tool Discovery**: Discover and cache tools from stdio MCP servers
-- **Health Monitoring**: Process health checks and crash detection
-- **Auto-Restart**: Max 3 attempts with exponential backoff, then permanently_failed status
-- **Team-Aware Reporting**: processes_by_team in heartbeat every 30 seconds
-
-### Phase 3: Team Isolation
-- **Resource Boundaries**: CPU and memory limits
-- **Process Isolation**: Namespaces and process groups
-- **Filesystem Isolation**: Team-specific directories
-- **Credential Management**: Secure environment injection
-
-### Phase 4: Backend Integration ✅ COMPLETED
-- **HTTP Polling**: Communication with DeployStack Backend
-- **Configuration Sync**: Dynamic configuration updates
-- **Status Reporting**: Real-time metrics and health
-- **Command Processing**: Execute Backend commands
-
-For detailed information about the polling implementation, see [Backend Polling Implementation](/development/satellite/polling).
-
-### Phase 5: Enterprise Features
-- **OAuth 2.1 Authentication**: Full authentication server
-- **HTTP Proxy**: External MCP server proxying
-- **Advanced Monitoring**: Comprehensive observability
-- **Multi-Region Support**: Global deployment
-
 ## Technical Implementation Details
 
 ### Current Implementation Specifications
