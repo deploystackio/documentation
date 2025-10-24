@@ -1,0 +1,742 @@
+---
+title: Production Satellite Setup
+description: Deploy a production-ready DeployStack Satellite with nsjail process isolation for multi-team environments on Debian 13.
+---
+
+# Production Satellite Setup
+
+This guide covers deploying a production-ready DeployStack Satellite with **nsjail process isolation** for secure multi-team environments. For development or single-team deployments, see the [Quick Start](/self-hosted/quick-start) guide.
+
+<Warning>
+**When to use this guide:**
+- **Production deployments** serving multiple teams
+- **Enterprise environments** with strict security requirements
+- **Shared infrastructure** where teams need complete isolation
+- **Multi-tenant** satellite deployments
+
+For **development or single-team** usage, the [Docker Compose setup](/self-hosted/docker-compose) is simpler and sufficient.
+</Warning>
+
+## Overview
+
+Production satellites provide enterprise-grade security through:
+
+- **nsjail Process Isolation**: Complete process separation per team with Linux namespaces
+- **Resource Limits**: CPU, memory, and process limits per MCP server (2GB RAM, 60s CPU, 1000 processes)
+- **Filesystem Jailing**: Read-only system directories, isolated writable spaces
+- **Non-Root Execution**: Satellite runs as dedicated `deploystack` user
+- **Audit Logging**: Complete activity tracking with automatic rotation
+
+## Prerequisites
+
+### System Requirements
+
+- **Operating System**: Debian 13 (Trixie) - required for nsjail compatibility
+- **RAM**: Minimum 4GB (8GB+ recommended for multiple teams)
+- **Storage**: 20GB+ available disk space
+- **Network**: Outbound HTTPS access to DeployStack Backend
+- **Access**: Root/sudo access for initial setup
+
+### Required Knowledge
+
+- Linux system administration
+- systemd service management
+- Basic networking and firewall configuration
+
+## Installation Process
+
+The installation follows a two-phase approach:
+
+1. **System Setup**: Install Node.js, nsjail, configure kernel (run once per server)
+2. **Satellite Installation**: Build satellite, configure, create systemd service
+
+<Steps>
+  <Step title="System Setup">
+    Install system dependencies and configure the server for satellite operation.
+  </Step>
+  
+  <Step title="Satellite Installation">
+    Build the satellite service and configure it for your environment.
+  </Step>
+  
+  <Step title="Service Configuration">
+    Create systemd service and start the satellite.
+  </Step>
+  
+  <Step title="Verification">
+    Confirm the satellite is running correctly and registered with the backend.
+  </Step>
+</Steps>
+
+## Phase 1: System Setup
+
+### Install Node.js 24
+
+DeployStack Satellite requires Node.js 24 for compatibility with the latest MCP protocol features.
+
+```bash
+# Add NodeSource repository
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo bash -
+
+# Install Node.js
+sudo apt-get install -y nodejs
+
+# Verify installation
+node --version  # Should show v24.x.x
+npm --version
+```
+
+### Install nsjail
+
+nsjail provides the process isolation that enables secure multi-team satellite operation.
+
+<Info>
+**Why nsjail?** nsjail uses Linux namespaces and cgroups to create completely isolated environments for each team's MCP servers. This prevents teams from accessing each other's data or interfering with other processes.
+</Info>
+
+```bash
+# Install build dependencies
+sudo apt-get update
+sudo apt-get install -y \
+  autoconf \
+  bison \
+  flex \
+  gcc \
+  g++ \
+  git \
+  libprotobuf-dev \
+  libnl-route-3-dev \
+  libtool \
+  make \
+  pkg-config \
+  protobuf-compiler
+
+# Clone and build nsjail
+cd /tmp
+git clone --depth 1 https://github.com/google/nsjail.git
+cd nsjail
+make
+
+# Install to system
+sudo cp nsjail /usr/local/bin/
+sudo chmod +x /usr/local/bin/nsjail
+
+# Verify installation
+nsjail --version
+
+# Cleanup
+cd /
+rm -rf /tmp/nsjail
+```
+
+### Configure Kernel for User Namespaces
+
+nsjail requires unprivileged user namespaces to be enabled at the kernel level.
+
+```bash
+# Create sysctl configuration
+echo 'kernel.unprivileged_userns_clone=1' | sudo tee /etc/sysctl.d/99-deploystack-userns.conf
+
+# Apply immediately
+sudo sysctl -p /etc/sysctl.d/99-deploystack-userns.conf
+
+# Verify setting
+cat /proc/sys/kernel/unprivileged_userns_clone
+# Should return: 1
+```
+
+<Warning>
+**Important**: This kernel setting is required for nsjail to function. Without it, all MCP server spawns will fail. The setting persists across reboots via the sysctl configuration file.
+</Warning>
+
+### Create Service User
+
+Create a dedicated non-root user for running the satellite service.
+
+```bash
+# Create deploystack user with home directory
+sudo useradd -r -s /bin/bash -m -d /opt/deploystack deploystack
+
+# Verify user creation
+id deploystack
+```
+
+### Set Up Logging Infrastructure
+
+Configure log directories and rotation for the satellite service.
+
+```bash
+# Create log directory
+sudo mkdir -p /var/log/deploystack-satellite
+sudo chown deploystack:deploystack /var/log/deploystack-satellite
+sudo chmod 755 /var/log/deploystack-satellite
+
+# Create logrotate configuration
+sudo tee /etc/logrotate.d/deploystack-satellite > /dev/null << 'EOF'
+/var/log/deploystack-satellite/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 deploystack deploystack
+    sharedscripts
+    postrotate
+        systemctl reload deploystack-satellite > /dev/null 2>&1 || true
+    endscript
+}
+EOF
+```
+
+<Info>
+**Log Rotation**: Logs rotate daily and retain 7 days of history by default. Adjust the `rotate` value in the logrotate configuration if you need longer retention.
+</Info>
+
+## Phase 2: Satellite Installation
+
+### Clone or Copy Satellite Code
+
+```bash
+# Switch to deploystack user
+sudo su - deploystack
+
+# Clone the repository (or copy satellite code to /opt/deploystack)
+cd /opt/deploystack
+git clone https://github.com/deploystackio/deploystack.git
+cd deploystack/services/satellite
+```
+
+### Install Dependencies and Build
+
+```bash
+# Install npm dependencies
+npm install
+
+# Build TypeScript code
+npm run build
+
+# Verify build output
+ls -la dist/index.js  # Should exist
+```
+
+### Create MCP Cache Directory
+
+```bash
+# Create cache directory for MCP server packages
+mkdir -p /opt/deploystack/mcp-cache
+```
+
+### Configure Environment
+
+Create the `.env` file with your production configuration.
+
+<Info>
+**Registration Token**: You must generate this token from your DeployStack admin interface before proceeding. Navigate to Admin → Satellites → Pairing to generate a global satellite token.
+</Info>
+
+```bash
+# Create .env file
+cat > .env << 'EOF'
+# DeployStack Satellite Configuration
+
+# Server Configuration
+PORT=3001
+NODE_ENV=production
+LOG_LEVEL=info
+
+# Backend Connection
+DEPLOYSTACK_BACKEND_URL=https://cloud.deploystack.io
+DEPLOYSTACK_BACKEND_POLLING_INTERVAL=60
+
+# Satellite Identity (10-32 chars, lowercase a-z0-9-_ only)
+DEPLOYSTACK_SATELLITE_NAME=prod-satellite-001
+
+# Registration Token (from admin panel)
+DEPLOYSTACK_REGISTRATION_TOKEN=deploystack_satellite_global_eyJhbGc...
+
+# Status Display
+DEPLOYSTACK_STATUS_SHOW_UPTIME=true
+DEPLOYSTACK_STATUS_SHOW_VERSION=true
+DEPLOYSTACK_STATUS_SHOW_MCP_DEBUG_ROUTE=false
+
+# Event System
+EVENT_BATCH_INTERVAL_MS=3000
+EVENT_MAX_BATCH_SIZE=100
+
+# nsjail Resource Limits
+NSJAIL_MEMORY_LIMIT_MB=2048
+NSJAIL_CPU_TIME_LIMIT_SECONDS=60
+NSJAIL_MAX_PROCESSES=1000
+NSJAIL_RLIMIT_NOFILE=1024
+NSJAIL_RLIMIT_FSIZE=50
+NSJAIL_TMPFS_SIZE=100M
+
+# Process Idle Timeout (seconds, 0 to disable)
+MCP_PROCESS_IDLE_TIMEOUT_SECONDS=180
+EOF
+
+# Secure the environment file
+chmod 600 .env
+```
+
+<Warning>
+**Satellite Name Requirements:**
+- Length: 10-32 characters
+- Characters: lowercase letters (a-z), numbers (0-9), hyphens (-), underscores (_)
+- No spaces or uppercase letters
+- Must be unique across your DeployStack deployment
+</Warning>
+
+### Create Systemd Service
+
+Exit back to root/sudo user to create the systemd service.
+
+```bash
+# Exit deploystack user
+exit
+
+# Create systemd service file
+sudo tee /etc/systemd/system/deploystack-satellite.service > /dev/null << 'EOF'
+[Unit]
+Description=DeployStack Satellite Service
+Documentation=https://docs.deploystack.io
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=deploystack
+Group=deploystack
+WorkingDirectory=/opt/deploystack/deploystack/services/satellite
+
+# Start command
+ExecStart=/usr/bin/node --env-file=.env dist/index.js
+
+# Logging
+StandardOutput=append:/var/log/deploystack-satellite/satellite.log
+StandardError=append:/var/log/deploystack-satellite/error.log
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/deploystack/deploystack/services/satellite/persistent_data
+ReadWritePaths=/var/log/deploystack-satellite
+ReadWritePaths=/opt/deploystack/mcp-cache
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Reload systemd
+sudo systemctl daemon-reload
+```
+
+<Info>
+**Security Features**: The systemd service runs with several security hardening options:
+- **NoNewPrivileges**: Prevents privilege escalation
+- **PrivateTmp**: Isolated /tmp directory
+- **ProtectSystem**: Read-only system directories
+- **ProtectHome**: Restricted home directory access
+- **ReadWritePaths**: Only specific directories are writable
+</Info>
+
+### Start the Service
+
+```bash
+# Enable service for automatic startup
+sudo systemctl enable deploystack-satellite
+
+# Start the service
+sudo systemctl start deploystack-satellite
+
+# Check status
+sudo systemctl status deploystack-satellite
+```
+
+## Verification
+
+### Check Service Status
+
+```bash
+# View service status
+sudo systemctl status deploystack-satellite
+
+# View live logs
+sudo tail -f /var/log/deploystack-satellite/satellite.log
+
+# Check for errors
+sudo tail -f /var/log/deploystack-satellite/error.log
+```
+
+### Verify Port Listening
+
+```bash
+# Check if port 3001 is listening
+sudo ss -tlnp | grep :3001
+
+# Test health endpoint
+curl http://localhost:3001/api/status/backend
+```
+
+### Check Registration
+
+Look for successful registration in the logs:
+
+```bash
+sudo grep "registered successfully" /var/log/deploystack-satellite/satellite.log
+```
+
+You should see:
+```
+✅ Satellite registered successfully: prod-satellite-001
+🔑 API key received and ready for authenticated communication
+```
+
+### Verify in Admin Interface
+
+1. Log in to your DeployStack admin interface
+2. Navigate to Admin → Satellites
+3. Confirm your satellite appears with status "Active"
+4. Check last heartbeat timestamp is recent
+
+## Service Management
+
+### Common Commands
+
+```bash
+# Start service
+sudo systemctl start deploystack-satellite
+
+# Stop service
+sudo systemctl stop deploystack-satellite
+
+# Restart service
+sudo systemctl restart deploystack-satellite
+
+# View status
+sudo systemctl status deploystack-satellite
+
+# Enable auto-start on boot
+sudo systemctl enable deploystack-satellite
+
+# Disable auto-start
+sudo systemctl disable deploystack-satellite
+
+# View logs (last 50 lines)
+sudo journalctl -u deploystack-satellite -n 50
+
+# Follow logs in real-time
+sudo journalctl -u deploystack-satellite -f
+```
+
+### Updating the Satellite
+
+```bash
+# Stop service
+sudo systemctl stop deploystack-satellite
+
+# Switch to deploystack user
+sudo su - deploystack
+cd /opt/deploystack/deploystack/services/satellite
+
+# Pull latest code
+git pull
+
+# Rebuild
+npm install
+npm run build
+
+# Exit back to root
+exit
+
+# Start service
+sudo systemctl start deploystack-satellite
+
+# Verify
+sudo systemctl status deploystack-satellite
+```
+
+## Security Considerations
+
+### nsjail Isolation
+
+Production satellites use nsjail to provide:
+
+- **PID Namespace Isolation**: Each team's MCP servers run in separate process trees
+- **Mount Namespace Isolation**: Isolated filesystem view per team
+- **IPC Namespace Isolation**: Separate inter-process communication
+- **UTS Namespace Isolation**: Each team gets unique hostname (mcp-{team_id})
+
+### Resource Limits
+
+Each MCP server process is limited to:
+
+- **Memory**: 2048MB (absolute minimum for Node.js V8)
+- **CPU Time**: 60 seconds
+- **Processes**: 1000 (required for npm operations)
+- **File Descriptors**: 1024
+- **Maximum File Size**: 50MB
+
+<Warning>
+**Memory Limit Note**: 2048MB is the absolute minimum for Node.js runtime initialization. Do not reduce this value below 2048MB or MCP servers will fail to start.
+</Warning>
+
+### Network Security
+
+Configure firewall rules for production:
+
+```bash
+# Allow only backend communication (satellite polls backend)
+# No inbound rules needed - satellite uses outbound polling
+
+# Optional: Allow local status checks
+sudo ufw allow from 127.0.0.1 to any port 3001
+
+# If you need external access to satellite (not recommended)
+sudo ufw allow 3001/tcp
+```
+
+## Troubleshooting
+
+### Service Won't Start
+
+**Check logs for errors:**
+```bash
+sudo journalctl -u deploystack-satellite -n 100
+sudo tail -50 /var/log/deploystack-satellite/error.log
+```
+
+**Common issues:**
+- Missing registration token in `.env`
+- Invalid satellite name format
+- Backend URL unreachable
+- Port 3001 already in use
+
+### nsjail Spawning Failures
+
+**Symptoms:**
+- MCP servers fail to spawn
+- Errors mentioning "clone" or "namespace"
+
+**Check kernel setting:**
+```bash
+cat /proc/sys/kernel/unprivileged_userns_clone
+# Must return: 1
+```
+
+**Verify nsjail installation:**
+```bash
+nsjail --version
+which nsjail
+```
+
+### Registration Fails
+
+**Check registration token:**
+```bash
+# View current token in .env (be careful - this is sensitive)
+sudo -u deploystack grep REGISTRATION_TOKEN /opt/deploystack/deploystack/services/satellite/.env
+```
+
+**Common registration issues:**
+- Token expired (global tokens expire after 1 hour)
+- Token already used (tokens are single-use)
+- Backend URL incorrect or unreachable
+- Network connectivity issues
+
+**Test backend connectivity:**
+```bash
+curl -I https://cloud.deploystack.io
+```
+
+### High Memory Usage
+
+**Check process memory:**
+```bash
+# View satellite memory usage
+sudo systemctl status deploystack-satellite | grep Memory
+
+# View all MCP server processes
+ps aux | grep node | grep deploystack
+```
+
+**Adjust idle timeout to terminate unused processes faster:**
+```bash
+# Edit .env file
+sudo -u deploystack nano /opt/deploystack/deploystack/services/satellite/.env
+
+# Change MCP_PROCESS_IDLE_TIMEOUT_SECONDS to lower value (e.g., 60)
+# Restart service
+sudo systemctl restart deploystack-satellite
+```
+
+### Port Already in Use
+
+**Find what's using port 3001:**
+```bash
+sudo lsof -i :3001
+sudo ss -tlnp | grep :3001
+```
+
+**Change satellite port:**
+```bash
+# Edit .env file
+sudo -u deploystack nano /opt/deploystack/deploystack/services/satellite/.env
+
+# Change PORT=3001 to another port
+# Restart service
+sudo systemctl restart deploystack-satellite
+```
+
+## Monitoring and Maintenance
+
+### Log Management
+
+**View current logs:**
+```bash
+# Satellite logs
+sudo tail -f /var/log/deploystack-satellite/satellite.log
+
+# Error logs
+sudo tail -f /var/log/deploystack-satellite/error.log
+
+# All logs
+sudo tail -f /var/log/deploystack-satellite/*.log
+```
+
+**Check log disk usage:**
+```bash
+sudo du -sh /var/log/deploystack-satellite
+```
+
+**Manual log cleanup:**
+```bash
+# Remove logs older than 7 days
+sudo find /var/log/deploystack-satellite -name "*.log" -mtime +7 -delete
+```
+
+### Health Monitoring
+
+Set up automated health checks:
+
+```bash
+# Create health check script
+sudo tee /usr/local/bin/check-satellite-health > /dev/null << 'EOF'
+#!/bin/bash
+if systemctl is-active --quiet deploystack-satellite; then
+    if curl -sf http://localhost:3001/api/status/backend > /dev/null; then
+        echo "OK"
+        exit 0
+    else
+        echo "WARN: Service running but not responding"
+        exit 1
+    fi
+else
+    echo "ERROR: Service not running"
+    exit 2
+fi
+EOF
+
+sudo chmod +x /usr/local/bin/check-satellite-health
+
+# Test health check
+sudo /usr/local/bin/check-satellite-health
+```
+
+### Performance Monitoring
+
+Monitor satellite performance metrics:
+
+```bash
+# CPU and memory usage
+top -p $(pgrep -f "deploystack-satellite")
+
+# Detailed process information
+sudo systemctl status deploystack-satellite
+
+# Network connections
+sudo ss -tn | grep :3001
+```
+
+## Production Best Practices
+
+### Backup Configuration
+
+Regularly backup your satellite configuration:
+
+```bash
+# Backup persistent data and configuration
+sudo tar czf /opt/backups/satellite-backup-$(date +%Y%m%d).tar.gz \
+  /opt/deploystack/deploystack/services/satellite/.env \
+  /opt/deploystack/deploystack/services/satellite/persistent_data
+```
+
+### Update Strategy
+
+1. Test updates in staging environment first
+2. Schedule maintenance windows for updates
+3. Keep backup of previous working version
+4. Monitor logs closely after updates
+
+### Security Auditing
+
+Regularly review:
+- Systemd service permissions
+- Log file permissions
+- Environment file security (`.env` should be 600)
+- User and group ownership
+
+### Capacity Planning
+
+Monitor and plan for:
+- Number of active MCP server processes
+- Memory usage per team
+- Log disk usage growth
+- Network bandwidth for backend communication
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card 
+    title="MCP Server Configuration"
+    icon="server"
+    href="/general/mcp-servers"
+  >
+    Configure MCP servers for your teams
+  </Card>
+  
+  <Card 
+    title="Team Management"
+    icon="users"
+    href="/general/teams"
+  >
+    Set up teams and access control
+  </Card>
+  
+  <Card 
+    title="Satellite Monitoring"
+    icon="chart-line"
+    href="/general/monitoring"
+  >
+    Monitor satellite health and usage
+  </Card>
+  
+  <Card 
+    title="API Documentation"
+    icon="code"
+    href="/development/backend/api"
+  >
+    Explore the satellite API
+  </Card>
+</CardGroup>
+
+---
+
+**Need help?** Join our [Discord community](https://discord.gg/42Ce3S7b3b) or check [GitHub Issues](https://github.com/deploystackio/deploystack/issues) for support.
