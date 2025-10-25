@@ -5,10 +5,16 @@ description: Deploy DeployStack using Docker Compose for a quick and reliable se
 
 # Docker Compose Setup
 
-Deploy DeployStack using Docker Compose for a production-ready, self-hosted installation. This method is recommended for most users as it provides a reliable, scalable setup with minimal configuration.
+Deploy DeployStack using Docker Compose for a quick and reliable self-hosted installation. This method is recommended for most users as it provides a reliable setup with minimal configuration.
 
 <Info>
 Docker containers are for production hosting or self-hosting. For development contributions, check the [Local Setup](/local-setup) guide.
+</Info>
+
+<Info>
+**Deployment Type**: This guide covers **development and single-team deployments**. The satellite runs without process isolation, suitable for local development or when serving only your own team.
+
+For **production deployments with multiple teams** or external users, see [Production Satellite Setup](/self-hosted/production-satellite) which includes nsjail process isolation for security and team separation.
 </Info>
 
 ## Overview
@@ -26,37 +32,6 @@ This guide provides step-by-step instructions to install and configure DeploySta
 - **RAM**: Ensure your environment has at least 4GB of RAM. Insufficient memory can cause processes to crash.
 - **Docker & Docker Compose**: Make sure both are installed and up-to-date.
 - **Storage**: At least 2GB of available disk space for images and persistent data.
-
-### Linux Host Requirements
-
-<Warning>
-**For Linux deployments only**: To enable nsjail process isolation in the satellite service, your Linux host must have unprivileged user namespaces enabled.
-</Warning>
-
-Check if already enabled:
-
-```bash
-cat /proc/sys/kernel/unprivileged_userns_clone
-# Should return: 1
-```
-
-If not enabled (returns 0 or file doesn't exist), enable it:
-
-```bash
-echo 'kernel.unprivileged_userns_clone=1' | sudo tee /etc/sysctl.d/00-userns.conf
-sudo sysctl -p /etc/sysctl.d/00-userns.conf
-```
-
-Verify the setting:
-
-```bash
-cat /proc/sys/kernel/unprivileged_userns_clone
-# Should now return: 1
-```
-
-<Info>
-**Note**: This setting is only required for production Linux deployments. Development on macOS/Windows doesn't need this configuration.
-</Info>
 
 ## Beggining the setup for Docker Compose
 
@@ -187,20 +162,6 @@ The satellite service is **already included** in the docker-compose.yml file. Yo
    ```
 
 **Note**: After initial registration, the satellite saves its API key to persistent storage and doesn't need the registration token for subsequent starts.
-
-<Info>
-**Alternative for systems without host-level sysctl configuration**: If you cannot modify the host system's kernel parameters, you can add the `--sysctl` flag to the satellite service in your `docker-compose.yml`:
-
-```yaml
-services:
-  satellite:
-    # ... other configuration ...
-    sysctls:
-      - kernel.unprivileged_userns_clone=1
-```
-
-Note that this requires Docker to run with additional privileges and is less secure than configuring the host system directly.
-</Info>
 
 ## Configuration
 

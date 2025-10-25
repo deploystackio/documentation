@@ -17,6 +17,7 @@
             "group": "Essentials",
             "pages": [
               "index",
+              "general/quick-start",
               "general/architecture",
               "general/teams",
               "general/roles",

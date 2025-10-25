@@ -24,29 +24,29 @@ Satellites operate as edge workers similar to GitHub Actions runners, providing:
 
 ## Current Implementation Architecture
 
-### Phase 1: MCP Transport Layer
+### MCP SDK Transport Layer
 
-The current satellite implementation provides complete MCP client interface support:
+The satellite uses the official `@modelcontextprotocol/sdk` for all MCP client communication:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                        MCP Transport Implementation                             │
+│                        Official MCP SDK Implementation                         │
 │                                                                                 │
-│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐           │
-│  │  SSE Transport  │    │ SSE Messaging   │    │ Streamable HTTP │           │
-│  │                 │    │                 │    │                 │           │
-│  │ • GET /sse      │    │ • POST /message │    │ • GET/POST /mcp │           │
-│  │ • Session Mgmt  │    │ • JSON-RPC 2.0  │    │ • Optional SSE  │           │
-│  │ • 30min timeout │    │ • Session-based │    │ • CORS Support  │           │
-│  └─────────────────┘    └─────────────────┘    └─────────────────┘           │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                        MCP SDK Server                                   │   │
+│  │                                                                         │   │
+│  │  • StreamableHTTPServerTransport    • Standard JSON-RPC handling       │   │
+│  │  • Automatic session management     • Built-in error responses         │   │
+│  │  • Protocol 2025-03-26 compliance   • SSE streaming support            │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
 │                                                                                 │
-│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐           │
-│  │ Session Manager │    │   SSE Handler   │    │ Streamable HTTP │           │
-│  │                 │    │                 │    │    Handler      │           │
-│  │ • 32-byte IDs   │    │ • Connection    │    │ • Dual Response │           │
-│  │ • Activity      │    │   Management    │    │ • Session Aware │           │
-│  │ • Auto Cleanup  │    │ • Message Send  │    │ • Error Handle  │           │
-│  └─────────────────┘    └─────────────────┘    └─────────────────┘           │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                     MCP Client Integration                              │   │
+│  │                                                                         │   │
+│  │  • StreamableHTTPClientTransport    • External server discovery        │   │
+│  │  • Automatic connection cleanup     • Tool discovery caching           │   │
+│  │  • Standard MCP method support      • Process communication            │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
 │                                                                                 │
 │  ┌─────────────────────────────────────────────────────────────────────────┐   │
 │  │                    Foundation Infrastructure                            │   │
@@ -59,55 +59,47 @@ The current satellite implementation provides complete MCP client interface supp
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Current MCP Transport Endpoints
+### MCP Transport Endpoints
 
-**Implemented Endpoints:**
-- `GET /sse` - Establish SSE connection with session management
-- `POST /message?session={id}` - Send JSON-RPC messages via SSE sessions
-- `GET /mcp` - Establish SSE stream for Streamable HTTP transport
-- `POST /mcp` - Send JSON-RPC messages via Streamable HTTP
-- `OPTIONS /mcp` - CORS preflight handling
+**Active Endpoints:**
+- `GET /mcp` - Establish SSE stream via MCP SDK
+- `POST /mcp` - Send JSON-RPC messages via MCP SDK  
+- `DELETE /mcp` - Session termination via MCP SDK
 
 **Transport Protocol Support:**
 ```
-MCP Client                    Satellite
+MCP Client                    Satellite (MCP SDK)
     │                            │
-    │──── GET /sse ─────────────▶│  (Establish SSE session)
+    │──── POST /mcp ────────────▶│  (Initialize connection)
     │                            │
-    │◀─── Session URL ──────────│  (Return session endpoint)
+    │◀─── Session headers ──────│  (Session established)
     │                            │
-    │──── POST /message ────────▶│  (Send JSON-RPC via session)
+    │──── POST /mcp ────────────▶│  (JSON-RPC tools/list)
     │                            │
-    │◀─── Response via SSE ─────│  (Stream response back)
+    │◀─── Tools response ───────│  (Cached tools returned)
 ```
 
-### Core Components
+### Core SDK Components
 
-**Session Manager:**
-- Cryptographically secure 32-byte base64url session IDs
-- 30-minute session timeout with automatic cleanup
-- Activity tracking and session state management
-- Client info storage and MCP initialization tracking
+**MCP Server Wrapper:**
+- Official SDK Server integration with Fastify
+- Standard MCP protocol method handlers
+- Automatic session and transport management
+- Integration with existing tool discovery and process management
 
-**SSE Handler:**
-- Server-Sent Events connection establishment
-- Message sending with error handling
-- Heartbeat and endpoint event management
-- Connection lifecycle management
+**Client Communication:**
+- StreamableHTTPClientTransport for external server communication
+- Automatic connection establishment and cleanup
+- Standard MCP method execution (listTools, callTool)
+- Built-in error handling and retry logic
 
-**Streamable HTTP Handler:**
-- Dual response mode (JSON and SSE streaming)
-- Optional session-based communication
-- CORS preflight handling
-- Error counting and session management
-
-### JSON-RPC 2.0 Protocol Implementation
+### MCP Protocol Implementation
 
 **Supported MCP Methods:**
-- `initialize` - MCP session initialization
+- `initialize` - MCP session initialization (SDK automatic)
 - `notifications/initialized` - Client initialization complete
-- `tools/list` - List available tools from remote MCP servers
-- `tools/call` - Execute tools on remote MCP servers
+- `tools/list` - List cached tools from discovered servers
+- `tools/call` - Execute tools routed to appropriate servers
 - `resources/list` - List available resources (returns empty array)
 - `resources/templates/list` - List resource templates (returns empty array)
 - `prompts/list` - List available prompts (returns empty array)
@@ -115,10 +107,10 @@ MCP Client                    Satellite
 For detailed information about tool discovery and execution, see [Tool Discovery Implementation](/development/satellite/tool-discovery).
 
 **Error Handling:**
-- JSON-RPC 2.0 compliant error responses
-- HTTP status code mapping
-- Structured error logging
-- Session validation and error reporting
+- Standard JSON-RPC 2.0 compliant error responses via SDK
+- Automatic HTTP status code mapping
+- Structured error logging with operation tracking
+- Built-in session validation and error reporting
 
 ## Planned Full Architecture
 
@@ -414,18 +406,18 @@ npm run dev
 
 **Test MCP Transport:**
 ```bash
-# Test SSE connection
-curl -N -H "Accept: text/event-stream" http://localhost:3001/sse
-
-# Send JSON-RPC message (replace SESSION_ID)
-curl -X POST "http://localhost:3001/message?session=SESSION_ID" \
+# Test MCP connection
+curl -X POST "http://localhost:3001/mcp" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{}}'
 
-# Direct HTTP transport
-curl -X POST http://localhost:3001/mcp \
+# Test tool discovery
+curl -X POST "http://localhost:3001/mcp" \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":"1","method":"tools/list","params":{}}'
+  -d '{"jsonrpc":"2.0","id":"2","method":"tools/list","params":{}}'
+
+# Test SSE streaming
+curl -N -H "Accept: text/event-stream" "http://localhost:3001/mcp"
 ```
 
 **MCP Client Configuration:**
@@ -436,7 +428,7 @@ curl -X POST http://localhost:3001/mcp \
       "command": "npx",
       "args": ["@modelcontextprotocol/server-fetch"],
       "env": {
-        "MCP_SERVER_URL": "http://localhost:3001/sse"
+        "MCP_SERVER_URL": "http://localhost:3001/mcp"
       }
     }
   }
