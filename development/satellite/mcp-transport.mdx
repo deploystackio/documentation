@@ -1,93 +1,41 @@
 ---
 title: MCP Transport Protocols
-description: External communication endpoints for MCP client integration
+description: Official MCP SDK transport implementation for external client integration
 ---
 
 # MCP Transport Protocols
 
-Satellite implements three MCP transport protocols for external client communication. Each protocol serves different use cases and client requirements.
+Satellite uses the official `@modelcontextprotocol/sdk` to provide MCP client communication. This ensures full protocol compliance and seamless compatibility with all MCP clients including VS Code, Claude, and MCP Inspector.
 
 ## Transport Overview
 
-| Protocol | Endpoint | Method | Use Case |
-|----------|----------|--------|---------|
-| SSE Transport | `/sse` | GET | Persistent connections with session management |
-| SSE Messaging | `/message` | POST | JSON-RPC message sending via established sessions |
-| Streamable HTTP | `/mcp` | GET/POST | Direct HTTP communication with optional streaming |
+| Protocol | Endpoint | Method | Use Case | Implementation |
+|----------|----------|--------|----------|---------------|
+| Streamable HTTP | `/mcp` | POST | Standard JSON-RPC communication | Official MCP SDK |
+| SSE Streaming | `/mcp` | GET | Server-sent events for real-time updates | Official MCP SDK |
+| Session Management | `/mcp` | DELETE | Session termination | Official MCP SDK |
 
-## SSE Transport
+## MCP SDK Implementation
 
-### Connection Establishment
+Satellite leverages the official MCP TypeScript SDK for all transport operations:
 
-**Endpoint:** `GET /sse`
+```typescript
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
-**Headers:**
-- `Accept: text/event-stream` (required)
-- `Cache-Control: no-cache`
-- `Connection: keep-alive`
-
-**Response:**
-- Content-Type: `text/event-stream`
-- Session ID and endpoint URL sent as SSE events
-- 30-minute session timeout with automatic cleanup
-
-**Example:**
-```bash
-curl -N -H "Accept: text/event-stream" http://localhost:3001/sse
-```
-
-**SSE Events:**
-```
-event: endpoint
-data: {"url": "http://localhost:3001/message?session=abc123..."}
-
-event: heartbeat
-data: {"timestamp": "2025-01-09T13:30:00.000Z"}
+const server = new Server({
+  name: 'deploystack-satellite',
+  version: '1.0.0'
+});
 ```
 
 ### Session Management
 
-- **Session ID:** 32-byte cryptographically secure base64url identifier
-- **Timeout:** 30 minutes of inactivity
-- **Activity Tracking:** Updated on each message received
-- **Cleanup:** Automatic removal of expired sessions
-
-## SSE Messaging
-
-**Endpoint:** `POST /message?session={sessionId}`
-
-**Headers:**
-- `Content-Type: application/json` (required)
-
-**Request Body:** JSON-RPC 2.0 message
-```json
-{
-  "jsonrpc": "2.0",
-  "id": "req-1",
-  "method": "initialize",
-  "params": {
-    "clientInfo": {
-      "name": "my-client",
-      "version": "1.0.0"
-    }
-  }
-}
-```
-
-**Response:** Message processing status
-```json
-{
-  "status": "sent",
-  "messageId": "req-1"
-}
-```
-
-**Status Codes:**
-- `200` - Message sent successfully
-- `202` - Message accepted (for notifications)
-- `400` - Invalid JSON-RPC or missing session
-- `404` - Session not found
-- `500` - Internal server error
+The SDK provides automatic session management with:
+- **Session ID:** Cryptographically secure identifiers
+- **Timeout:** Configurable session timeouts  
+- **Activity Tracking:** Automatic session activity updates
+- **Cleanup:** Built-in session cleanup and resource management
 
 ## Streamable HTTP Transport
 
@@ -167,22 +115,7 @@ For detailed information about tool discovery and execution, see [Tool Discovery
 
 ### MCP Client Configuration
 
-**SSE Transport Example:**
-```json
-{
-  "mcpServers": {
-    "satellite": {
-      "command": "npx",
-      "args": ["@modelcontextprotocol/server-fetch"],
-      "env": {
-        "MCP_SERVER_URL": "http://localhost:3001/sse"
-      }
-    }
-  }
-}
-```
-
-**Direct HTTP Example:**
+**Standard Configuration:**
 ```json
 {
   "mcpServers": {
@@ -197,6 +130,19 @@ For detailed information about tool discovery and execution, see [Tool Discovery
 }
 ```
 
+**VS Code Configuration:**
+```json
+{
+  "servers": {
+    "deploystack-satellite": {
+      "url": "http://localhost:3001/mcp",
+      "type": "http"
+    }
+  },
+  "inputs": []
+}
+```
+
 ## Development Setup
 
 ### Local Testing
@@ -207,29 +153,27 @@ For detailed information about tool discovery and execution, see [Tool Discovery
    npm run dev
    ```
 
-2. **Test SSE Connection:**
+2. **Test MCP Connection:**
    ```bash
-   curl -N -H "Accept: text/event-stream" http://localhost:3001/sse
-   ```
-
-3. **Send JSON-RPC Message:**
-   ```bash
-   curl -X POST "http://localhost:3001/message?session=YOUR_SESSION_ID" \
+   curl -X POST "http://localhost:3001/mcp" \
      -H "Content-Type: application/json" \
      -d '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{}}'
    ```
 
-### Protocol Selection
+3. **Test Tools Discovery:**
+   ```bash
+   curl -X POST "http://localhost:3001/mcp" \
+     -H "Content-Type: application/json" \
+     -d '{"jsonrpc":"2.0","id":"2","method":"tools/list","params":{}}'
+   ```
 
-**Use SSE Transport when:**
-- Long-lived connections needed
-- Session state management required
-- Real-time bidirectional communication
+### Protocol Features
 
-**Use Streamable HTTP when:**
-- Stateless request/response patterns
-- Standard HTTP client libraries
-- Optional streaming responses
+The official MCP SDK provides:
+- **Automatic Session Management:** Sessions created and managed transparently
+- **Standard Protocol Compliance:** Full MCP specification 2025-03-26 support
+- **Flexible Transport Options:** JSON and SSE streaming responses
+- **Built-in Error Handling:** Standard JSON-RPC error responses
 
 ## Security Considerations
 
