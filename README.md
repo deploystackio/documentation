@@ -108,15 +108,16 @@ Mintlify provides built-in components for enhanced documentation:
 **Code Groups:**
 ```mdx
 <CodeGroup>
-```bash macOS/Linux
+`\`\`bash macOS/Linux
 npm install
-```
+`\`\`
 
-```powershell Windows
+`\`\`powershell Windows
 npm install
-```
+`\`\`
 </CodeGroup>
 ```
+
 
 **Cards:**
 ```mdx
