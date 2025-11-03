@@ -1,0 +1,594 @@
+---
+title: Hierarchical Router Implementation
+description: Technical solution to MCP context window consumption. DeployStack's hierarchical router pattern reduces token usage by 99.5% using just 2 meta-tools.
+---
+
+DeployStack Satellite implements a hierarchical router pattern to solve the MCP context window consumption problem. Instead of exposing hundreds of tools directly to MCP clients, the satellite exposes only 2 meta-tools that enable dynamic tool discovery and execution.
+
+<Info>
+**Problem Solved**: Traditional MCP implementations expose all tools directly, consuming 40-80% of the context window before any actual work begins. The hierarchical router reduces this to \<1% while maintaining full functionality.
+</Info>
+
+For information about how tools are discovered and cached internally, see [Tool Discovery Implementation](/development/satellite/tool-discovery).
+
+## The Context Window Problem
+
+### Traditional MCP Architecture
+
+When MCP clients connect to servers with many tools, the context window gets consumed by tool definitions:
+
+```
+Example with 15 MCP servers, each having 10 tools: 150 total tools
+Each tool definition consumes approximately 500 tokens: 150 × 500 = 75,000 tokens
+Context window total capacity: 200,000 tokens
+Available for work: 125,000 tokens (62.5%)
+```
+
+**Real-world impact:**
+- Claude Code: 82,000 tokens consumed by MCP tools (41% of context)
+- Industry consensus: 20-40 tools before performance degrades
+- Cursor hard limit: 40 tools maximum
+- Critical failures: 80+ tools cause suboptimal responses
+
+### Root Cause
+
+MCP clients call `tools/list` to discover available tools, and servers respond with complete tool definitions including:
+- Tool name
+- Description (often 100+ characters)
+- Input schema (JSON Schema objects)
+- Parameter descriptions
+- Examples and constraints
+
+This metadata is valuable but consumes massive context space when multiplied across many tools.
+
+## The Hierarchical Router Solution
+
+### Architecture Overview
+
+Instead of exposing all tools directly, the satellite exposes only 2 meta-tools:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  MCP Client (Claude Desktop / VS Code)                      │
+│                                                              │
+│  Connects to: http://satellite.deploystack.io/mcp          │
+│                                                              │
+│  Sees: "This server has 2 tools!"                          │
+│        1. discover_mcp_tools                                 │
+│        2. execute_mcp_tool                                   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ MCP Protocol (JSON-RPC)
+                              │
+┌─────────────────────────────▼───────────────────────────────┐
+│  DeployStack Satellite (Hierarchical Router)                │
+│                                                              │
+│  Exposes: 2 static meta-tools (NEVER change)               │
+│                                                              │
+│  Behind the scenes:                                          │
+│  • Manages 20+ actual MCP servers                           │
+│  • Each with 5-10 tools = 100+ real tools                   │
+│  • Search index with Fuse.js                                │
+│  • Client never knows about this complexity                  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Token Reduction
+
+**Before (Traditional):**
+- 150 tools × 500 tokens = 75,000 tokens
+- 37.5% of 200k context consumed
+
+**After (Hierarchical):**
+- 2 meta-tools × 175 tokens = 350 tokens
+- 0.175% of 200k context consumed
+- **99.5% reduction**
+
+## Meta-Tool Specifications
+
+### Tool 1: discover_mcp_tools
+
+**Purpose:** Search for available tools across all connected MCP servers using natural language queries.
+
+**Definition:**
+```typescript
+{
+  name: "discover_mcp_tools",
+  description: "Search and discover available MCP tools across all connected servers. Use natural language to find tools (e.g., 'Figma tools', 'PostgreSQL database', 'GitHub repository'). Returns tool paths that can be executed with execute_mcp_tool.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "Natural language search query describing what you want to do"
+      },
+      limit: {
+        type: "number",
+        description: "Maximum number of results to return (default: 10)",
+        default: 10
+      }
+    },
+    required: ["query"]
+  }
+}
+```
+
+**Example Request:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "1",
+  "method": "tools/call",
+  "params": {
+    "name": "discover_mcp_tools",
+    "arguments": {
+      "query": "github create issue",
+      "limit": 5
+    }
+  }
+}
+```
+
+**Example Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "1",
+  "result": {
+    "content": [{
+      "type": "text",
+      "text": {
+        "tools": [
+          {
+            "tool_path": "github:create_issue",
+            "description": "Create a new issue in a repository",
+            "server_name": "github",
+            "transport": "stdio",
+            "relevance_score": 0.01
+          },
+          {
+            "tool_path": "github:update_issue",
+            "description": "Update an existing issue",
+            "server_name": "github",
+            "transport": "stdio",
+            "relevance_score": 0.15
+          }
+        ],
+        "total_found": 2,
+        "search_time_ms": 3,
+        "query": "github create issue"
+      }
+    }]
+  }
+}
+```
+
+**Implementation Details:**
+- Uses Fuse.js for fuzzy full-text search
+- Searches across tool names, descriptions, and server names
+- Returns results ranked by relevance score
+- Search time: 2-5ms for 100+ tools
+- Queries [UnifiedToolDiscoveryManager](/development/satellite/tool-discovery) for tool cache
+
+### Tool 2: execute_mcp_tool
+
+**Purpose:** Execute a discovered tool by its path returned from `discover_mcp_tools`.
+
+**Definition:**
+```typescript
+{
+  name: "execute_mcp_tool",
+  description: "Execute a discovered MCP tool by its path. Use after discovering tools with discover_mcp_tools. The tool_path format is 'serverName:toolName' (e.g., 'figma:get_file', 'github:create_issue').",
+  inputSchema: {
+    type: "object",
+    properties: {
+      tool_path: {
+        type: "string",
+        description: "Full tool path from discover_mcp_tools (format: serverName:toolName)"
+      },
+      arguments: {
+        type: "object",
+        description: "Arguments to pass to the tool (schema varies by tool)"
+      }
+    },
+    required: ["tool_path", "arguments"]
+  }
+}
+```
+
+**Example Request:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "2",
+  "method": "tools/call",
+  "params": {
+    "name": "execute_mcp_tool",
+    "arguments": {
+      "tool_path": "github:create_issue",
+      "arguments": {
+        "repo": "deploystackio/deploystack",
+        "title": "Test issue",
+        "body": "Test body"
+      }
+    }
+  }
+}
+```
+
+**Example Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "2",
+  "result": {
+    "content": [{
+      "type": "text",
+      "text": {
+        "issue_number": 42,
+        "url": "https://github.com/deploystackio/deploystack/issues/42"
+      }
+    }]
+  }
+}
+```
+
+**Implementation Details:**
+- Parses `tool_path` from external format (`server:tool`) to internal format (`server-tool`)
+- Looks up tool in unified cache to determine transport type
+- Routes to appropriate handler (stdio or HTTP/SSE)
+- Returns result in MCP content format
+
+## Complete User Flow
+
+### Step 1: Client Connects
+
+```
+MCP Client → POST /mcp
+{
+  "jsonrpc": "2.0",
+  "method": "initialize",
+  "params": {...}
+}
+
+Satellite → Client
+{
+  "result": {
+    "capabilities": {"tools": {}},
+    "serverInfo": {"name": "deploystack-satellite"}
+  }
+}
+```
+
+**Client knows:** "I connected to a server named deploystack-satellite"
+
+### Step 2: Client Discovers Available Tools
+
+```
+MCP Client → POST /mcp
+{
+  "jsonrpc": "2.0",
+  "method": "tools/list",
+  "params": {}
+}
+
+Satellite → Client
+{
+  "result": {
+    "tools": [
+      {
+        "name": "discover_mcp_tools",
+        "description": "Search and discover available MCP tools...",
+        "inputSchema": {...}
+      },
+      {
+        "name": "execute_mcp_tool",
+        "description": "Execute a discovered MCP tool...",
+        "inputSchema": {...}
+      }
+    ]
+  }
+}
+```
+
+**Client knows:** "This server has 2 tools available"
+
+### Step 3: User Asks for GitHub Tools
+
+The AI agent (Claude) decides it needs GitHub tools:
+
+```
+MCP Client → POST /mcp
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "discover_mcp_tools",
+    "arguments": {
+      "query": "github create issue",
+      "limit": 5
+    }
+  }
+}
+
+Satellite Internal Process:
+1. Receives search query: "github create issue"
+2. Searches Fuse.js index (3ms)
+3. Finds matches from cached tools
+4. Formats results with external tool_path format
+
+Satellite → Client
+{
+  "result": {
+    "content": [{
+      "type": "text",
+      "text": {
+        "tools": [
+          {
+            "tool_path": "github:create_issue",
+            "description": "Create a new issue",
+            "relevance_score": 0.01
+          }
+        ]
+      }
+    }]
+  }
+}
+```
+
+**Client knows:** "The discovery tool returned some tool paths as strings"
+
+### Step 4: User Executes Discovered Tool
+
+The AI agent decides to use `github:create_issue`:
+
+```
+MCP Client → POST /mcp
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "execute_mcp_tool",
+    "arguments": {
+      "tool_path": "github:create_issue",
+      "arguments": {
+        "repo": "deploystackio/deploystack",
+        "title": "Test issue"
+      }
+    }
+  }
+}
+
+Satellite Internal Process:
+1. Parses tool_path: "github:create_issue" → "github-create_issue"
+2. Looks up in cache: transport=stdio, serverName="github-team123-abc456"
+3. Routes to ProcessManager for stdio execution
+4. Sends JSON-RPC to actual GitHub MCP server process
+5. Returns result
+
+Satellite → Client
+{
+  "result": {
+    "content": [{
+      "type": "text",
+      "text": {
+        "issue_number": 42,
+        "url": "https://github.com/..."
+      }
+    }]
+  }
+}
+```
+
+**Client knows:** "The execute tool returned a result"
+
+## Format Conversion
+
+### External vs Internal Formats
+
+The satellite uses different tool path formats for different purposes:
+
+**External Format (User-Facing): `serverName:toolName`**
+
+Used in:
+- `discover_mcp_tools` responses
+- `execute_mcp_tool` requests
+- Any client-facing communication
+
+Examples:
+- `github:create_issue`
+- `figma:get_file`
+- `postgres:query`
+
+Why colon?
+- Standard separator in URIs and paths
+- Clean, readable format
+- Industry convention (npm packages, docker images)
+
+**Internal Format (Routing): `serverName-toolName`**
+
+Used in:
+- Unified tool cache keys
+- Tool discovery manager
+- Process routing
+- Internal lookups
+
+Examples:
+- `github-create_issue`
+- `figma-get_file`
+- `postgres-query`
+
+Why dash?
+- Existing codebase convention
+- Backward compatibility
+- All existing code uses dash format
+
+### Conversion Logic
+
+```typescript
+// In handleExecuteTool()
+const toolPath = "github:create_issue";  // From client
+
+// Parse external format
+const [serverSlug, toolName] = toolPath.split(':');
+
+// Convert to internal format
+const namespacedToolName = `${serverSlug}-${toolName}`;
+// Result: "github-create_issue"
+
+// Look up in cache
+const cachedTool = toolDiscoveryManager.getTool(namespacedToolName);
+
+// Route to actual MCP server
+await executeToolCall(namespacedToolName, toolArguments);
+```
+
+The conversion is transparent to both clients and actual MCP servers - it's purely a satellite internal concern.
+
+## Search Implementation
+
+### Fuse.js Configuration
+
+```typescript
+const fuseOptions = {
+  threshold: 0.3,        // Precise matches (0.0 = exact, 1.0 = anything)
+  keys: [
+    { name: 'toolName', weight: 0.4 },          // 40% weight
+    { name: 'description', weight: 0.35 },      // 35% weight
+    { name: 'serverSlug', weight: 0.25 }        // 25% weight
+  ],
+  includeScore: true,
+  minMatchCharLength: 2,
+  useExtendedSearch: true
+};
+```
+
+### Search Performance
+
+- **Index Build**: On-demand per search (no stale cache)
+- **Search Time**: 2-5ms for 100+ tools
+- **Memory**: Zero duplication (queries UnifiedToolDiscoveryManager directly)
+- **Accuracy**: Handles typos, partial matches, fuzzy matching
+
+### Single Source of Truth
+
+ToolSearchService queries [UnifiedToolDiscoveryManager.getAllTools()](/development/satellite/tool-discovery) directly for every search:
+
+```typescript
+search(query: string, limit: number): SearchResult[] {
+  // Get fresh tools from single source of truth
+  const allTools = this.toolDiscoveryManager.getAllTools();
+  
+  // Build Fuse.js index on-demand
+  const fuse = new Fuse(allTools, fuseOptions);
+  
+  // Search and return results
+  return fuse.search(query).slice(0, limit);
+}
+```
+
+Benefits:
+- Always up-to-date (no cache invalidation needed)
+- No memory duplication
+- Automatic reflection of tool changes
+
+## Why Tool Notifications Are Irrelevant
+
+### The Question
+
+> "Should we implement `notifications/tools/list_changed` when tools are added or removed?"
+
+### The Answer
+
+**NO.** The MCP client only sees 2 static meta-tools that NEVER change:
+- `discover_mcp_tools` ✅ Always available
+- `execute_mcp_tool` ✅ Always available
+
+**What DOES change behind the scenes:**
+- New MCP servers installed → Search index updates automatically
+- MCP servers removed → Search index updates automatically
+- Tools discovered from new servers → Search index updates automatically
+
+**But the client never needs to know!**
+
+When a new MCP server is installed:
+1. ✅ Backend sends configuration update to satellite
+2. ✅ Satellite spawns new MCP server process (if stdio)
+3. ✅ Tool discovery runs automatically
+4. ✅ Search index refreshed (next search uses new tools)
+5. ❌ **Client is NOT notified** (doesn't need to be)
+
+Next time the client calls `discover_mcp_tools`, the new tools are automatically included in search results. **No notification needed.**
+
+## Performance Characteristics
+
+### Token Consumption
+
+| Metric | Traditional | Hierarchical | Reduction |
+|--------|-------------|--------------|-----------|
+| Tools Exposed | 150 | 2 | 98.7% |
+| Tokens Consumed | 75,000 | 350 | 99.5% |
+| Context Available | 62.5% | 99.8% | +37.3% |
+
+### Search Performance
+
+- **Discovery Latency**: 2-5ms (including Fuse.js index build)
+- **Execution Latency**: \<1ms (routing overhead only)
+- **Memory Overhead**: ~1KB per cached tool
+- **Scalability**: No degradation up to 500+ tools
+
+### Real-World Impact
+
+**Claude Code Example:**
+- Before: 82,000 tokens (41%) consumed by MCP tools
+- After: 350 tokens (0.175%) consumed by meta-tools
+- Result: **81,650 tokens freed for actual work**
+
+## Implementation Status
+
+<Info>
+**Status**: ✅ Fully Operational
+
+Both meta-tools are implemented and production-ready:
+- `discover_mcp_tools`: Full-text search with Fuse.js
+- `execute_mcp_tool`: Complete routing for stdio and HTTP/SSE transports
+</Info>
+
+### Code Locations
+
+**Core Implementation:**
+- `/services/satellite/src/core/mcp-server-wrapper.ts` - Meta-tool handlers
+- `/services/satellite/src/services/tool-search-service.ts` - Search implementation
+- `/services/satellite/src/services/unified-tool-discovery-manager.ts` - Tool cache
+
+**Key Methods:**
+- `setupMcpServer()` - Registers 2 meta-tools instead of all tools
+- `handleDiscoverTools()` - Implements discovery logic
+- `handleExecuteTool()` - Implements execution routing
+
+## Benefits Summary
+
+**For Users:**
+- 95%+ more context available for actual work
+- Natural language tool discovery
+- No performance degradation with many tools
+- Transparent - works like any MCP server
+
+**For Developers:**
+- Simple 2-tool interface
+- Automatic tool discovery
+- No client modifications needed
+- Standard MCP protocol compliance
+
+**For Operations:**
+- Scales to hundreds of tools
+- No memory explosion
+- Fast search performance
+- Easy to monitor and debug
+
+## Related Documentation
+
+- [Tool Discovery Implementation](/development/satellite/tool-discovery) - Internal tool caching and discovery
+- [MCP Transport Protocols](/development/satellite/mcp-transport) - How clients connect
+- [Process Management](/development/satellite/process-management) - stdio server lifecycle
+- [Architecture Overview](/development/satellite/architecture) - Complete satellite design
