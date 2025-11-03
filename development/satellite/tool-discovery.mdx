@@ -4,13 +4,15 @@ description: Technical implementation of MCP server tool discovery in DeployStac
 ---
 
 
-DeployStack Satellite implements automatic tool discovery from MCP servers across both HTTP/SSE remote endpoints and stdio subprocess servers. This unified system provides dynamic tool availability without manual configuration, enabling MCP clients to discover and execute tools through the satellite's interface.
+DeployStack Satellite implements automatic tool discovery from MCP servers across both HTTP/SSE remote endpoints and stdio subprocess servers. This unified system provides dynamic tool availability without manual configuration.
 
 <Info>
-**Current Implementation**: Tool discovery fully supports both HTTP/SSE remote MCP servers and stdio subprocess servers through a unified architecture. The `UnifiedToolDiscoveryManager` coordinates discovery across both transport types, merging tools into a single cache for seamless client access.
+**Current Implementation**: Tool discovery fully supports both HTTP/SSE remote MCP servers and stdio subprocess servers through a unified architecture. The `UnifiedToolDiscoveryManager` coordinates discovery across both transport types, merging tools into a single cache.
+
+This document focuses on the **internal** tool discovery mechanism. To learn how tools are exposed to MCP clients through the hierarchical router pattern, see [Hierarchical Router Implementation](/development/satellite/hierarchical-router).
 </Info>
 
-For information about the overall satellite architecture, see [Satellite Architecture Design](/development/satellite/architecture). For details about the MCP transport protocols that expose discovered tools, see [MCP Transport Protocols](/development/satellite/mcp-transport).
+The overall satellite architecture is documented in [Satellite Architecture Design](/development/satellite/architecture). MCP transport protocol details can be found in [MCP Transport Protocols](/development/satellite/mcp-transport).
 
 ## Technical Overview
 
@@ -45,9 +47,9 @@ Tool discovery operates through three coordinated managers that handle different
 ### Core Components
 
 **UnifiedToolDiscoveryManager:**
-- Coordinates discovery across HTTP/SSE and stdio transport types
-- Merges tools from both managers into unified cache
-- Routes discovery requests based on transport type
+- Coordinates tool discovery across both HTTP/SSE and stdio transport types
+- Merges discovered tools from both managers into a unified cache
+- Routes discovery requests to the appropriate transport type
 - Provides single interface for MCP protocol handlers
 
 **RemoteToolDiscoveryManager:**
@@ -248,26 +250,6 @@ curl http://localhost:3001/api/status/debug
 <Warning>
 **Security Notice**: The debug endpoint exposes detailed system information. Disable in production with `DEPLOYSTACK_STATUS_SHOW_MCP_DEBUG_ROUTE=false`.
 </Warning>
-
-### Testing Strategies
-
-**Unified Testing:**
-```bash
-# Test tool listing (shows both HTTP and stdio tools)
-curl -X POST http://localhost:3001/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":"1","method":"tools/list","params":{}}'
-
-# Test HTTP tool execution
-curl -X POST http://localhost:3001/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":"2","method":"tools/call","params":{"name":"context7-resolve-library-id","arguments":{"libraryName":"react"}}}'
-
-# Test stdio tool execution
-curl -X POST http://localhost:3001/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":"3","method":"tools/call","params":{"name":"filesystem-read_file","arguments":{"path":"/tmp/test.txt"}}}'
-```
 
 ## Performance Characteristics
 
