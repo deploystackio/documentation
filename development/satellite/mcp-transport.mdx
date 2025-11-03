@@ -4,7 +4,7 @@ description: Official MCP SDK transport implementation for external client integ
 ---
 
 
-Satellite uses the official `@modelcontextprotocol/sdk` to provide MCP client communication. This ensures full protocol compliance and seamless compatibility with all MCP clients including VS Code, Claude, and MCP Inspector.
+Satellite uses the official `@modelcontextprotocol/sdk` to provide MCP client communication. This ensures full protocol compliance and works with all MCP clients including VS Code, Claude, and MCP Inspector.
 
 ## Transport Overview
 
@@ -157,13 +157,6 @@ For detailed information about tool discovery and execution, see [Tool Discovery
    curl -X POST "http://localhost:3001/mcp" \
      -H "Content-Type: application/json" \
      -d '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{}}'
-   ```
-
-3. **Test Tools Discovery:**
-   ```bash
-   curl -X POST "http://localhost:3001/mcp" \
-     -H "Content-Type: application/json" \
-     -d '{"jsonrpc":"2.0","id":"2","method":"tools/list","params":{}}'
    ```
 
 ### Protocol Features

@@ -75,7 +75,7 @@ MCP Client                    Satellite (MCP SDK)
     │                            │
     │──── POST /mcp ────────────▶│  (JSON-RPC tools/list)
     │                            │
-    │◀─── Tools response ───────│  (Cached tools returned)
+    │◀─── 2 meta-tools ─────────│  (Hierarchical router)
 ```
 
 ### Core SDK Components
@@ -97,13 +97,17 @@ MCP Client                    Satellite (MCP SDK)
 **Supported MCP Methods:**
 - `initialize` - MCP session initialization (SDK automatic)
 - `notifications/initialized` - Client initialization complete
-- `tools/list` - List cached tools from discovered servers
-- `tools/call` - Execute tools routed to appropriate servers
+- `tools/list` - List available meta-tools (hierarchical router: 2 tools only)
+- `tools/call` - Execute meta-tools or route to actual MCP servers
 - `resources/list` - List available resources (returns empty array)
 - `resources/templates/list` - List resource templates (returns empty array)
 - `prompts/list` - List available prompts (returns empty array)
 
-For detailed information about tool discovery and execution, see [Tool Discovery Implementation](/development/satellite/tool-discovery).
+<Info>
+**Hierarchical Router**: The satellite exposes only 2 meta-tools to MCP clients (`discover_mcp_tools` and `execute_mcp_tool`) instead of all available tools. This solves the MCP context window consumption problem by reducing token usage by 95%+. See [Hierarchical Router Implementation](/development/satellite/hierarchical-router) for details.
+</Info>
+
+For detailed information about internal tool discovery and caching, see [Tool Discovery Implementation](/development/satellite/tool-discovery).
 
 **Error Handling:**
 - Standard JSON-RPC 2.0 compliant error responses via SDK
@@ -377,7 +381,7 @@ Configuration → Spawn → Monitor → Health Check → Restart/Terminate
 - **JSON-RPC Version**: 2.0 strict compliance
 - **HTTP Framework**: Fastify with JSON Schema validation
 - **Logging**: Pino structured logging with operation tracking
-- **Error Handling**: Comprehensive HTTP status code mapping
+- **Error Handling**: Complete HTTP status code mapping
 
 ### Planned Resource Jailing Specifications
 - **CPU Limit**: 0.1 cores per MCP server process
@@ -410,14 +414,11 @@ curl -X POST "http://localhost:3001/mcp" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{}}'
 
-# Test tool discovery
-curl -X POST "http://localhost:3001/mcp" \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":"2","method":"tools/list","params":{}}'
-
 # Test SSE streaming
 curl -N -H "Accept: text/event-stream" "http://localhost:3001/mcp"
 ```
+
+For testing the hierarchical router (tool discovery and execution), see [Hierarchical Router Implementation](/development/satellite/hierarchical-router).
 
 **MCP Client Configuration:**
 ```json

@@ -186,6 +186,7 @@
             "group": "MCP Server Management",
             "pages": [
               "/development/satellite/mcp-transport",
+              "/development/satellite/hierarchical-router",
               "/development/satellite/process-management",
               "/development/satellite/team-isolation",
               "/development/satellite/tool-discovery",
