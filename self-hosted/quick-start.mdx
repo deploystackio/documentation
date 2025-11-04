@@ -4,7 +4,7 @@ description: Get DeployStack running in minutes with Docker Compose or individua
 ---
 
 
-Get DeployStack up and running in minutes. This guide covers deploying the core platform (frontend + backend) and the required satellite service for MCP server management.
+Get DeployStack up and running in minutes. This guide covers deploying the core platform (frontend + backend). After completing the initial setup, you'll deploy a satellite service for MCP server management.
 
 <Warning>
 **Important**: Satellites are required for DeployStack to function. The platform alone cannot manage MCP servers - you must deploy at least one satellite.
@@ -24,29 +24,36 @@ For **production deployments with multiple teams** or external users, see [Produ
 
 ## Method 1: Docker Compose (Recommended)
 
-The fastest way to get DeployStack running with proper networking and persistence.
+The fastest way to get DeployStack backend and frontend running with proper networking and persistence.
 
 <Steps>
   <Step title="Download and Start">
-    Run these two commands to get DeployStack running:
-    
+    Run these two commands to get DeployStack backend and frontend running:
+
     ```bash
     curl -o docker-compose.yml https://raw.githubusercontent.com/deploystackio/deploystack/main/docker-compose.yml
     DEPLOYSTACK_ENCRYPTION_SECRET=$(openssl rand -hex 16) docker-compose up -d
     ```
+
+    <Info>
+    **Note**: This deploys the backend and frontend only. The satellite service must be deployed separately after completing the setup wizard (see [Satellite Service](#satellite-service) section below).
+    </Info>
   </Step>
-  
+
   <Step title="Access DeployStack">
     Open your browser and navigate to:
     - **DeployStack Interface**: [http://localhost:8080](http://localhost:8080)
     - **Backend API**: [http://localhost:3000](http://localhost:3000)
   </Step>
-  
-  <Step title="Complete Setup">
+
+  <Step title="Complete Setup Wizard">
     Follow the on-screen setup wizard to:
     - Create your admin account
     - Configure basic settings
-    - Set up your first MCP Server
+  </Step>
+
+  <Step title="Deploy Satellite">
+    After completing the setup wizard, proceed to the [Satellite Service](#satellite-service) section below to deploy your first satellite and start managing MCP servers.
   </Step>
 </Steps>
 
@@ -203,6 +210,7 @@ After completing the basic backend and frontend setup, deploy at least one satel
   </Step>
   
   <Step title="Start Satellite Service">
+    **For local development (connecting from same machine):**
     ```bash
     docker run -d \
       --name deploystack-satellite \
@@ -213,6 +221,27 @@ After completing the basic backend and frontend setup, deploy at least one satel
       -v deploystack_satellite_persistent:/app/persistent_data \
       deploystack/satellite:latest
     ```
+
+    **For remote access (connecting from MCP clients via domain/IP):**
+    ```bash
+    docker run -d \
+      --name deploystack-satellite \
+      -p 3001:3001 \
+      -e DEPLOYSTACK_BACKEND_URL="http://YOUR_SERVER_IP:3000" \
+      -e DEPLOYSTACK_SATELLITE_URL="https://satellite.example.com" \
+      -e DEPLOYSTACK_SATELLITE_NAME="my-satellite-001" \
+      -e DEPLOYSTACK_REGISTRATION_TOKEN="your-token-here" \
+      -v deploystack_satellite_persistent:/app/persistent_data \
+      deploystack/satellite:latest
+    ```
+
+    <Info>
+    **When to set `DEPLOYSTACK_SATELLITE_URL`:**
+    - Required when MCP clients (Claude Code, VS Code, etc.) connect via a domain or IP address
+    - Not needed for local development on localhost
+    - Use base URL only (e.g., `https://satellite.example.com`) - no `/mcp` or `/sse` paths
+    - Required for OAuth authentication to work with remote MCP clients
+    </Info>
     
     <Warning>
     **Satellite Name Requirements:**
@@ -263,13 +292,21 @@ The registration token is only required once during initial pairing.
 | `VITE_DEPLOYSTACK_BACKEND_URL` | Backend API URL for frontend | `http://localhost:3000` | `https://api.deploystack.company.com` |
 | `VITE_APP_TITLE` | Custom application title | `DeployStack` | `Company DeployStack` |
 
-### Satellite Variables (Required)
+### Satellite Variables
+
+**Required:**
 
 | Variable | Description | Example |
 |----------|-------------|----------|
 | `DEPLOYSTACK_BACKEND_URL` | Backend URL for satellite to connect to | `http://localhost:3000` |
 | `DEPLOYSTACK_SATELLITE_NAME` | Unique satellite name (10-32 chars, lowercase only) | `my-satellite-001` |
 | `DEPLOYSTACK_REGISTRATION_TOKEN` | JWT registration token from admin (required for initial pairing) | `deploystack_satellite_global_eyJhbGc...` |
+
+**Optional (Required for Remote Access):**
+
+| Variable | Description | Default | Example |
+|----------|-------------|---------|----------|
+| `DEPLOYSTACK_SATELLITE_URL` | Public URL of satellite for OAuth metadata (required when MCP clients connect remotely) | `http://localhost:PORT` | `https://satellite.example.com` |
 
 ## Next Steps
 
