@@ -248,6 +248,12 @@ LOG_LEVEL=info
 DEPLOYSTACK_BACKEND_URL=https://cloud.deploystack.io
 DEPLOYSTACK_BACKEND_POLLING_INTERVAL=60
 
+# Satellite Public URL (REQUIRED for remote MCP client connections)
+# This is the publicly accessible URL where MCP clients connect
+# Used for OAuth 2.0 Protected Resource Metadata (RFC 9728)
+# Example: https://satellite.example.com (no /mcp or /sse paths)
+DEPLOYSTACK_SATELLITE_URL=https://satellite.example.com
+
 # Satellite Identity (10-32 chars, lowercase a-z0-9-_ only)
 DEPLOYSTACK_SATELLITE_NAME=prod-satellite-001
 
