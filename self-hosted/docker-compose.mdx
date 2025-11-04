@@ -18,10 +18,10 @@ For **production deployments with multiple teams** or external users, see [Produ
 
 ## Overview
 
-This guide provides step-by-step instructions to install and configure DeployStack using Docker Compose. The setup includes frontend, backend, and **required satellite service** with persistent data storage and proper networking.
+This guide provides step-by-step instructions to install and configure DeployStack using Docker Compose. The setup includes frontend and backend with persistent data storage and proper networking.
 
 <Warning>
-**Satellites are required**: DeployStack cannot manage MCP servers without at least one satellite. This guide includes satellite deployment as a mandatory step.
+**Satellites are required**: DeployStack cannot manage MCP servers without at least one satellite. After completing the Docker Compose setup, you must deploy a satellite separately (instructions included below).
 </Warning>
 
 **Important:** Only modify settings explicitly mentioned in this guide. Altering other configurations may lead to issues.
@@ -80,13 +80,9 @@ cat > .env << EOF
 # DeployStack Configuration
 DEPLOYSTACK_ENCRYPTION_SECRET=your-generated-secret-here
 
-# Satellite Registration (required - obtain from admin panel after setup)
-DEPLOYSTACK_REGISTRATION_TOKEN=
-
-# Optional: Customize ports (default: frontend=8080, backend=3000, satellite=3001)
+# Optional: Customize ports (default: frontend=8080, backend=3000)
 # FRONTEND_PORT=8080
 # BACKEND_PORT=3000
-# SATELLITE_PORT=3001
 
 # Optional: Custom app title
 # VITE_APP_TITLE=My DeployStack Instance
@@ -94,10 +90,6 @@ EOF
 ```
 
 Replace `your-generated-secret-here` with the secret you generated in Step 2.
-
-<Warning>
-**Important**: Leave `DEPLOYSTACK_REGISTRATION_TOKEN` empty for now. You'll add it after completing the admin setup in Step 6.
-</Warning>
 
 ### Step 4: Launch DeployStack
 
@@ -108,10 +100,14 @@ docker-compose up -d
 ```
 
 This command will:
-- Pull the latest DeployStack images
+- Pull the latest DeployStack images (frontend and backend)
 - Create necessary volumes for persistent data
-- Start both frontend and backend services
+- Start frontend and backend services
 - Set up networking between services
+
+<Info>
+**Note**: This deploys the backend and frontend only. The satellite service must be deployed separately after completing the setup wizard (see Step 7 below).
+</Info>
 
 ### Step 5: Verify Installation
 
@@ -135,32 +131,65 @@ Open your browser and navigate to:
 **Satellites are required** - Without at least one satellite, DeployStack cannot manage MCP servers. Complete this step to make your deployment functional.
 </Warning>
 
-The satellite service is **already included** in the docker-compose.yml file. You just need to configure the registration token:
+The satellite must be deployed separately after completing the setup wizard:
 
-1. **Generate Registration Token** (via admin interface after backend setup):
-   - Log in to DeployStack as admin (complete Step 6 first)
+1. **Complete Setup Wizard First**:
+   - Access http://localhost:8080/setup
+   - Create your admin account
+   - Complete basic platform configuration
+
+2. **Generate Registration Token**:
+   - Log in to DeployStack as admin
    - Navigate to Admin → Satellites → Pairing
-   - Click "Generate Token" and copy it
+   - Click "Generate Token" and copy the full token
+   - Token format: `deploystack_satellite_global_eyJhbGc...`
 
-2. **Add token to your `.env` file**:
+3. **Deploy Satellite with Docker**:
+
+   **For local development (connecting from same machine):**
    ```bash
-   # Satellite Configuration (required)
-   DEPLOYSTACK_REGISTRATION_TOKEN=deploystack_satellite_global_eyJhbGc...
+   docker run -d \
+     --name deploystack-satellite \
+     --network deploystack-network \
+     -p 3001:3001 \
+     -e DEPLOYSTACK_BACKEND_URL="http://deploystack-backend:3000" \
+     -e DEPLOYSTACK_SATELLITE_NAME="docker-satellite-001" \
+     -e DEPLOYSTACK_REGISTRATION_TOKEN="your-token-here" \
+     -v deploystack_satellite_persistent:/app/persistent_data \
+     deploystack/satellite:latest
    ```
 
-3. **Restart services to apply token**:
+   **For remote access (connecting from MCP clients via domain/IP):**
    ```bash
-   docker-compose down
-   docker-compose up -d
+   docker run -d \
+     --name deploystack-satellite \
+     --network deploystack-network \
+     -p 3001:3001 \
+     -e DEPLOYSTACK_BACKEND_URL="http://deploystack-backend:3000" \
+     -e DEPLOYSTACK_SATELLITE_URL="https://satellite.example.com" \
+     -e DEPLOYSTACK_SATELLITE_NAME="docker-satellite-001" \
+     -e DEPLOYSTACK_REGISTRATION_TOKEN="your-token-here" \
+     -v deploystack_satellite_persistent:/app/persistent_data \
+     deploystack/satellite:latest
    ```
 
-4. **Verify satellite registration**:
+   <Info>
+   **When to set `DEPLOYSTACK_SATELLITE_URL`:**
+   - Required when MCP clients (Claude Code, VS Code, etc.) connect via a domain or IP address
+   - Not needed for local development on localhost
+   - Use base URL only (e.g., `https://satellite.example.com`) - no `/mcp` or `/sse` paths
+   - Required for OAuth authentication to work with remote MCP clients
+   </Info>
+
+4. **Verify Satellite Registration**:
    ```bash
    docker logs deploystack-satellite
    # Should show: ✅ Satellite registered successfully: docker-satellite-001
    ```
 
-**Note**: After initial registration, the satellite saves its API key to persistent storage and doesn't need the registration token for subsequent starts.
+<Info>
+**Note**: After initial registration, the satellite saves its API key to persistent storage. The registration token is only needed for the first startup. Container restarts will use the saved API key automatically.
+</Info>
 
 ## Configuration
 
@@ -234,6 +263,7 @@ server {
 DeployStack uses Docker volumes to persist data:
 
 - **deploystack_backend_persistent**: Application database, configuration, and user uploads
+- **deploystack_satellite_persistent**: Satellite credentials and process data (created when satellite is deployed separately)
 
 #### Backup Your Data
 
@@ -243,8 +273,11 @@ Regularly backup your persistent data:
 # Create backup directory
 mkdir -p backups/$(date +%Y%m%d)
 
-# Backup volume
+# Backup backend volume
 docker run --rm -v deploystack_backend_persistent:/data -v $(pwd)/backups/$(date +%Y%m%d):/backup alpine tar czf /backup/backend_persistent.tar.gz -C /data .
+
+# Backup satellite volume (if satellite is deployed)
+docker run --rm -v deploystack_satellite_persistent:/data -v $(pwd)/backups/$(date +%Y%m%d):/backup alpine tar czf /backup/satellite_persistent.tar.gz -C /data .
 ```
 
 ## Environment Variables Reference
@@ -265,15 +298,23 @@ docker run --rm -v deploystack_backend_persistent:/data -v $(pwd)/backups/$(date
 | `FRONTEND_PORT` | Frontend port mapping | `8080` | `80` |
 | `BACKEND_PORT` | Backend port mapping | `3000` | `3001` |
 
-### Satellite Variables (Required)
+### Satellite Variables
+
+Satellite services are deployed separately using `docker run` commands (not via docker-compose). See [Step 7: Deploy Satellite Service](#step-7-deploy-satellite-service-required) for deployment instructions.
+
+**Required Satellite Environment Variables:**
 
 | Variable | Description | Example |
 |----------|-------------|----------|
-| `DEPLOYSTACK_REGISTRATION_TOKEN` | JWT registration token from admin (required for initial satellite pairing) | `deploystack_satellite_global_eyJhbGc...` |
+| `DEPLOYSTACK_BACKEND_URL` | Backend URL for satellite to connect to | `http://deploystack-backend:3000` |
+| `DEPLOYSTACK_SATELLITE_NAME` | Unique satellite name (10-32 chars, lowercase only) | `docker-satellite-001` |
+| `DEPLOYSTACK_REGISTRATION_TOKEN` | JWT registration token from admin (required for initial pairing) | `deploystack_satellite_global_eyJhbGc...` |
 
-<Info>
-**Note**: The satellite name `docker-satellite-001` is pre-configured in docker-compose.yml. You only need to provide the registration token in your `.env` file.
-</Info>
+**Optional (Required for Remote Access):**
+
+| Variable | Description | Default | Example |
+|----------|-------------|---------|----------|
+| `DEPLOYSTACK_SATELLITE_URL` | Public URL of satellite for OAuth metadata (required when MCP clients connect remotely) | `http://localhost:PORT` | `https://satellite.example.com` |
 
 ## Troubleshooting
 
