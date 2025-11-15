@@ -65,7 +65,7 @@ Satellite Components          EventBus              Backend
 **Naming Convention**: All event data fields use **snake_case** (e.g., `server_id`, `team_id`, `spawn_duration_ms`) to match the backend API convention.
 </Note>
 
-The satellite emits 12 event types across 4 categories:
+The satellite emits 13 event types across 4 categories:
 
 ### MCP Server Lifecycle
 
@@ -226,20 +226,39 @@ Emitted when SSE connection closes (client disconnect, timeout, or error).
 ### Tool Discovery
 
 #### `mcp.tools.discovered`
-Emitted after successful tool discovery from HTTP or stdio MCP server.
+Emitted after successful tool discovery from HTTP or stdio MCP server with complete tool metadata and token consumption.
 
 **Data Structure:**
 ```typescript
 {
-  server_id: string;
-  server_slug: string;
+  installation_id: string;
+  installation_name: string;
   team_id: string;
-  tool_count: number;
-  tool_names: string[];
-  discovery_duration_ms: number;
-  previous_tool_count: number;
+  server_slug: string;
+  tool_count: number;           // Total tools discovered
+  total_tokens: number;         // Sum of all tool token counts
+  tools: Array<{
+    tool_name: string;
+    description: string;
+    input_schema: Record<string, unknown>;
+    token_count: number;        // Tokens for this specific tool
+  }>;
+  discovered_at: string;        // ISO 8601 timestamp
 }
 ```
+
+**Purpose:**
+- Store tool metadata in backend database (`mcpToolMetadata` table)
+- Calculate hierarchical router token savings (traditional vs 2-meta-tool approach)
+- Enable frontend tool catalog display with token consumption metrics
+- Provide analytics on MCP server complexity and context window usage
+
+**Emission Timing:**
+- stdio servers: After handshake completion and tool caching
+- HTTP/SSE servers: After startup tool discovery and caching
+
+**Token Calculation:**
+Uses `token-counter.ts` utility to estimate tokens for each tool based on name, description, and input schema JSON.
 
 #### `mcp.tools.updated`
 Emitted when tool list changes during configuration refresh.
