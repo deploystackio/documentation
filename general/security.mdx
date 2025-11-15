@@ -78,6 +78,45 @@ DeployStack automatically protects sensitive MCP configuration values through a 
 - **Audit Safe**: Logs and interfaces never contain actual secret values
 - **Team Security**: Team members use secrets without seeing actual values
 
+### Satellite Log Masking
+
+DeployStack satellites automatically protect sensitive values in log files and monitoring systems through selective secret masking:
+
+**Automatic Secret Detection:**
+- **Backend Metadata**: Control plane identifies which configuration fields contain secrets based on schema definitions
+- **Secret Transmission**: Backend sends metadata to satellites indicating which query parameters, headers, and environment variables are secrets
+- **Selective Masking**: Satellites mask only fields marked as secrets, leaving regular configuration visible for debugging
+
+**Masking Pattern:**
+- **Partial Visibility**: First 3 characters of secret values remain visible (e.g., `sk_*****`)
+- **Short Values**: Values shorter than 3 characters are fully masked as `***`
+- **Context Preservation**: Masked logs still show which parameters were used without exposing actual values
+
+**What Gets Masked in Logs:**
+- URL query parameters containing API keys or tokens
+- HTTP headers with authentication credentials
+- Environment variables marked as secret type
+- Any configuration field transmitted with secret metadata
+
+**What Doesn't Get Masked:**
+- Regular configuration values (debug flags, URLs without secrets)
+- Server names and installation identifiers
+- Non-sensitive query parameters and headers
+- Status codes and timing information
+
+**Security Benefits:**
+- **Log Safety**: Satellite logs can be safely shared for debugging without exposing credentials
+- **Monitoring Protection**: Log aggregation systems won't capture plaintext secrets
+- **Audit Trail**: Logs show which credentials were used without revealing actual values
+- **Incident Response**: Security teams can analyze logs without credential exposure risk
+
+**Example Masked Log Output:**
+```
+[INFO] Connecting to MCP server: brightdata-scraping-browser
+       URL: https://mcp-server.brightdata.com?token=sk_*****&region=us-east-1
+       Headers: Authorization=Bea*****
+```
+
 ### Global Settings Encryption
 Your global configuration data is protected with encryption:
 

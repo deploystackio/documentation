@@ -91,17 +91,20 @@ The catalog defines the configuration structure for each MCP server type:
 -- Template Level (with lock controls)
 template_args: text('template_args')         -- [{value, locked, description}]
 template_env: text('template_env')           -- Fixed environment variables
-template_headers: text('template_headers')   -- Fixed HTTP headers (for remotes)
+template_headers: text('template_headers')   -- Fixed HTTP headers (for HTTP/SSE)
+template_url_query_params: text('template_url_query_params') -- Fixed URL query params (for HTTP/SSE)
 
--- Team Schema (with lock/visibility controls) 
+-- Team Schema (with lock/visibility controls)
 team_args_schema: text('team_args_schema')   -- Schema with lock controls
 team_env_schema: text('team_env_schema')     -- [{name, type, required, default_team_locked, visible_to_users}]
-team_headers_schema: text('team_headers_schema') -- HTTP headers schema
+team_headers_schema: text('team_headers_schema') -- HTTP headers schema (for HTTP/SSE)
+team_url_query_params_schema: text('team_url_query_params_schema') -- URL query params schema (for HTTP/SSE)
 
 -- User Schema
 user_args_schema: text('user_args_schema')   -- User-configurable argument schema
 user_env_schema: text('user_env_schema')     -- User-configurable environment schema
-user_headers_schema: text('user_headers_schema') -- User HTTP headers schema
+user_headers_schema: text('user_headers_schema') -- User HTTP headers schema (for HTTP/SSE)
+user_url_query_params_schema: text('user_url_query_params_schema') -- User URL query params schema (for HTTP/SSE)
 ```
 
 **Transport Configuration:**
@@ -139,6 +142,8 @@ Team installations manage shared configurations:
 installation_name: text('installation_name') -- Team-friendly name
 team_args: text('team_args')                 -- Team-level arguments (JSON array)
 team_env: text('team_env')                   -- Team environment variables (JSON object)
+team_headers: text('team_headers')           -- Team HTTP headers (JSON object, for HTTP/SSE)
+team_url_query_params: text('team_url_query_params') -- Team URL query params (JSON object, for HTTP/SSE)
 ```
 
 ### Tier 3: User Configuration (`mcpUserConfigurations`)
@@ -151,6 +156,8 @@ user_id: text('user_id')                     -- User who owns this config
 
 user_args: text('user_args')                 -- User arguments (JSON array)
 user_env: text('user_env')                   -- User environment variables (JSON object)
+user_headers: text('user_headers')           -- User HTTP headers (JSON object, for HTTP/SSE)
+user_url_query_params: text('user_url_query_params') -- User URL query params (JSON object, for HTTP/SSE)
 ```
 
 ## Configuration Flow
@@ -270,6 +277,8 @@ Automatically mapped to:
 - URL → `template_env` or embedded in remotes config (locked)
 - Authentication headers → `team_headers_schema` (secrets)
 - Optional headers → `user_headers_schema` (personal preferences)
+- API keys in URL query params → `team_url_query_params_schema` (secrets)
+- User preferences in query params → `user_url_query_params_schema` (customization)
 
 The transformation layer (`officialRegistryTransforms.ts`) handles all automatic mapping without admin intervention.
 

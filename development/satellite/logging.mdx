@@ -323,6 +323,109 @@ server.log.warn({
 - **Add performance metrics**: Duration, resource usage, counts
 - **Use consistent naming**: camelCase and standard field names
 
+## Secret Masking in Logs
+
+The satellite automatically protects sensitive credentials in log output through selective secret masking. This prevents API keys, tokens, and passwords from appearing in plain text in log files or monitoring systems.
+
+### How Secret Masking Works
+
+**Automatic Detection:**
+- Backend sends metadata with MCP server configurations identifying which fields are secrets
+- Satellite receives `secret_metadata` with lists of secret query parameters, headers, and environment variables
+- Masking utilities automatically apply to fields marked as secrets
+
+**Masking Pattern:**
+- First 3 characters remain visible followed by `*****` (e.g., `sk_abc123xyz789` becomes `sk_*****`)
+- Values shorter than 3 characters are fully masked as `***`
+- Non-secret values remain fully visible for debugging
+
+### Using the Log Masker Utility
+
+The log masking utilities are located in `src/utils/log-masker.ts` and provide three functions for masking different configuration types:
+
+```typescript
+import { maskUrlForLogging, maskHeadersForLogging, maskEnvForLogging } from '../utils/log-masker';
+
+// Example: Mask URL with secret query parameters
+const maskedUrl = maskUrlForLogging(
+  'https://api.example.com?token=sk_abc123&region=us-east',
+  ['token']  // Only 'token' is marked as secret
+);
+// Result: 'https://api.example.com?token=sk_*****&region=us-east'
+
+// Example: Mask HTTP headers
+const maskedHeaders = maskHeadersForLogging(
+  { 'Authorization': 'Bearer sk_abc123', 'Content-Type': 'application/json' },
+  ['Authorization']  // Only 'Authorization' is marked as secret
+);
+// Result: { 'Authorization': 'Bea*****', 'Content-Type': 'application/json' }
+```
+
+### Best Practices for Secret Protection
+
+**✅ DO: Use Masking Functions for URLs with Credentials**
+
+```typescript
+// ✅ Good - URLs with query parameters masked
+server.log.info({
+  operation: 'mcp_server_connect',
+  serverId: config.server_slug,
+  url: maskUrlForLogging(config.url, config.secret_metadata?.query_params),
+  transport: config.transport_type
+}, 'Connecting to MCP server');
+```
+
+**✅ DO: Mask Headers Containing Authentication**
+
+```typescript
+// ✅ Good - Headers masked before logging
+server.log.debug({
+  operation: 'http_request',
+  url: maskUrlForLogging(config.url, config.secret_metadata?.query_params),
+  headers: maskHeadersForLogging(config.headers, config.secret_metadata?.headers)
+}, 'Making HTTP request to MCP server');
+```
+
+**❌ DON'T: Log Raw Credentials**
+
+```typescript
+// ❌ Bad - Exposes credentials in logs
+server.log.info({
+  operation: 'mcp_server_connect',
+  url: config.url,  // Contains API key in query param!
+  headers: config.headers  // Contains Authorization token!
+}, 'Connecting to MCP server');
+```
+
+### Implementation Locations
+
+Secret masking is implemented in these satellite components:
+
+- **Dynamic Config Manager** (`src/services/dynamic-config-manager.ts`) - 5 locations where MCP server URLs are logged
+- **Command Processor** (`src/services/command-processor.ts`) - MCP server spawn and configuration logging
+- **HTTP Proxy Manager** (`src/process/http-proxy-manager.ts`) - HTTP/SSE transport logging
+- **MCP Server Wrapper** (`src/core/mcp-server-wrapper.ts`) - Server connection and lifecycle logging
+- **Remote Tool Discovery** (`src/services/remote-tool-discovery-manager.ts`) - Tool discovery from HTTP servers
+
+### Debugging with Masked Logs
+
+When troubleshooting authentication issues:
+
+1. **Partial visibility helps identify credentials**: First 3 characters show which credential was used
+2. **Compare prefixes**: Verify the correct API key/token is being applied
+3. **Check non-secret params**: Regular parameters remain visible for debugging
+4. **Use secret metadata**: Confirm which fields are marked as secrets in configuration
+
+**Example masked log output:**
+
+```
+[INFO] Connecting to MCP server
+       operation: "mcp_server_connect"
+       serverId: "brightdata-scraping"
+       url: "https://mcp-server.brightdata.com?token=sk_*****&region=us-east-1"
+       headers: {"Authorization":"Bea*****","Content-Type":"application/json"}
+```
+
 ## Environment-Specific Configuration
 
 ### Development Environment

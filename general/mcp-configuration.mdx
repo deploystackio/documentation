@@ -221,7 +221,9 @@ Servers synced from the official MCP Registry can use different transport mechan
 Servers that run as local processes using standard input/output. Arguments are configured in the template level (locked), with runtime arguments at team/user levels.
 
 **HTTP/SSE Transport (via remotes):**
-Servers accessed via HTTP endpoints. Headers are mapped to appropriate tiers - authentication headers at team level, optional headers at user level.
+Servers accessed via HTTP endpoints. Both headers and URL query parameters are mapped to appropriate tiers:
+- **HTTP Headers** - Authentication headers at team level, optional headers at user level
+- **URL Query Parameters** - API keys and tokens at team level, personal preferences at user level
 
 The three-tier system adapts automatically based on the transport type detected from the official registry.
 
