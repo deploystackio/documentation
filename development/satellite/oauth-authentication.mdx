@@ -268,6 +268,94 @@ const response = await fetch(`${backendUrl}/api/oauth2/introspect`, {
 - `active: false` - Token invalid, return authentication error
 - Team context includes: team_id, team_name, team_role, team_permissions
 
+## Session Management and Security Model
+
+### MCP Sessions vs OAuth Authentication
+
+The satellite implements a two-layer security model that separates authentication from session management:
+
+**Authentication Layer (OAuth Bearer Token):**
+- Primary security mechanism for all requests
+- Validates user identity, team membership, and permissions
+- Enforced by authentication middleware before session handling
+- Team isolation enforced at this layer via token introspection
+
+**Session Layer (MCP Session ID):**
+- Transport-level identifier for HTTP/SSE connection routing
+- NOT a security credential - purely for protocol state management
+- Can be safely reused because security comes from Bearer token
+- Managed by StreamableHTTPServerTransport from MCP SDK
+
+### Session Resurrection After Satellite Restart
+
+When a satellite restarts (deployments, updates, crashes), MCP sessions are lost because they live in memory. The satellite implements transparent session resurrection to avoid forcing users to manually reconnect:
+
+**How Session Resurrection Works:**
+1. Client sends request with old session ID (from before restart)
+2. Satellite validates Bearer token FIRST (authentication layer)
+3. If session ID is stale, satellite creates new Server + Transport with same session ID
+4. Bootstrap transport with synthetic `initialize` request
+5. Process actual client request normally
+6. Client continues without reconnection
+
+**Implementation Details:**
+```typescript
+// Authentication happens FIRST (line 558 in mcp-server-wrapper.ts)
+const authHeader = request.headers['authorization'];
+const token = authHeader?.replace(/^Bearer\s+/i, '');
+
+if (!token) {
+  return reply.status(401).send({
+    jsonrpc: '2.0',
+    error: { code: -32001, message: 'Authentication required' },
+    id: null
+  });
+}
+
+// Validate token via introspection BEFORE session handling
+const introspectionResult = await this.tokenIntrospectionService.validateToken(token);
+
+if (!introspectionResult.valid) {
+  return reply.status(401).send({
+    jsonrpc: '2.0',
+    error: { code: -32002, message: 'Invalid token' },
+    id: null
+  });
+}
+
+// NOW handle session resurrection (lines 616-722)
+const sessionId = request.headers['mcp-session-id'];
+const existingTransport = this.transports.get(sessionId);
+
+if (!existingTransport && sessionId) {
+  // Create new Server + Transport with same session ID
+  server = new Server({ name: 'deploystack-satellite', version: '1.0.0' });
+
+  transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => sessionId, // Reuse old session ID
+    onsessioninitialized: (restoredSessionId) => {
+      this.transports.set(restoredSessionId, { transport, server });
+    }
+  });
+
+  await server.connect(transport);
+
+  // Bootstrap transport with synthetic initialize request
+  const syntheticInitRequest = {
+    jsonrpc: '2.0',
+    id: 0,
+    method: 'initialize',
+    params: {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 'resurrected-session', version: '1.0.0' }
+    }
+  };
+
+  await transport.handleRequest(request.raw, mockRes, syntheticInitRequest);
+}
+```
+
 ## Team-Aware Tool Discovery
 
 ### Tool Filtering Implementation
