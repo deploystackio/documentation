@@ -38,7 +38,7 @@ services/backend/src/
 │   ├── github-oauth.ts     # GitHub settings
 │   └── [provider]-oauth.ts # New provider settings
 ├── db/
-│   └── schema.sqlite.ts    # User table with provider IDs
+│   └── schema.ts    # User table with provider IDs
 └── lib/
     └── lucia.ts            # Session management
 ```
@@ -135,7 +135,7 @@ Key considerations:
 Add provider ID field to `authUser` table:
 
 ```typescript
-// In src/db/schema.sqlite.ts
+// In src/db/schema.ts
 // Add field like:
 // google_id: text('google_id').unique()
 // microsoft_id: text('microsoft_id').unique()

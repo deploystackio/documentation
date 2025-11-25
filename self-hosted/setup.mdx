@@ -25,12 +25,13 @@ Configure your self-hosted DeployStack instance with essential settings to custo
     If this is a fresh installation, first visit `https://<your-frontend-url>/setup` to complete the database initialization wizard. This creates:
     
     **For Docker deployments:**
-    - Database configuration stored in the Docker volume `deploystack_backend_persistent`
+    - PostgreSQL database configuration stored in the Docker volume `deploystack_backend_persistent`
+    - PostgreSQL data stored in `deploystack_postgres_data` volume
     - Access the setup wizard at `http://localhost:8080/setup` (or your configured frontend URL)
-    
+
     **For local development:**
-    - `services/backend/persistent_data/db.selection.json` (database type configuration)
-    - `services/backend/persistent_data/database/deploystack.db` (if using SQLite)
+    - PostgreSQL connection configured via environment variables in `services/backend/.env`
+    - `services/backend/persistent_data/db.selection.json` (database initialization status)
   </Step>
   
   <Step title="Log in as Administrator">
@@ -185,8 +186,8 @@ Follow this recommended setup workflow for new DeployStack instances:
 <Steps>
   <Step title="Initial Database Setup">
     - Navigate to `https://<your-frontend-url>/setup` (Docker: `http://localhost:8080/setup` by default)
-    - Complete the database setup wizard (SQLite or Turso)
-    - This initializes the database and saves configuration
+    - Complete the database setup wizard (PostgreSQL)
+    - This initializes the PostgreSQL database and applies migrations
     - Create your admin account
     - Log in to the platform
   </Step>
@@ -371,9 +372,9 @@ docker run --rm -v deploystack_backend_persistent:/data \
   tar xzf /backup/deploystack-backup-20250108.tar.gz -C /
 
 # The volume contains:
-# - database/deploystack.db - SQLite database (if using SQLite)
-# - db.selection.json - Database type configuration
+# - db.selection.json - Database initialization status
 # - Any other persistent application data
+# Note: PostgreSQL data is stored separately in deploystack_postgres_data volume
 ```
 
 ```bash Local Development
@@ -389,9 +390,9 @@ tar czf deploystack-backup-$(date +%Y%m%d).tar.gz \
 tar xzf deploystack-backup-20250108.tar.gz
 
 # The directory contains:
-# - database/deploystack.db - SQLite database (if using SQLite)
-# - db.selection.json - Database type configuration
+# - db.selection.json - Database initialization status
 # - Any other persistent application data
+# Note: PostgreSQL runs separately via Docker (npm run postgres:local)
 ```
 </CodeGroup>
 

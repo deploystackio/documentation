@@ -252,7 +252,7 @@ Configuration respects team boundaries and isolation:
 
 ### Core Table Structure
 
-The satellite system integrates with existing DeployStack schema through 5 specialized tables. For detailed schema definitions, see [`services/backend/src/db/schema.sqlite.ts`](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/db/schema.sqlite.ts).
+The satellite system integrates with existing DeployStack schema through 5 specialized tables. For detailed schema definitions, see [`services/backend/src/db/schema.ts`](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/db/schema.ts).
 
 **Satellite Registry** (`satellites`):
 - Central registration of all satellites
@@ -412,7 +412,7 @@ server.get('/satellites/:satelliteId/commands', {
 
 The satellite system extends the existing database schema with 5 specialized tables:
 
-**Schema Location**: `services/backend/src/db/schema.sqlite.ts`
+**Schema Location**: `services/backend/src/db/schema.ts`
 
 **Table Relationships**:
 - `satellites` table links to existing `teams` and `authUser` tables
@@ -479,11 +479,11 @@ npm run dev  # Starts on http://localhost:3001
 **Database Inspection**:
 ```bash
 # View registered satellites
-sqlite3 services/backend/persistent_data/database/deploystack.db
+psql deploystack
 > SELECT id, name, satellite_type, status FROM satellites;
 
 # View MCP server installations
-> SELECT installation_name, team_id FROM mcpServerInstallations;
+> SELECT installation_name, team_id FROM "mcpServerInstallations";
 ```
 
 ## API Documentation

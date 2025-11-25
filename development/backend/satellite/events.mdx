@@ -79,7 +79,7 @@ export interface EventHandler {
   handle: (
     satelliteId: string,
     eventData: Record<string, unknown>,
-    db: LibSQLDatabase,
+    db: PostgresJsDatabase,
     eventTimestamp: Date
   ) => Promise<void>;
 }
@@ -208,8 +208,8 @@ Inserts record into `satelliteUsageLogs` for analytics and audit trails.
 Create a new file in `services/backend/src/events/satellite/`:
 
 ```typescript
-import type { LibSQLDatabase } from 'drizzle-orm/libsql';
-import { yourTable } from '../../db/schema.sqlite';
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import { yourTable } from '../../db/schema.ts';
 import { eq } from 'drizzle-orm';
 
 export const EVENT_TYPE = 'your.event.type';
@@ -240,7 +240,7 @@ interface YourEventData {
 export async function handle(
   satelliteId: string,
   eventData: Record<string, unknown>,
-  db: LibSQLDatabase,
+  db: PostgresJsDatabase,
   eventTimestamp: Date
 ): Promise<void> {
   const data = eventData as unknown as YourEventData;
@@ -319,17 +319,6 @@ Each event is processed in a separate database transaction:
 - Failed events don't rollback other events
 - Maintains data consistency per event
 - Isolated error handling prevents cascade failures
-
-### Database Driver Compatibility
-
-When updating records, use the driver-compatible pattern:
-
-```typescript
-const result = await db.update(table).set(data).where(condition);
-
-// Handle both SQLite (changes) and Turso (rowsAffected)
-const updated = (result.changes || result.rowsAffected || 0) > 0;
-```
 
 ## Performance Considerations
 
@@ -524,7 +513,7 @@ LIMIT 10;
 
 **DO**:
 - Use parameterized queries via Drizzle ORM
-- Handle both SQLite and Turso driver differences
+- Use PostgreSQL-specific features when needed
 - Include timestamps for all state changes
 - Use transactions for multi-step operations
 - Index frequently queried fields

@@ -85,8 +85,8 @@ The test suite uses a sophisticated database isolation strategy to ensure comple
 
 ### Timestamp-Based Isolation
 
-Each test run creates a unique SQLite database file with a millisecond timestamp:
-- Example: `deploystack-1704369600000.db`
+Each test run creates a unique PostgreSQL database with a millisecond timestamp:
+- Example: `deploystack-1704369600000`
 - This ensures complete isolation between parallel test runs
 - No conflicts when multiple developers run tests simultaneously
 - Automatic cleanup through directory removal
@@ -173,10 +173,10 @@ When adding new E2E tests:
 - **Purpose**: Verifies the initial database setup functionality.
 - **Key Checks**:
   - Ensures the test database directory does not exist before setup.
-  - Calls `POST /api/db/setup` with `{"type": "sqlite"}`.
-  - Verifies the API response indicates successful setup initiation and includes `database_type: "sqlite"`.
-  - Checks that the SQLite database file is created in the test database directory (`persistent_data/database-test/deploystack-{timestamp}.db`).
-  - Calls `GET /api/db/status` and verifies the response shows `configured: true`, `initialized: true`, and `dialect: "sqlite"`.
+  - Calls `POST /api/db/setup` with `{"type": "postgresql"}`.
+  - Verifies the API response indicates successful setup initiation and includes `database_type: "postgresql"`.
+  - Checks that the PostgreSQL test database is created.
+  - Calls `GET /api/db/status` and verifies the response shows `configured: true`, `initialized: true`, and `dialect: "postgresql"`.
   - Validates global settings initialization without errors.
   - Confirms all migrations are applied successfully.
   - Tests proper error handling for duplicate setup attempts.
