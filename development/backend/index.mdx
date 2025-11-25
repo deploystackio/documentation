@@ -13,7 +13,7 @@ The DeployStack backend is a modern, high-performance Node.js application built 
 
 - **Framework**: Fastify for high-performance HTTP server
 - **Language**: TypeScript for type safety
-- **Database**: SQLite (default) or PostgreSQL with Drizzle ORM
+- **Database**: SQLite with Drizzle ORM
 - **Validation**: JSON Schema for request/response validation and OpenAPI generation
 - **Plugin System**: Extensible architecture with security isolation
 - **Authentication**: Dual authentication system - cookie-based sessions for frontend and OAuth 2.1 for satellite access
@@ -44,7 +44,7 @@ The development server starts at `http://localhost:3000` with API documentation 
     href="/development/backend/database/index" 
     title="Database Management"
   >
-    SQLite and PostgreSQL setup, schema management, migrations, and Drizzle ORM best practices.
+    SQLite setup, schema management, migrations, and Drizzle ORM best practices.
   </Card>
   
   <Card 
@@ -162,7 +162,7 @@ services/backend/
 - **Type Safety**: Request/response validation with TypeScript
 
 ### Database Management
-- **Multi-Database Support**: SQLite (default) and PostgreSQL
+- **Multi-Database Support**: SQLite
 - **Type-Safe ORM**: Drizzle ORM with full TypeScript integration
 - **Migration System**: Automatic schema management
 - **Plugin Extensions**: Plugins can add their own tables

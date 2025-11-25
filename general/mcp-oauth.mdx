@@ -1,0 +1,252 @@
+---
+title: OAuth-Enabled MCP Servers
+description: Learn how to install and authorize OAuth-enabled MCP servers with per-user authentication and automatic token management.
+sidebarTitle: MCP OAuth Servers
+---
+
+Some MCP servers require OAuth authorization to access external services like Box, Google Drive, or Slack. OAuth-enabled servers work differently from standard MCP servers because each user must authorize individually with their own account.
+
+## Overview
+
+**OAuth-enabled MCP servers** connect to third-party services that require user consent. When your team installs an OAuth server, each team member must go through their own authorization flow.
+
+**Key Difference:**
+- **Standard MCP servers**: Team admin configures shared credentials
+- **OAuth MCP servers**: Each user authorizes with their personal account
+
+**Why User-Level Authorization?**
+- Alice's Google Drive ≠ Bob's Google Drive
+- Each user accesses their own data, not shared team data
+- OAuth tokens are private and encrypted per user
+- Actions are traceable to individual users for accountability
+
+**This is NOT:**
+- GitHub OAuth (used for logging into DeployStack)
+- Satellite OAuth (used for client connections)
+- Team-level configuration (args/env/headers from three-tier system)
+
+## How OAuth MCP Servers Work
+
+### Team Installation (Team Admin Only)
+
+When a `team_admin` installs an OAuth-enabled MCP server:
+
+1. **Browse the catalog** and find an OAuth server (Box, Google Drive, etc.)
+2. **Click "Install & Authorize"** to create the team installation
+3. **The team admin is redirected** to authorize with their own account
+4. **Installation appears in team** with "Connected" status for team admin
+
+**Important:** Only the team admin sees "Connected" at this point. Other team members will see "Auth Required" until they authorize.
+
+### Individual Authorization (All Users)
+
+When Bob (team_user) or any other team member views the installations:
+
+1. **Bob sees the installation** with "⚠ Auth Required" status
+2. **Bob clicks "Reconnect"** to start his own authorization
+3. **Browser popup opens** to the OAuth provider (Box, Google, etc.)
+4. **Bob consents** to DeployStack accessing his account
+5. **Bob is redirected back** and sees "✓ Connected" status
+
+**Result:** Bob's tokens are stored separately from Alice's tokens. Each user's MCP operations use their own credentials.
+
+## Authorization Flow
+
+### Step 1: User Initiates Authorization
+
+When you click "Authorize" or "Reconnect":
+- DeployStack starts OAuth discovery from the MCP server
+- A unique authorization URL is generated for you
+- PKCE security parameters are created (prevents token theft)
+
+### Step 2: Consent Screen
+
+A browser window opens showing:
+- The service you're authorizing (Box, Google, etc.)
+- What permissions DeployStack is requesting
+- Your personal account to authorize with
+
+**You choose:** Allow or Deny
+
+### Step 3: Token Exchange
+
+After you click "Allow":
+- The OAuth provider redirects you back to DeployStack
+- DeployStack exchanges the authorization code for tokens
+- Tokens are encrypted and stored with your user ID
+- You see "✓ Connected" status
+
+### Step 4: Automatic Token Management
+
+Once authorized:
+- Background job monitors token expiration
+- Tokens are automatically refreshed before they expire
+- You stay connected without re-authorizing
+- If refresh fails, you'll see "Auth Required" again
+
+## Multi-User Team Scenarios
+
+### Scenario: Three-Person Team with Box MCP
+
+**Team:** Acme Corp
+- Alice (team_admin)
+- Bob (team_user)
+- Carol (team_user)
+
+**Timeline:**
+
+1. **Alice installs Box MCP Server**
+   - Creates installation "Team Box Files"
+   - Alice authorizes with her Box account
+   - Alice sees: ✓ Connected
+
+2. **Bob logs in**
+   - Sees installation "Team Box Files"
+   - Status: ⚠ Auth Required
+   - Clicks "Reconnect"
+   - Authorizes with his Box account
+   - Bob sees: ✓ Connected
+
+3. **Carol logs in**
+   - Sees installation "Team Box Files"
+   - Status: ⚠ Auth Required
+   - Must authorize with her Box account
+   - Carol sees: ✓ Connected
+
+**Data Access:**
+- Alice's requests → Alice's Box files
+- Bob's requests → Bob's Box files
+- Carol's requests → Carol's Box files
+- No cross-user data access
+
+### Scenario: User Switches Teams
+
+**Context:** Alice is in both "Engineering Team" and "Marketing Team"
+
+**What Happens:**
+
+1. **Engineering Team** installs Google Drive MCP
+   - Alice authorizes with her Google account
+   - Alice's tokens stored for Engineering Team
+
+2. **Marketing Team** also has Google Drive MCP
+   - Alice must authorize again for Marketing Team
+   - Separate tokens stored for Marketing Team context
+   - Same Google account, different team = separate authorization
+
+**Why?** Tokens are stored per user + team + installation combination for security isolation.
+
+## Token Storage and Security
+
+### Encryption at Rest
+
+Your OAuth tokens are encrypted in the database using AES-256-GCM encryption:
+- Access tokens encrypted before storage
+- Refresh tokens encrypted before storage
+- Only decrypted when Satellite needs them at runtime
+
+For complete security details, see [Security and Privacy](/security).
+
+### Privacy Guarantees
+
+**Your tokens are private:**
+- Team admins cannot see your OAuth tokens
+- Other team members cannot see your OAuth tokens
+- Tokens are filtered by your user ID on every query
+
+**Your tokens are isolated:**
+- Each user has separate token records
+- Revoking your access doesn't affect other users
+- Your authorization status is independent
+
+### Runtime Token Injection
+
+When you use an OAuth MCP server:
+
+1. **Satellite receives your request** (with your user ID)
+2. **Satellite asks backend** for your tokens (filtered by user_id)
+3. **Backend decrypts** your tokens and returns them
+4. **Satellite injects tokens** into the MCP server process
+5. **MCP server uses your credentials** to access the service
+
+This happens automatically and transparently.
+
+## Token Refresh Process
+
+### Automatic Refresh
+
+A background job runs every few minutes:
+- Checks for tokens expiring soon (< 10 minutes remaining)
+- Uses the refresh_token to get new access_token
+- Updates stored tokens automatically
+- No user action required
+
+### When Refresh Fails
+
+If token refresh fails (revoked access, expired refresh token):
+- Your installation status changes to "⚠ Auth Required"
+- You see a prompt to re-authorize
+- Click "Reconnect" to start a new authorization flow
+- New tokens are stored after authorization
+
+## Identifying OAuth-Enabled Servers
+
+### In the MCP Catalog
+
+OAuth-enabled servers are marked with:
+- **"Requires OAuth" badge** in the server card
+- **OAuth indicator** in the server details
+- **Authorization notice** in the installation instructions
+
+### During Installation
+
+When installing an OAuth server:
+- Button text: "Install & Authorize" (not just "Install")
+- You'll be redirected to authorization immediately after installation
+- Installation won't be fully functional until authorized
+
+## Common Questions
+
+### Q: Can team admins authorize on behalf of users?
+
+**No.** Each user must authorize with their own account. Team admins cannot authorize for other users because OAuth tokens are tied to individual user accounts.
+
+### Q: What if I don't want to authorize?
+
+You won't be able to use that MCP server. The installation will show "Auth Required" and remain unusable until you authorize.
+
+### Q: Can I revoke access later?
+
+Yes. You can revoke DeployStack's access directly from the OAuth provider (Box, Google, etc.). DeployStack will show "Auth Required" status after revocation, and you can re-authorize anytime.
+
+### Q: Do I need to re-authorize if I leave and rejoin the team?
+
+Yes. When you leave a team, your tokens for that team are deleted. If you rejoin, you must authorize again.
+
+### Q: What happens if tokens expire while I'm using the server?
+
+The Satellite will detect expired tokens and return an error. You'll see "Auth Required" status and need to re-authorize.
+
+## Comparison with Other OAuth Types
+
+| Feature | GitHub OAuth | Satellite OAuth | MCP Server OAuth |
+|---------|-------------|-----------------|------------------|
+| **Purpose** | Login to DeployStack | Connect clients to Satellite | Access third-party services |
+| **Who authorizes** | Individual users | Team (via credentials) | Individual users |
+| **Frequency** | Once per login session | Per Satellite connection | Per MCP server |
+| **Storage** | Session cookies | Client configuration | Database (per-user) |
+| **Visibility** | User only | Team visible | User-private |
+| **Refresh** | Session-based | Client handles | Automatic background |
+| **Revocation** | Logout | Delete credentials | Revoke at provider |
+
+## Related Documentation
+
+For complete understanding of OAuth MCP servers in context:
+
+- [MCP Configuration System](/mcp-configuration) - Three-tier architecture (OAuth is separate)
+- [MCP Team Installation](/mcp-team-installation) - How team admins install OAuth servers
+- [MCP User Configuration](/mcp-user-configuration) - User settings and authorization
+- [MCP Catalog](/mcp-catalog) - Discovering OAuth-enabled servers
+- [Security and Privacy](/security) - Token encryption and storage security
+
+OAuth-enabled MCP servers provide secure, per-user access to external services while maintaining privacy and security through encrypted token storage and automatic token management.
