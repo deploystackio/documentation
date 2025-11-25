@@ -337,9 +337,9 @@ server.addHook('onClose', async () => {
   const rawConn = server.rawDbConnection;
   if (rawConn) {
     const status = getDbStatus();
-    if (status.dialect === 'sqlite' && 'close' in rawConn) {
-      (rawConn as SqliteDriver.Database).close();
-      server.log.info('SQLite connection closed.');
+    if (status.dialect === 'postgresql') {
+      await (rawConn as Pool).end();
+      server.log.info('PostgreSQL connection pool closed.');
     }
   }
 });
@@ -408,7 +408,7 @@ GROUP BY b.id;
 ## Database Schema
 
 <Info>
-For the complete database schema, see [schema.sqlite.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/db/schema.sqlite.ts) in the backend directory.
+For the complete database schema, see [schema.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/db/schema.ts) in the backend directory.
 </Info>
 
 ### Jobs Table
@@ -472,7 +472,7 @@ CREATE TABLE queue_job_batches (
 
 ### Why Database-Backed?
 
-No additional infrastructure required (Redis, message queues). Uses existing SQLite/Turso database, and jobs persist across server restarts.
+No additional infrastructure required (Redis, message queues). Uses existing PostgreSQL database, and jobs persist across server restarts.
 
 ### Why Sequential Processing?
 
@@ -525,6 +525,6 @@ Generate complex reports from large datasets without blocking API requests.
 
 ## Summary
 
-The background job queue system provides a simple, reliable way to process long-running tasks in DeployStack. Built on familiar SQLite/Turso infrastructure, it requires no additional services while providing persistence, retry logic, and rate limiting. Workers follow a straightforward pattern making them easy to implement and test.
+The background job queue system provides a simple, reliable way to process long-running tasks in DeployStack. Built on PostgreSQL infrastructure, it requires no additional services while providing persistence, retry logic, and rate limiting. Workers follow a straightforward pattern making them easy to implement and test.
 
 For routine operations, the system handles thousands of jobs efficiently. For specialized needs requiring higher throughput or distributed processing, the architecture supports clear migration paths to more advanced solutions.

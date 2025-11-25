@@ -5,16 +5,25 @@ sidebarTitle: MCP Team Installation
 ---
 
 
-Team administrators install MCP servers from the catalog and configure shared team settings that all team members inherit. You control what users can customize through lock/unlock settings.
+Team administrators install MCP servers from the catalog and configure shared team settings. You control whether team members must use shared credentials or can configure their own private credentials through lock/unlock settings.
 
 ## Overview
 
-As a team administrator, you:
+**Important:** This guide is for users with the **`team_admin`** role. Only team administrators can install and configure MCP servers for their teams. Users with the **`team_user`** role can only configure their personal settings after a team admin has installed the server.
 
-- **Install MCP servers** from the catalog into your team workspace
-- **Configure shared settings** like API keys and common parameters
-- **Control user access** through lock/unlock settings
-- **Manage team credentials** securely for all team members
+As a team administrator (`team_admin`), you:
+
+- **Install MCP servers** from the catalog into your team workspace (only `team_admin` can do this)
+- **Configure shared settings** like team-wide API keys and common parameters
+- **Control credential policy** - force shared credentials OR allow users to use private ones
+- **Manage team credentials** securely that can be shared across team members
+- **Enable credential privacy** - unlock settings so users can configure private credentials
+
+**What `team_user` members cannot do:**
+- Cannot install MCP servers to the team
+- Cannot view or modify team-level credentials set by team admins
+- Cannot change lock/unlock settings
+- Can only configure their own personal user-level settings (if unlocked)
 
 For an overview of the three-tier system, see [MCP Configuration System](/mcp-configuration). For details on how global administrators create the schemas that define your configuration options, see [Admin Schema Workflow](/mcp-admin-schema-workflow).
 
@@ -32,6 +41,8 @@ Each installation gets a meaningful name like "DevOps Team Filesystem" or "Custo
 
 **Server Sources**: When browsing the catalog, you'll see servers from multiple sources - official registry servers (automatically synced and marked with badges) and manually created custom integrations. Both types work identically with DeployStack's three-tier configuration system.
 
+**OAuth-Enabled MCP Servers:** Some MCP servers require OAuth authorization (Box, Google Drive, Slack, etc.). When you install an OAuth server, you'll authorize with your own account first, but each team member must then authorize individually with their own account. For complete details, see [OAuth-Enabled MCP Servers](/mcp-oauth).
+
 The configuration options available to you are determined by how the global administrator categorized elements during schema creation. You can only configure elements that were designated as "Team Configurable" in the original schema definition.
 
 ## Lock/Unlock Controls
@@ -48,57 +59,101 @@ The lock/unlock system gives you granular control over what team members can mod
 - **🔒 Locked** - Users cannot modify this setting (team-controlled)
 - **🔓 Unlocked** - Users can customize this setting (user-controlled)
 
-**When to Lock:**
-- **Security** - API keys and sensitive credentials
-- **Standardization** - Settings that should be consistent across team
-- **Compliance** - Organizational policy requirements
+**When to Lock (Force Team Credentials):**
+- **Shared Resources** - When team should use same account for billing/tracking
+- **Standardization** - Settings that must be consistent across team
+- **Compliance** - Organizational policy requires shared credentials
+- **Cost Control** - Prevent users from using personal premium accounts
 
-**When to Unlock:**
-- **Personal Workflow** - Individual customization needs
-- **User Preferences** - Personal productivity settings
+**When to Unlock (Allow Private Credentials):**
+- **Rate Limits** - Let users configure personal API keys for higher limits
+- **Individual Accountability** - Track actions per user through personal tokens
+- **Personal Accounts** - Users have their own service subscriptions
+- **Development vs Production** - Users can test with personal dev credentials
 
 ## Team Configuration Example
 
-**Team Web Search Server:**
+**Scenario A: Locked Credentials (Forced Shared)**
 
 ```
-Installation Name: "Team Web Search"
+Installation Name: "Team Web Search - Shared Account"
 
 Template Configuration (Set by Global Admin, Cannot Change):
 ├─ Command: "npx" (🔒 Locked Forever)
 ├─ Package: "@brightdata/mcp-server-web-search" (🔒 Locked Forever)
-├─ System Flag: "-y" (🔒 Locked Forever)
+└─ System Flag: "-y" (🔒 Locked Forever)
 
 Team Configuration (You Control):
-├─ API_KEY: "••••• (encrypted secret)" (🔒 Locked)
-├─ SEARCH_QUOTA: "1000 queries/day" (🔒 Locked)
-├─ CONTENT_FILTERS: "enabled" (🔒 Locked)
+├─ SHARED_API_KEY: "team_key_abc123" (🔒 Locked - users MUST use this)
+├─ SEARCH_QUOTA: "1000 queries/day" (🔒 Locked - same for everyone)
+└─ CONTENT_FILTERS: "enabled" (🔒 Locked)
 
-User Controls (You Decide Lock/Unlock):
+User Controls:
 ├─ Default Search Engine: 🔓 Unlocked (users choose preference)
 ├─ Results Per Page: 🔓 Unlocked (individual preference)
-├─ Cache Settings: 🔓 Unlocked (performance tuning)
+└─ Cache Settings: 🔓 Unlocked (performance tuning)
 ```
 
-**Result:** Team members automatically inherit template configuration and team API credentials with quota limits, but can customize their search preferences and performance settings within the boundaries you set.
+**Result:** All team members use the same API key. Good for cost control and shared billing.
+
+---
+
+**Scenario B: Unlocked Credentials (Private Allowed)**
+
+```
+Installation Name: "Team Web Search - Personal Keys"
+
+Template Configuration (Set by Global Admin, Cannot Change):
+├─ Command: "npx" (🔒 Locked Forever)
+├─ Package: "@brightdata/mcp-server-web-search" (🔒 Locked Forever)
+└─ System Flag: "-y" (🔒 Locked Forever)
+
+Team Configuration (You Control):
+├─ SHARED_API_KEY: "team_key_abc123" (🔓 Unlocked - users CAN override)
+├─ SEARCH_QUOTA: "1000 queries/day" (🔓 Unlocked - users can set their own)
+└─ CONTENT_FILTERS: "enabled" (🔒 Locked - enforce for all)
+
+User Controls:
+├─ PERSONAL_API_KEY: 🔓 Unlocked (users can use their own key)
+├─ Default Search Engine: 🔓 Unlocked
+├─ Results Per Page: 🔓 Unlocked
+└─ Cache Settings: 🔓 Unlocked
+```
+
+**Result:** Users can choose to use team credentials OR configure their own private API keys. Good for rate limits and individual accountability.
 
 ## Credential Management
 
+**Team Credential Types:**
+
+1. **Shared Team Credentials (Locked)**
+   - All team members use the same credentials
+   - Encrypted in database, visible as `*****` to users
+   - Good for: Shared accounts, cost control, unified billing
+
+2. **Default Team Credentials (Unlocked)**
+   - Team provides default credentials as fallback
+   - Users can override with their own private credentials
+   - Good for: Optional personal upgrades, rate limit flexibility
+
 **Security Features:**
 - All team credentials are encrypted in the database
-- Team administrators can configure and modify credentials
-- Team members can use credentials but may not see actual values
+- **Only `team_admin` can view and modify team credentials** - `team_user` members cannot see or change them
+- Team credentials appear as `*****` to all users (including `team_admin` in some contexts)
+- Users can ONLY see their own private credentials, not other users' credentials
 
-**Credential Visibility:**
-- **Secret Fields** - Users see `*****` and use them automatically (for API keys, tokens)
-- **Visible Fields** - Users can see actual values (for service URLs, non-sensitive settings)
+**Credential Privacy:**
+- **Locked Credentials** - Users must use team credentials (cannot see actual values)
+- **Unlocked Credentials** - Users can configure private credentials (not shared with team)
+- **User Isolation** - Each user's private credentials are encrypted separately
+- **Role-Based Access** - Only `team_admin` can manage team-level credentials; `team_user` cannot access them
 
 For complete details on how secret fields are encrypted and protected, see [Security and Privacy](/security).
 
 **Updates:**
-- Update credentials without affecting user configurations
-- Changes automatically apply to all team members
-- No downtime during credential updates
+- Update shared team credentials without affecting user configurations
+- Changes automatically apply to all team members using shared credentials
+- Users with private credentials are unaffected by team credential changes
 
 ## Security and Isolation
 
@@ -107,20 +162,26 @@ For complete details on how secret fields are encrypted and protected, see [Secu
 - No cross-team access to configurations or credentials
 - Only team administrators can modify team installations
 
+**User Privacy Within Team:**
+- Users can configure private credentials not shared with other team members
+- Each user's private credentials are encrypted separately in the database
+- Team administrators cannot see individual users' private credentials
+- Users cannot see other team members' private credentials
+
 **Configuration Inheritance:**
 - Team settings automatically flow to all team members
-- Users build on top of team configuration
+- Users can inherit team credentials OR configure their own private ones
 - Clean separation between shared and personal settings
 
 ## What Team Members Experience
 
 Based on your lock/unlock decisions and the schema boundaries set by global administrators, team members:
 
-- Only see configuration elements they can modify
-- Use team credentials automatically without seeing sensitive values
-- Can customize unlocked elements for their workflow
-- Get consistent behavior across all team members
-- Benefit from satellite-managed remote execution
+- **See only configurable elements** - Configuration options you unlocked for them
+- **Choose credential source** - Use team credentials OR their own private ones (if unlocked)
+- **Maintain privacy** - Their private credentials are never visible to you or other team members
+- **Get consistent baseline** - Inherit locked team settings while customizing unlocked ones
+- **Benefit from satellite execution** - Remote MCP server execution with proper credential isolation
 
 For details on the user experience, see [MCP User Configuration](/mcp-user-configuration).
 

@@ -1,44 +1,39 @@
 ---
 title: Database Management
-description: Multi-database support with SQLite and Turso using environment-based configuration and Drizzle ORM for DeployStack Backend development.
+description: PostgreSQL database management with Drizzle ORM for DeployStack Backend development.
 sidebarTitle: Overview
 ---
 
 
 ## Overview
 
-DeployStack supports multiple database types through an environment-based configuration system using Drizzle ORM. The system provides excellent performance, type safety, and a modern, developer-friendly experience with support for:
+DeployStack uses PostgreSQL as its database backend, providing enterprise-grade reliability, ACID compliance, and excellent performance. The system leverages Drizzle ORM for type-safe database operations with a modern, developer-friendly experience.
 
-- **SQLite** - Local file-based database (default for development)
-- **Turso** - Distributed SQLite database with global replication
-
-All databases use the same SQLite syntax and schema, ensuring consistency across different deployment environments.
+PostgreSQL provides:
+- **ACID Compliance** - Full transactional support with rollback capabilities
+- **Connection Pooling** - Efficient connection management via node-postgres
+- **Native Type System** - Boolean, timestamp with timezone, JSONB, arrays, and more
+- **Horizontal Scaling** - Read replicas and partitioning for production deployments
 
 ## Database Setup and Configuration
 
-The backend uses an environment-based configuration system where database credentials are provided via environment variables, and the database type is selected through the setup API.
+The backend uses an environment-based configuration system where database credentials are provided via environment variables, and the database is initialized through the setup API.
 
 > **Setup Instructions**: For step-by-step setup instructions, see the [Database Setup Guide](/self-hosted/database-setup).
 
-> **Database-Specific Guides**: For detailed technical information about specific databases, see:
-> - [SQLite Development Guide](/development/backend/database/sqlite)
-> - [Turso Development Guide](/development/backend/database/turso)
+> **PostgreSQL Technical Guide**: For detailed technical information, see the [PostgreSQL Development Guide](/development/backend/database/postgresql).
 
 ### Environment Variables
 
-Configure your chosen database type by setting the appropriate environment variables:
+Configure PostgreSQL by setting these environment variables:
 
-#### SQLite Configuration
 ```bash
-# Optional - defaults to persistent_data/database/deploystack.db
-# Path is relative to services/backend/ directory
-SQLITE_DB_PATH=persistent_data/database/deploystack.db
-```
-
-#### Turso Configuration
-```bash
-TURSO_DATABASE_URL=libsql://your-database-url
-TURSO_AUTH_TOKEN=your_auth_token
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=deploystack
+POSTGRES_USER=your_user
+POSTGRES_PASSWORD=your_password
+POSTGRES_SSL=false  # Set to 'true' for SSL connections
 ```
 
 ### Database Status
@@ -53,7 +48,7 @@ Check the current status of the database configuration and initialization:
 {
   "configured": true,
   "initialized": true,
-  "dialect": "sqlite"
+  "dialect": "postgresql"
 }
 ```
 
@@ -68,19 +63,11 @@ The initial database setup is performed through the frontend setup wizard at `/s
 
 **Note for Developers**: While you can call the API endpoint directly for testing, end-users should always use the frontend setup wizard for proper initialization.
 
-#### Setup Examples
+#### Setup Request
 
-**SQLite Setup:**
 ```json
 {
-  "type": "sqlite"
-}
-```
-
-**Turso Setup:**
-```json
-{
-  "type": "turso"
+  "type": "postgresql"
 }
 ```
 
@@ -93,7 +80,7 @@ The setup endpoint returns a JSON response indicating success and restart requir
 {
   "message": "Database setup successful. All services have been initialized and are ready to use.",
   "restart_required": false,
-  "database_type": "sqlite"
+  "database_type": "postgresql"
 }
 ```
 
@@ -102,13 +89,13 @@ The setup endpoint returns a JSON response indicating success and restart requir
 {
   "message": "Database setup successful, but some services may require a server restart to function properly.",
   "restart_required": true,
-  "database_type": "sqlite"
+  "database_type": "postgresql"
 }
 ```
 
 ### Database Selection File
 
-The chosen database type is stored in:
+The database configuration is stored in:
 - `services/backend/persistent_data/db.selection.json` (relative to the backend service directory)
 
 This file is automatically created and managed by the setup API when users complete the frontend setup wizard at `https://<your-frontend-url>/setup`. Manual editing is not recommended.
@@ -116,7 +103,7 @@ This file is automatically created and managed by the setup API when users compl
 Example content:
 ```json
 {
-  "type": "sqlite",
+  "type": "postgresql",
   "selectedAt": "2025-01-02T18:22:15.000Z",
   "version": "1.0"
 }
@@ -129,27 +116,34 @@ Example content:
 ### Key Components
 
 - **Drizzle ORM**: Type-safe ORM with native driver support
-- **Native Drivers**: 
-  - `better-sqlite3` for SQLite
-  - `@libsql/client` for Turso
-- **Unified Schema**: Single schema definition works across all database types
+- **node-postgres (pg)**: Native PostgreSQL driver with connection pooling
 - **Environment Configuration**: Database credentials via environment variables
+- **Automatic Migrations**: Migrations applied on server startup
 
-### Database Drivers
+### Database Driver
 
-The system uses native Drizzle drivers for optimal performance:
+The system uses the native PostgreSQL driver for optimal performance:
 
 ```typescript
-// SQLite
-import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 
-// Turso
-import { drizzle } from 'drizzle-orm/libsql';
+// PostgreSQL connection pool
+const pool = new Pool({
+  host: config.host,
+  port: config.port,
+  database: config.database,
+  user: config.user,
+  password: config.password,
+  ssl: config.ssl ? { rejectUnauthorized: false } : false
+});
+
+const db = drizzle(pool, { schema });
 ```
 
 ### Database Connection Patterns
 
-When accessing the database in route handlers, always use `getDb()` to obtain the database connection dynamically:
+When accessing the database in route handlers, always use `getDb()` to obtain the database connection:
 
 ```typescript
 import { getDb } from '../../../db';
@@ -166,130 +160,78 @@ export default async function yourRoute(server: FastifyInstance) {
 - `server.db` may be `null` during certain initialization states
 - `getDb()` always returns the active database connection
 - This ensures consistent behavior across all endpoints
-- Other working endpoints already follow this pattern
 
 **Avoid:** Direct usage of `server.db` as it can cause "Cannot read properties of null" errors.
 
-## Database Driver Compatibility
+## Database Operations
 
-⚠️ **Critical for Multi-Database Applications**: Understanding driver differences prevents hours of debugging!
+### Working with Query Results
 
-### The Problem: Different Result Property Names
-
-When performing database operations (INSERT, UPDATE, DELETE), different database drivers return different property names in their result objects:
+PostgreSQL operations (INSERT, UPDATE, DELETE) return a result object with `rowCount` indicating the number of affected rows:
 
 ```typescript
-// SQLite (better-sqlite3) result object
+// PostgreSQL result object
 {
-  changes: 1,                    // ← Number of affected rows
-  lastInsertRowid: "abc123"
-}
-
-// Turso (libSQL) result object  
-{
-  rowsAffected: 1,               // ← Number of affected rows
-  lastInsertRowid: "abc123"
+  rowCount: 1,           // Number of affected rows
+  rows: [],              // Returned rows from SELECT queries
+  command: 'DELETE',     // SQL command type
+  oid: 0,
+  fields: []
 }
 ```
 
-**Key Difference:**
-- **SQLite**: Uses `result.changes` to indicate affected rows
-- **Turso**: Uses `result.rowsAffected` to indicate affected rows
+### Standard Patterns
 
-### Real-World Impact
-
-This difference caused a production bug where DELETE operations appeared to fail in Turso but worked in SQLite development:
-
+**Delete Operations**:
 ```typescript
-// ❌ WRONG: Only works with SQLite
-const deleted = result.changes > 0;
-
-// ✅ CORRECT: Works with both SQLite and Turso
-const deleted = (result.changes || result.rowsAffected || 0) > 0;
-```
-
-**Symptoms of this bug:**
-- ✅ Works perfectly in development (SQLite)
-- ❌ Fails mysteriously in production (Turso)
-- 🔄 Data actually gets modified, but application thinks it failed
-- 🐛 Users see error messages even though operation succeeded
-
-### DeployStack's Built-in Solution
-
-DeployStack services automatically handle this compatibility issue. For example, in `McpInstallationService.deleteInstallation()`:
-
-```typescript
-// DeployStack handles both drivers automatically
-const deleted = (result.changes || result.rowsAffected || 0) > 0;
-```
-
-### Writing Compatible Database Code
-
-When writing custom database operations, always use the cross-compatible pattern:
-
-```typescript
-// ✅ CORRECT: Multi-driver compatible
-export class MyService {
-  async deleteRecord(id: string): Promise<boolean> {
+export class McpInstallationService {
+  async deleteInstallation(id: string): Promise<boolean> {
     const result = await this.db
-      .delete(myTable)
-      .where(eq(myTable.id, id));
+      .delete(mcpServerInstallations)
+      .where(eq(mcpServerInstallations.id, id));
 
-    // Handle both SQLite and Turso drivers
-    return (result.changes || result.rowsAffected || 0) > 0;
-  }
-
-  async updateRecord(id: string, data: any): Promise<boolean> {
-    const result = await this.db
-      .update(myTable)
-      .set(data)
-      .where(eq(myTable.id, id));
-
-    // Same pattern for updates
-    return (result.changes || result.rowsAffected || 0) > 0;
+    return (result.rowCount || 0) > 0;
   }
 }
 ```
 
-### Testing Across Database Types
-
-To catch these issues during development:
-
-1. **Test with both databases**: Run your code against both SQLite and Turso
-2. **Use integration tests**: Write tests that verify actual database operations
-3. **Check result objects**: Log result objects during development to see the structure
-
+**Update Operations**:
 ```typescript
-// Debug logging to see result structure
-const result = await db.delete(table).where(condition);
-console.log('Delete result:', result); // Inspect the actual properties
+export class TeamService {
+  async updateTeamName(id: string, name: string): Promise<boolean> {
+    const result = await this.db
+      .update(teams)
+      .set({ name, updated_at: new Date() })
+      .where(eq(teams.id, id));
+
+    return (result.rowCount || 0) > 0;
+  }
+}
 ```
 
-### Why This Happens
+**Counting Affected Rows**:
+```typescript
+export class TokenService {
+  async revokeExpiredTokens(): Promise<number> {
+    const result = await this.db
+      .delete(oauthAccessTokens)
+      .where(lt(oauthAccessTokens.expires_at, Date.now()));
 
-This difference exists because:
-
-- **SQLite/better-sqlite3**: Uses the native SQLite C API which returns `changes`
-- **Turso/libSQL**: Uses the HTTP/WebSocket protocol which standardizes on `rowsAffected`
-
-Both represent the same concept (number of affected rows) but with different property names.
-
-### Prevention Checklist
-
-When writing database operations:
-
-- [ ] Use `(result.changes || result.rowsAffected || 0)` pattern
-- [ ] Test with both SQLite and Turso if possible  
-- [ ] Look for existing DeployStack service patterns to follow
-- [ ] Never assume specific property names exist
-- [ ] Add debug logging when troubleshooting database operations
-
-> **💡 Pro Tip**: This pattern also future-proofs your code for additional database types that DeployStack might support later.
-
+    return result.rowCount || 0;
+  }
+}
+```
 
 ## Database Structure
 
-The database schema is defined in `src/db/schema.sqlite.ts`. This is the **single source of truth** for all database schema definitions and works across all supported database types.
+DeployStack uses PostgreSQL-native types and features:
+
+### Schema Files
+
+**`src/db/schema.ts`** - PostgreSQL schema definition
+- Native PostgreSQL types (`boolean`, `timestamp with timezone`, `jsonb`)
+- Proper foreign key relationships and constraints
+- Migration directory: `drizzle/migrations/`
 
 The schema contains:
 1. Core application tables (users, teams, MCP configurations, etc.)
@@ -297,25 +239,22 @@ The schema contains:
 3. Plugin table definitions (populated dynamically)
 4. Proper foreign key relationships and constraints
 
-**Important**: Only `schema.sqlite.ts` should be edited for schema changes. All databases use SQLite syntax.
-
 ## Making Schema Changes
 
 Follow these steps to add or modify database tables:
 
-1. **Modify Schema Definition**
+1. **Modify Schema Definitions**
 
-   Edit `src/db/schema.sqlite.ts` to add or modify tables:
+   Edit `src/db/schema-tables/[table-group].ts`:
 
    ```typescript
-   // Example: Adding a new projects table
-   export const projects = sqliteTable('projects', {
+   // Example: src/db/schema-tables/teams.ts
+   import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+
+   export const projects = pgTable('projects', {
      id: text('id').primaryKey(),
      name: text('name').notNull(),
-     description: text('description'),
-     userId: text('user_id').references(() => authUser.id),
-     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
-     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
    });
    ```
 
@@ -327,11 +266,11 @@ Follow these steps to add or modify database tables:
    npm run db:generate
    ```
 
-   This creates SQL migration files in `drizzle/migrations_sqlite/` that work across all database types.
+   This generates SQL migration files in `drizzle/migrations/`.
 
 3. **Review Migrations**
 
-   Examine the generated SQL files in `drizzle/migrations_sqlite/` to ensure they match your intended changes.
+   Examine the generated SQL files in `drizzle/migrations/` to ensure they match your intended changes.
 
 4. **Apply Migrations**
 
@@ -348,14 +287,13 @@ Follow these steps to add or modify database tables:
    ```typescript
    // Example: Using the new table in a route
    app.get('/api/projects', async (request, reply) => {
-     const projects = await request.db.select().from(schema.projects).all();
+     const projects = await request.db.select().from(schema.projects);
      return projects;
    });
    ```
 
 ## Migration Management
 
-- **Unified Migrations**: Single `migrations_sqlite` folder works for all database types
 - **Automatic Tracking**: Migrations tracked in `__drizzle_migrations` table
 - **Incremental Application**: Only new migrations are applied
 - **Transaction Safety**: Migrations applied in transactions for consistency
@@ -363,15 +301,9 @@ Follow these steps to add or modify database tables:
 
 **Important**: Migrations cannot run until the database exists. The initial setup (via frontend wizard at `/setup`) must be completed first to create the database, then migrations will apply on subsequent server startups.
 
-### Migration Compatibility
-
-All databases use SQLite syntax, ensuring migration compatibility:
-- **SQLite**: Direct execution
-- **Turso**: libSQL protocol with SQLite syntax
-
 ## Global Settings Integration
 
-During database setup, DeployStack automatically initializes global settings that configure the application. This process is database-aware and handles database-specific limitations:
+During database setup, DeployStack automatically initializes global settings that configure the application:
 
 ### Automatic Initialization
 
@@ -379,13 +311,7 @@ The global settings system:
 - **Loads setting definitions** from all modules in `src/global-settings/`
 - **Creates setting groups** for organizing configuration options
 - **Initializes default values** for all settings with proper encryption
-- **Handles database limitations** through automatic batching
-
-### Database-Specific Handling
-
-**SQLite**: Settings are created in large batches for optimal performance
-
-**Turso**: Uses efficient batch operations with libSQL protocol
+- **Uses efficient batch operations** with PostgreSQL connection pooling
 
 > **Global Settings Documentation**: For detailed information about global settings, see the [Global Settings Guide](/development/backend/global-settings).
 
@@ -401,105 +327,98 @@ Key plugin database features:
 
 ## Development Workflow
 
-1. **Environment Setup**: Configure environment variables for your chosen database
+1. **Environment Setup**: Configure PostgreSQL environment variables
 2. **Initial Setup**: Complete the frontend setup wizard at `/setup` (for first-time setup)
    - This creates `persistent_data/db.selection.json`
-   - Initializes the database based on your selection
+   - Initializes the PostgreSQL database
    - For development, you can also directly call `POST /api/db/setup`
-3. **Schema Changes**: Modify `src/db/schema.sqlite.ts`
+3. **Schema Changes**: Modify `src/db/schema-tables/` directory
 4. **Generate Migrations**: Run `npm run db:generate`
 5. **Apply Changes**: Restart server or run `npm run db:up`
 6. **Update Code**: Use the modified schema in your application
 
-**Backup Strategy**: Always backup the entire `services/backend/persistent_data/` directory as it contains:
-- The SQLite database file (if using SQLite)
-- The database selection configuration
-- Any other persistent application data
+## PostgreSQL-Specific Features
 
-## Database-Specific Considerations
+### Connection Pooling
+- Efficient connection management via `node-postgres`
+- Configurable pool size and timeout settings
+- Automatic connection recycling
 
-### SQLite
-- **File Location**: `services/backend/persistent_data/database/deploystack.db` (full path from project root)
-- **Performance**: Excellent for development and small to medium deployments
-- **Backup**: Simple file-based backup - backup the entire `persistent_data/` directory
-- **Selection File**: Database type stored in `persistent_data/db.selection.json`
+### Native Types
+- Boolean columns with native `boolean` type
+- Timestamps with timezone support
+- JSONB for efficient JSON storage
+- Arrays and custom types
 
-### Turso
-- **Global Replication**: Multi-region database replication
-- **Edge Performance**: Low-latency access worldwide
-- **libSQL Protocol**: Enhanced SQLite with additional features
-- **Scaling**: Automatic scaling based on usage
+### Advanced Features
+- Multi-version concurrency control (MVCC)
+- Point-in-time recovery and continuous archiving
+- Full-text search capabilities
+- Horizontal scaling with read replicas
 
-## Best Practices
+## Inspecting the Database
 
-### Schema Design
-- Use meaningful column names and consistent naming conventions
-- Add appropriate indexes for frequently queried columns
-- Include proper foreign key constraints for relational data
-- Always use migrations for schema changes
-
-### Environment Management
-- Keep database credentials in environment variables
-- Use different databases for different environments (dev/staging/prod)
-- Never commit database credentials to version control
-
-### Migration Safety
-- Always review generated migrations before applying
-- Test migrations in development before production
-- Keep migrations small and focused
-- Never manually edit migration files
-
-## Inspecting Databases
-
-### SQLite
 ```bash
-# Using SQLite CLI (from project root)
-sqlite3 services/backend/persistent_data/database/deploystack.db
+# Using psql CLI
+psql -h localhost -U your_user -d deploystack
 
-# Or from backend directory
-cd services/backend
-sqlite3 persistent_data/database/deploystack.db
+# Common psql commands
+\dt              # List all tables
+\d tablename     # Describe table structure
+\q               # Quit
 
-# Using DB Browser for SQLite (GUI)
-# Download from: https://sqlitebrowser.org/
+# Using pgAdmin (GUI)
+# Download from: https://www.pgadmin.org/
 ```
 
-### Turso
-```bash
-# Using Turso CLI
-turso db shell your-database
+## Environment Configuration Examples
 
-# Using libSQL shell
-# Available at: https://github.com/libsql/libsql
+### Development
+```bash
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=deploystack
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=development_password
+POSTGRES_SSL=false
 ```
 
-## Troubleshooting
+### Production with SSL
+```bash
+POSTGRES_HOST=production-host.example.com
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=deploystack
+POSTGRES_USER=deploystack_user
+POSTGRES_PASSWORD=secure_production_password
+POSTGRES_SSL=true
+```
 
-### Setup Issues
-- **Configuration Error**: Verify environment variables are set correctly
-- **Network Issues**: Check connectivity for Turso
-- **Permissions**: Ensure API tokens have proper permissions
+### Docker Compose
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: deploystack
+      POSTGRES_USER: deploystack
+      POSTGRES_PASSWORD: your_secure_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
-### Migration Issues
-- **Migration Conflicts**: Check for duplicate or conflicting migrations
-- **Schema Drift**: Ensure all environments use the same migrations
-- **Rollback**: Manually revert problematic migrations if needed
+  backend:
+    build: ./services/backend
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DATABASE: deploystack
+      POSTGRES_USER: deploystack
+      POSTGRES_PASSWORD: your_secure_password
+      POSTGRES_SSL: false
+    depends_on:
+      - postgres
 
-### Performance Issues
-- **SQLite**: Check file system performance and disk space
-- **Turso**: Monitor regional performance and connection latency
-
-### Plugin Issues
-- **Missing Tables**: Ensure plugins are loaded before database initialization
-- **Schema Conflicts**: Check for table name conflicts between plugins
-- **Initialization Errors**: Review plugin database extension implementations
-
-## Future Database Support
-
-The environment-based architecture makes it easy to add support for additional databases:
-
-- **PostgreSQL**: Planned for future release
-- **MySQL**: Possible future addition
-- **Other SQLite-compatible databases**: Can be added with minimal changes
-
-The unified schema approach ensures that adding new database types requires minimal changes to existing application code.
+volumes:
+  postgres_data:
+```

@@ -37,7 +37,7 @@ Cleanup Worker (cron job + background worker)
 **MCP Client Activity Metrics** serves as the complete reference implementation. All files are in place and can be used as templates for new metric types.
 
 **Key Files**:
-- Database: `src/db/schema.sqlite.ts` (table: `mcpClientActivityMetrics`)
+- Database: `src/db/schema.ts` (table: `mcpClientActivityMetrics`)
 - Base Service: `src/services/metrics/TimeSeriesMetricsService.ts`
 - Metric Service: `src/services/metrics/McpClientActivityMetricsService.ts`
 - Event Handler: `src/events/satellite/mcp-client-activity.ts`
@@ -83,7 +83,7 @@ Permissions: Users view their own, admins view all
 
 ### Step 2: Create Database Table
 
-Create your metrics table in `src/db/schema.sqlite.ts` following the `mcpClientActivityMetrics` table pattern.
+Create your metrics table in `src/db/schema.ts` following the `mcpClientActivityMetrics` table pattern.
 
 **Critical Requirements**:
 - Use `bucket_timestamp` (integer, Unix seconds)
@@ -115,9 +115,9 @@ Create a service that extends the base `TimeSeriesMetricsService`:
 
 ```typescript
 import { eq, gte, lte, and, sql } from 'drizzle-orm';
-import type { LibSQLDatabase } from 'drizzle-orm/libsql';
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { TimeSeriesMetricsService } from './TimeSeriesMetricsService';
-import { serverInstallMetrics } from '../../db/schema.sqlite';
+import { serverInstallMetrics } from '../../db/schema.ts';
 import type { 
   QueryParams, 
   BucketData, 
@@ -131,9 +131,9 @@ interface ServerInstallBucket extends BucketData {
 }
 
 export class ServerInstallMetricsService extends TimeSeriesMetricsService {
-  private db: LibSQLDatabase;
+  private db: PostgresJsDatabase;
   
-  constructor(db: LibSQLDatabase) {
+  constructor(db: PostgresJsDatabase) {
     super();
     this.db = db;
   }
@@ -407,16 +407,6 @@ const results = await this.db
   .orderBy(metrics.bucket_timestamp);
 ```
 
-### Database Driver Compatibility
-
-Handle both SQLite (`changes`) and Turso (`rowsAffected`):
-
-```typescript
-const deletedCount = (result.changes || result.rowsAffected || 0);
-```
-
-For more details, see [Database Driver Compatibility](/development/backend/database/#database-driver-compatibility).
-
 
 
 ## Common Pitfalls
@@ -445,15 +435,6 @@ const results = await db.select({
 .from(metrics)
 .where(conditions)
 .groupBy(metrics.bucket_timestamp);
-```
-
-### ❌ Not handling both database drivers
-```typescript
-// WRONG - Only works with SQLite
-const deletedCount = result.changes;
-
-// CORRECT - Works with both SQLite and Turso
-const deletedCount = (result.changes || result.rowsAffected || 0);
 ```
 
 ## Related Documentation

@@ -14,7 +14,9 @@ The system separates configuration into three distinct layers:
 2. **Team Level** - Shared team configurations with lock/unlock controls  
 3. **User Level** - Personal configurations within team-defined boundaries
 
-This architecture enables teams to share common settings like API keys while allowing individual members to customize personal settings like local file paths while maintaining team security and standards.
+This architecture enables teams to share common settings like API keys while allowing individual members to use their own private credentials or customize personal settings like local file paths - all within the same team installation, maintaining both team collaboration and individual privacy.
+
+**Note on OAuth-Enabled MCP Servers:** Some MCP servers require OAuth authorization, which happens at the user level—separate from this three-tier configuration system. Each user must authorize individually with their own account. For details, see [OAuth-Enabled MCP Servers](/mcp-oauth).
 
 ## How It Works
 
@@ -42,9 +44,9 @@ This architecture enables teams to share common settings like API keys while all
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │ TIER 3: USER (Individual)                                                      │
 │ ┌─────────────────────────────────────────────────────────────────────────────┐ │
-│ │ 🔓 Personal Settings: Local paths, preferences                             │ │
-│ │ 🔗 Automatic Inheritance: Use team credentials seamlessly                  │ │
-│ │ 🛡️ Team Security: Access controlled through team OAuth tokens             │ │
+│ │ 🔓 Personal Settings: Private credentials, local paths, preferences        │ │
+│ │ 🔗 Automatic Inheritance: Use team credentials OR your own private ones    │ │
+│ │ 🛡️ Privacy: Your credentials are NOT shared with other team members       │ │
 │ └─────────────────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────────┘
                                         │
@@ -67,17 +69,20 @@ The heart of the system is sophisticated lock/unlock controls with precise categ
 - **Validation Rules** - Set data types, constraints, and security requirements for configurable elements
 - **Precise Schema Definition** - Create detailed schemas that control the exact configuration experience
 
-**Team Administrator Controls:**
+**Team Administrator Controls (`team_admin` role only):**
+- **Install MCP Servers** - Only `team_admin` can install MCP servers to teams (not `team_user`)
 - **Configure Team Settings** - Set shared credentials and parameters within schema boundaries
 - **Control User Access** - Lock/unlock elements for team members based on organizational needs
 - **Manage Team Credentials** - Securely handle team-wide secrets with appropriate visibility controls
 - **Work Within Schema Boundaries** - Configure only elements designated as "Team Configurable" by global admins
 
+**Important:** Users with `team_user` role cannot install MCP servers, view team credentials, or modify team settings. They can only configure their own personal user-level settings.
+
 **User Access:**
+- **Private Credentials** - Configure personal API keys and secrets that are NOT shared with other team members
 - **Personal Customization** - Modify only unlocked elements within boundaries set by global admin categorization
-- **Secure Experience** - No access to locked configuration, team secrets, or template elements
+- **Credential Privacy** - Your user-level credentials remain private and isolated from other team members
 - **Focused Interface** - See only configuration elements designated as personally configurable
-- **Team Integration** - Access through OAuth team authentication
 
 ## User Journey Workflows
 
@@ -88,15 +93,19 @@ Each tier has its own focused workflow:
 
 Key workflow: Repository → Claude Desktop Config → **Configuration Schema Categorization** → Basic Info → Catalog Entry
 
-### For Team Administrators  
+### For Team Administrators (`team_admin` role)
 **[Team Installation](/mcp-team-installation)** - Learn how to install MCP servers from the catalog, configure shared team settings, and control user access.
 
 Key workflow: Browse Catalog → Configure Team Settings → Set Lock Controls → Deploy Installation
 
-### For Individual Users
+**Note:** Only users with `team_admin` role can perform team installations. Users with `team_user` role skip this step and go directly to user configuration.
+
+### For Individual Users (both `team_admin` and `team_user` roles)
 **[User Configuration](/mcp-user-configuration)** - Learn how to configure personal MCP settings and customize your workflow.
 
 Key workflow: Access Team Installation → Configure Personal Settings → Save Configuration
+
+**Note:** Both `team_admin` and `team_user` roles configure personal settings the same way. The difference is that only `team_admin` can install the MCP server to the team in the first place.
 
 ## Official Registry Configuration Mapping
 
@@ -201,17 +210,21 @@ This automatic mapping enables synced servers from the official registry to work
 
 **Flexibility:** Support for variable-length configurations and individual customization
 
-**Collaboration:** Teams coordinate through shared settings while maintaining individual customization
+**Collaboration:** Teams coordinate through shared settings while maintaining individual customization and credential privacy
 
 **Governance:** Clear boundaries and audit trails for organizational compliance, with precise control over configuration inheritance
 
 ## Common Use Cases
 
-**Development Teams:** Share Git tokens and project settings while allowing personal directory configurations
+**Development Teams:** Share org-wide Git tokens and project settings while team members can use their personal GitHub tokens for individual rate limits
 
-**Data Science Teams:** Share database credentials and data lake access while supporting individual analysis workflows  
+**Data Science Teams:** Share production database credentials at team level while data scientists use personal API keys for external services
 
-**Support Teams:** Share customer service API keys while allowing personal workspace customization
+**Support Teams:** Share customer service API keys at team level while support agents use personal OAuth tokens for individual accountability
+
+**Rate Limit Management:** Team shares basic API access while individual users configure personal premium API keys for higher rate limits
+
+**Multi-Account Access:** Team accesses shared resources while users maintain separate credentials for personal accounts or dev environments
 
 ## Official Registry Transport Types
 

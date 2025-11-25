@@ -164,7 +164,7 @@ services:
       - DEPLOYSTACK_ENCRYPTION_SECRET=your-encryption-secret
 
     volumes:
-      - ./data:/app/data  # For SQLite database persistence
+      - ./data:/app/data  # For persistent data storage
 ```
 
 ### Dockerfile Environment Handling
@@ -241,15 +241,16 @@ export const createServer = async () => {
 ### Database Configuration Example
 
 ```typescript
-// src/db/setup.ts
-const setupDatabase = () => {
+// src/db/config.ts
+const getDatabaseUrl = () => {
   const isTestEnv = process.env.NODE_ENV === 'test'
-  const sqliteDbFileName = isTestEnv ? 'deploystack.test.db' : 'deploystack.db'
-  
-  const dbPath = path.join(process.cwd(), 'data', sqliteDbFileName)
-  
-  return new Database(dbPath)
+  const dbName = isTestEnv ? 'deploystack_test' : 'deploystack'
+
+  return process.env.DATABASE_URL || `postgresql://localhost:5432/${dbName}`
 }
+
+const connectionString = getDatabaseUrl()
+const pool = new Pool({ connectionString })
 ```
 
 ### Plugin System Configuration

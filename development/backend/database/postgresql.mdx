@@ -1,0 +1,562 @@
+---
+title: PostgreSQL Development Guide
+description: Technical implementation details and development patterns for PostgreSQL integration in DeployStack Backend.
+sidebarTitle: PostgreSQL Development
+---
+
+## Overview
+
+DeployStack uses PostgreSQL as its database backend, providing enterprise-grade reliability with ACID compliance, advanced features, and horizontal scalability through read replicas and partitioning.
+
+> **Setup Instructions**: For initial PostgreSQL configuration, see the [Database Setup Guide](/self-hosted/database-setup).
+
+## Technical Architecture
+
+### Enterprise PostgreSQL Features
+
+**ACID Compliance**:
+- Full transactional support with rollback capabilities
+- Multi-version concurrency control (MVCC)
+- Point-in-time recovery and continuous archiving
+
+**Connection Pooling**:
+- Efficient connection management via `node-postgres`
+- Configurable pool size and timeout settings
+- Automatic connection recycling
+
+**Native Type System**:
+- Boolean, timestamp with timezone, JSONB, arrays
+- Custom types and enums
+- Full-text search capabilities
+
+### Drizzle ORM Integration
+
+DeployStack uses the `node-postgres` driver for optimal PostgreSQL performance:
+
+```typescript
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+
+// PostgreSQL connection pool
+const pool = new Pool({
+  host: config.host,
+  port: config.port,
+  database: config.database,
+  user: config.user,
+  password: config.password,
+  ssl: config.ssl ? { rejectUnauthorized: false } : false
+});
+
+const db = drizzle(pool, { schema });
+```
+
+## Working with Query Results
+
+PostgreSQL operations return result objects with specific properties:
+
+```typescript
+// PostgreSQL result object structure
+{
+  rowCount: 1,           // Number of affected rows
+  rows: [],              // Returned rows from SELECT queries
+  command: 'DELETE',     // SQL command type
+  oid: 0,
+  fields: []
+}
+```
+
+### Standard Patterns
+
+**Delete Operations**:
+```typescript
+export class McpInstallationService {
+  async deleteInstallation(id: string): Promise<boolean> {
+    const result = await this.db
+      .delete(mcpServerInstallations)
+      .where(eq(mcpServerInstallations.id, id));
+
+    return (result.rowCount || 0) > 0;
+  }
+}
+```
+
+**Update Operations**:
+```typescript
+export class TeamService {
+  async updateTeamName(id: string, name: string): Promise<boolean> {
+    const result = await this.db
+      .update(teams)
+      .set({ name, updated_at: new Date() })
+      .where(eq(teams.id, id));
+
+    return (result.rowCount || 0) > 0;
+  }
+}
+```
+
+**Counting Affected Rows**:
+```typescript
+export class TokenService {
+  async revokeExpiredTokens(): Promise<number> {
+    const result = await this.db
+      .delete(oauthAccessTokens)
+      .where(lt(oauthAccessTokens.expires_at, Date.now()));
+
+    return result.rowCount || 0;
+  }
+}
+```
+
+## Schema Architecture
+
+### Schema Structure
+
+DeployStack uses a modular schema structure with PostgreSQL-native types:
+
+**File Structure**:
+```
+services/backend/src/db/
+  ├── schema.ts                 # Main schema export
+  ├── schema-tables/            # Individual table definitions
+  │   ├── auth.ts              # Authentication tables
+  │   ├── teams.ts             # Team and membership tables
+  │   ├── mcp.ts               # MCP server configurations
+  │   ├── satellites.ts        # Satellite management
+  │   └── ...
+  └── migrations/               # PostgreSQL migrations
+```
+
+### PostgreSQL Type System
+
+DeployStack leverages PostgreSQL's native type system:
+
+**Data Types**:
+
+| Type | PostgreSQL Implementation | Example |
+|------|--------------------------|---------|
+| Boolean | `boolean('col')` | `email_verified: boolean('email_verified')` |
+| Timestamp | `timestamp('col', { withTimezone: true })` | `created_at: timestamp('created_at', { withTimezone: true })` |
+| Default Now | `.defaultNow()` | `created_at: timestamp('created_at').defaultNow()` |
+| Text/String | `text('col')` | `name: text('name')` |
+| JSONB | `jsonb('col')` | `metadata: jsonb('metadata')` |
+| Table Builder | `pgTable('name', { ... })` | `export const users = pgTable('users', { ... })` |
+
+**Example Table Definition**:
+
+```typescript
+import { pgTable, text, boolean, timestamp } from 'drizzle-orm/pg-core';
+
+export const authUser = pgTable('authUser', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull().unique(),
+  email_verified: boolean('email_verified').notNull().default(false),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+```
+
+### Adding New Tables
+
+When adding new tables, follow this pattern:
+
+1. **Create table definition** in `src/db/schema-tables/[group].ts`
+2. **Generate migration** using `npm run db:generate`
+3. **Review and apply** migration
+
+**Example: Adding a "notifications" table**:
+
+```typescript
+// File: src/db/schema-tables/teams.ts
+import { pgTable, text, boolean, timestamp } from 'drizzle-orm/pg-core';
+
+export const notifications = pgTable('notifications', {
+  id: text('id').primaryKey(),
+  user_id: text('user_id').notNull().references(() => authUser.id),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  read: boolean('read').notNull().default(false),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+```
+
+## Migration System
+
+### Migration Directory
+
+PostgreSQL migrations are stored in:
+
+```
+drizzle/
+  └── migrations/              # PostgreSQL migration files
+      ├── 0000_create_users.sql
+      ├── 0001_create_teams.sql
+      └── meta/               # Migration metadata
+```
+
+### Migration SQL Structure
+
+PostgreSQL migrations use standard PostgreSQL SQL syntax:
+
+```sql
+CREATE TABLE "authUser" (
+  "id" TEXT PRIMARY KEY,
+  "email" TEXT NOT NULL UNIQUE,
+  "email_verified" BOOLEAN DEFAULT false NOT NULL,
+  "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+CREATE INDEX "idx_authUser_email" ON "authUser" ("email");
+```
+
+### Generating Migrations
+
+```bash
+# Generate migration from schema changes
+npm run db:generate
+
+# This creates files in drizzle/migrations/
+```
+
+The migration generator analyzes your schema changes and creates appropriate SQL migration files.
+
+### Applying Migrations
+
+Migrations are automatically applied on server startup:
+
+```typescript
+// Automatic migration application
+const migrationsPath = path.join(process.cwd(), 'drizzle', 'migrations');
+await migrate(db, { migrationsFolder: migrationsPath });
+```
+
+You can also apply migrations manually:
+
+```bash
+npm run db:up
+```
+
+## Environment Configuration
+
+### Required Environment Variables
+
+```bash
+# PostgreSQL Connection Settings
+POSTGRES_HOST=localhost            # Database host
+POSTGRES_PORT=5432                 # Database port (default: 5432)
+POSTGRES_DATABASE=deploystack      # Database name
+POSTGRES_USER=your_user           # Database user
+POSTGRES_PASSWORD=your_password    # Database password
+POSTGRES_SSL=false                 # Enable SSL (true/false)
+```
+
+### SSL Configuration
+
+For production deployments with SSL:
+
+```bash
+POSTGRES_SSL=true
+```
+
+This enables SSL with `rejectUnauthorized: false` for self-signed certificates. For production, configure proper SSL certificates.
+
+### Docker Compose Example
+
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: deploystack
+      POSTGRES_USER: deploystack
+      POSTGRES_PASSWORD: your_secure_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./services/backend
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DATABASE: deploystack
+      POSTGRES_USER: deploystack
+      POSTGRES_PASSWORD: your_secure_password
+      POSTGRES_SSL: false
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+```
+
+## Development Workflow
+
+### Local Development Setup
+
+1. **Install PostgreSQL**:
+   ```bash
+   # macOS (Homebrew)
+   brew install postgresql@16
+   brew services start postgresql@16
+
+   # Ubuntu/Debian
+   sudo apt-get install postgresql-16
+
+   # Docker
+   docker run -d --name postgres \
+     -e POSTGRES_PASSWORD=password \
+     -p 5432:5432 \
+     postgres:16-alpine
+   ```
+
+2. **Create Database**:
+   ```bash
+   # Create database
+   createdb -U postgres deploystack
+
+   # Or using psql
+   psql -U postgres
+   CREATE DATABASE deploystack;
+   \q
+   ```
+
+3. **Configure Environment**:
+   ```bash
+   # services/backend/.env
+   POSTGRES_HOST=localhost
+   POSTGRES_PORT=5432
+   POSTGRES_DATABASE=deploystack
+   POSTGRES_USER=postgres
+   POSTGRES_PASSWORD=password
+   POSTGRES_SSL=false
+   ```
+
+4. **Setup Database**:
+   ```bash
+   # Via API
+   curl -X POST http://localhost:3000/api/db/setup \
+     -H "Content-Type: application/json" \
+     -d '{"type": "postgresql"}'
+
+   # Or use frontend wizard at http://localhost:5173/setup
+   ```
+
+### Testing with PostgreSQL
+
+```typescript
+// Test configuration for PostgreSQL
+const testDbConfig = {
+  host: process.env.TEST_POSTGRES_HOST || 'localhost',
+  port: parseInt(process.env.TEST_POSTGRES_PORT || '5432'),
+  database: `test_${Date.now()}`,
+  user: process.env.TEST_POSTGRES_USER || 'postgres',
+  password: process.env.TEST_POSTGRES_PASSWORD || 'password',
+};
+
+// Create test database
+await createTestDatabase(testDbConfig);
+
+// Run tests
+await runTests();
+
+// Cleanup
+await dropTestDatabase(testDbConfig);
+```
+
+## Advanced PostgreSQL Features
+
+### JSONB Support
+
+PostgreSQL's JSONB type provides efficient JSON storage with indexing:
+
+```typescript
+export const mcpServers = pgTable('mcpServerTemplates', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  tags: jsonb('tags').$type<string[]>(),
+  metadata: jsonb('metadata').$type<Record<string, any>>(),
+});
+
+// Query with JSONB operators
+const servers = await db
+  .select()
+  .from(mcpServers)
+  .where(sql`${mcpServers.tags} @> '["typescript"]'`);
+```
+
+### Full-Text Search
+
+PostgreSQL provides powerful full-text search capabilities:
+
+```typescript
+// Add tsvector column for full-text search
+export const mcpServers = pgTable('mcpServerTemplates', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  search_vector: sql`tsvector GENERATED ALWAYS AS (to_tsvector('english', coalesce(name, '') || ' ' || coalesce(description, ''))) STORED`,
+});
+
+// Create GIN index for fast searches
+await db.execute(sql`
+  CREATE INDEX idx_mcpServers_search
+  ON mcpServerTemplates
+  USING GIN(search_vector)
+`);
+
+// Perform full-text search
+const results = await db
+  .select()
+  .from(mcpServers)
+  .where(sql`${mcpServers.search_vector} @@ to_tsquery('english', 'database & server')`);
+```
+
+### Advanced Indexing
+
+```typescript
+// Partial indexes
+await db.execute(sql`
+  CREATE INDEX idx_active_satellites
+  ON satellites (status)
+  WHERE status = 'active'
+`);
+
+// Composite indexes
+await db.execute(sql`
+  CREATE INDEX idx_team_installations
+  ON mcpTeamInstallations (team_id, server_id)
+`);
+
+// Expression indexes
+await db.execute(sql`
+  CREATE INDEX idx_lowercase_email
+  ON authUser (LOWER(email))
+`);
+```
+
+### Connection Pool Tuning
+
+```typescript
+const pool = new Pool({
+  host: config.host,
+  port: config.port,
+  database: config.database,
+  user: config.user,
+  password: config.password,
+  ssl: config.ssl,
+
+  // Pool configuration
+  max: 20,                    // Maximum pool size
+  idleTimeoutMillis: 30000,   // Idle connection timeout
+  connectionTimeoutMillis: 2000, // Connection timeout
+});
+```
+
+## Query Optimization
+
+### Using Explain
+
+```typescript
+// Analyze query performance
+const result = await db.execute(sql`
+  EXPLAIN ANALYZE
+  SELECT * FROM mcpServerTemplates
+  WHERE status = 'active'
+  ORDER BY created_at DESC
+`);
+```
+
+### Query Builder Performance
+
+```typescript
+// Efficient query with proper indexing
+const installations = await db
+  .select({
+    installation: mcpTeamInstallations,
+    server: mcpServers,
+    team: teams
+  })
+  .from(mcpTeamInstallations)
+  .leftJoin(mcpServers, eq(mcpTeamInstallations.server_id, mcpServers.id))
+  .leftJoin(teams, eq(mcpTeamInstallations.team_id, teams.id))
+  .where(eq(mcpTeamInstallations.team_id, teamId))
+  .orderBy(desc(mcpTeamInstallations.created_at));
+```
+
+## Backup and Recovery
+
+### Backup Strategies
+
+```bash
+# Full database backup
+pg_dump -h localhost -U deploystack deploystack > backup.sql
+
+# Compressed backup
+pg_dump -h localhost -U deploystack deploystack | gzip > backup.sql.gz
+
+# Custom format (supports parallel restore)
+pg_dump -h localhost -U deploystack -Fc deploystack > backup.dump
+
+# Backup with Docker
+docker exec postgres pg_dump -U deploystack deploystack > backup.sql
+```
+
+### Restore Database
+
+```bash
+# Restore from SQL dump
+psql -h localhost -U deploystack deploystack < backup.sql
+
+# Restore from custom format
+pg_restore -h localhost -U deploystack -d deploystack backup.dump
+
+# Restore with Docker
+docker exec -i postgres psql -U deploystack deploystack < backup.sql
+```
+
+## Monitoring and Maintenance
+
+### Database Statistics
+
+```sql
+-- Check table sizes
+SELECT
+  schemaname,
+  tablename,
+  pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
+FROM pg_tables
+WHERE schemaname = 'public'
+ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+
+-- Check index usage
+SELECT
+  schemaname,
+  tablename,
+  indexname,
+  idx_scan as index_scans,
+  pg_size_pretty(pg_relation_size(indexrelid)) as index_size
+FROM pg_stat_user_indexes
+ORDER BY idx_scan DESC;
+```
+
+### Vacuum and Analyze
+
+```sql
+-- Analyze tables for query optimization
+ANALYZE;
+
+-- Vacuum to reclaim storage
+VACUUM;
+
+-- Full vacuum (locks tables)
+VACUUM FULL;
+
+-- Analyze specific table
+ANALYZE mcpServerTemplates;
+```
+
+---
+
+For more information about database management in DeployStack, see the [Database Management Guide](/development/backend/database).

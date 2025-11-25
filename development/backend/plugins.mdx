@@ -103,24 +103,24 @@ Add basic plugin information:
 
 ### 3. Define Database Schema (Optional)
 
-If your plugin requires database tables, create a `schema.ts` file:
+If your plugin requires database tables, create a `schema.ts` file using PostgreSQL table definitions:
 
 ```typescript
-import { sqliteTable, text, integer, sql } from 'drizzle-orm/sqlite-core';
+import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 // Define your plugin's tables
-export const myCustomEntities = sqliteTable('my_custom_entities', {
+export const myCustomEntities = pgTable('my_custom_entities', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   data: text('data'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 // You can define multiple tables if needed
-export const myCustomRelations = sqliteTable('my_custom_relations', {
+export const myCustomRelations = pgTable('my_custom_relations', {
   id: text('id').primaryKey(),
-  entityId: text('entity_id').notNull().references(() => myCustomEntities.id),
-  relationType: text('relation_type').notNull(),
+  entity_id: text('entity_id').notNull().references(() => myCustomEntities.id),
+  relation_type: text('relation_type').notNull(),
 });
 ```
 
@@ -131,30 +131,17 @@ Create a `routes.ts` file for your API routes:
 ```typescript
 import { type PluginRouteManager } from '../../plugin-system/route-manager';
 import { type AnyDatabase, getSchema } from '../../db';
-import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { type NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { type SQLiteTable } from 'drizzle-orm/sqlite-core';
-import { type PgTable } from 'drizzle-orm/pg-core';
 import { eq } from 'drizzle-orm';
-
-// Helper type guard for database type checking
-function isSQLiteDB(db: AnyDatabase): db is BetterSQLite3Database<any> {
-  return typeof (db as BetterSQLite3Database).get === 'function' &&
-         typeof (db as BetterSQLite3Database).all === 'function' &&
-         typeof (db as BetterSQLite3Database).run === 'function';
-}
 
 /**
  * Register all routes for your custom plugin
- * 
+ *
  * All routes registered here will be automatically namespaced under:
  * /api/plugin/my-custom-plugin/
  */
 export async function registerRoutes(routeManager: PluginRouteManager, db: AnyDatabase | null): Promise<void> {
-  // Note: In actual plugin development, you should receive a logger instance
-  // For this example, we'll show the pattern you should follow
-  const logger = routeManager.getLogger(); // Assuming this method exists
-  
+  const logger = routeManager.getLogger();
+
   if (!db) {
     logger?.warn(`Database not available, skipping routes.`);
     return;
@@ -172,36 +159,21 @@ export async function registerRoutes(routeManager: PluginRouteManager, db: AnyDa
   // Register GET /entities route
   // This becomes: GET /api/plugin/my-custom-plugin/entities
   routeManager.get('/entities', async () => {
-    if (isSQLiteDB(db)) {
-      const entities = await db.select().from(table as SQLiteTable).all();
-      return { entities };
-    } else {
-      const entities = await (db as NodePgDatabase).select().from(table as PgTable);
-      return { entities };
-    }
+    const entities = await db.select().from(table);
+    return { entities };
   });
 
   // Register GET /entities/:id route
   // This becomes: GET /api/plugin/my-custom-plugin/entities/:id
   routeManager.get('/entities/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    let entity;
 
-    if (isSQLiteDB(db)) {
-      const typedTable = table as SQLiteTable & { id: any };
-      entity = await db
-        .select()
-        .from(typedTable)
-        .where(eq(typedTable.id, id))
-        .get();
-    } else {
-      const typedTable = table as PgTable & { id: any };
-      const rows = await (db as NodePgDatabase)
-        .select()
-        .from(typedTable)
-        .where(eq(typedTable.id, id));
-      entity = rows[0] ?? null;
-    }
+    const rows = await db
+      .select()
+      .from(table)
+      .where(eq(table.id, id));
+
+    const entity = rows[0] ?? null;
 
     if (!entity) {
       return reply.status(404).send({ error: 'Entity not found' });
@@ -225,11 +197,7 @@ export async function registerRoutes(routeManager: PluginRouteManager, db: AnyDa
       data: body.data || null,
     };
 
-    if (isSQLiteDB(db)) {
-      await db.insert(table as SQLiteTable).values(entityData).run();
-    } else {
-      await (db as NodePgDatabase).insert(table as PgTable).values(entityData);
-    }
+    await db.insert(table).values(entityData);
 
     return { id, ...body };
   });
@@ -243,24 +211,13 @@ export async function registerRoutes(routeManager: PluginRouteManager, db: AnyDa
 Create an `index.ts` file that implements the Plugin interface:
 
 ```typescript
-import { 
-  type Plugin, 
+import {
+  type Plugin,
   type DatabaseExtension,
   type PluginRouteManager
 } from '../../plugin-system/types';
 import { type AnyDatabase, getSchema } from '../../db';
-import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { type NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { type SQLiteTable } from 'drizzle-orm/sqlite-core';
-import { type PgTable } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-
-// Helper type guard for database type checking
-function isSQLiteDB(db: AnyDatabase): db is BetterSQLite3Database<any> {
-  return typeof (db as BetterSQLite3Database).get === 'function' &&
-         typeof (db as BetterSQLite3Database).all === 'function' &&
-         typeof (db as BetterSQLite3Database).run === 'function';
-}
 
 // Table definitions for this plugin
 const myCustomPluginTableDefinitions = {
@@ -268,7 +225,7 @@ const myCustomPluginTableDefinitions = {
     id: (b: any) => b('id').primaryKey(),
     name: (b: any) => b('name').notNull(),
     data: (b: any) => b('data'),
-    createdAt: (b: any) => b('created_at', { mode: 'timestamp' }).notNull().defaultNow(),
+    created_at: (b: any) => b('created_at', { mode: 'timestamp' }).notNull().defaultNow(),
   }
 };
 
@@ -281,14 +238,13 @@ class MyCustomPlugin implements Plugin {
     description: 'Adds custom functionality to DeployStack',
     author: 'Your Name',
   };
-  
+
   // Database extension (optional - remove if not needed)
   databaseExtension: DatabaseExtension = {
     tableDefinitions: myCustomPluginTableDefinitions,
-    
+
     // Optional initialization function for seeding data
     onDatabaseInit: async (db: AnyDatabase, logger?: FastifyBaseLogger) => {
-      // Note: In actual implementation, logger should be passed from PluginManager
       logger?.info(`Initializing database...`);
 
       const currentSchema = getSchema();
@@ -300,19 +256,11 @@ class MyCustomPlugin implements Plugin {
         return;
       }
 
-      let currentCount = 0;
-      if (isSQLiteDB(db)) {
-        const result = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(table as SQLiteTable)
-          .get();
-        currentCount = result?.count ?? 0;
-      } else {
-        const rows = await (db as NodePgDatabase)
-          .select({ count: sql<number>`count(*)` })
-          .from(table as PgTable);
-        currentCount = rows[0]?.count ?? 0;
-      }
+      // Check if we need to seed initial data
+      const rows = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(table);
+      const currentCount = rows[0]?.count ?? 0;
 
       if (currentCount === 0) {
         logger?.info(`Seeding initial data...`);
@@ -322,19 +270,14 @@ class MyCustomPlugin implements Plugin {
           data: JSON.stringify({ initialized: true }),
         };
 
-        if (isSQLiteDB(db)) {
-          await db.insert(table as SQLiteTable).values(dataToSeed).run();
-        } else {
-          await (db as NodePgDatabase).insert(table as PgTable).values(dataToSeed);
-        }
+        await db.insert(table).values(dataToSeed);
         logger?.info(`Seeded initial data`);
       }
     },
   };
-  
+
   // Plugin initialization (non-route initialization only)
   async initialize(db: AnyDatabase | null, logger?: FastifyBaseLogger) {
-    // Note: In actual implementation, logger should be passed from PluginManager
     logger?.info(`Initializing...`);
     // Non-route initialization only - routes are registered via registerRoutes method
     logger?.info(`Initialized successfully`);
@@ -345,10 +288,9 @@ class MyCustomPlugin implements Plugin {
     const { registerRoutes } = await import('./routes');
     await registerRoutes(routeManager, db);
   }
-  
+
   // Optional shutdown method for cleanup
   async shutdown(logger?: FastifyBaseLogger) {
-    // Note: In actual implementation, logger should be passed from PluginManager
     logger?.info(`Shutting down...`);
     // Perform any cleanup needed
   }
@@ -395,8 +337,11 @@ const myPluginTableDefinitions = {
 
 **Important Notes:**
 - Use `created_at` (snake_case) for database column names, not `createdAt` (camelCase)
-- Timestamp columns with `{ mode: 'timestamp' }` automatically get `DEFAULT (strftime('%s', 'now'))`
-- Column types are auto-detected: `id`/`count` → INTEGER, `*_at`/`*date` → INTEGER (timestamp), others → TEXT
+- Timestamp columns with `{ mode: 'timestamp' }` automatically get `TIMESTAMP WITH TIME ZONE DEFAULT NOW()`
+- Column types are auto-detected and converted for PostgreSQL:
+  - `id`/`count` → INTEGER
+  - `*_at`/`*date` → TIMESTAMP WITH TIME ZONE
+  - Others → TEXT
 - Tables are prefixed with your plugin ID: `my-plugin_my_entities`
 
 ### API Routes
@@ -513,13 +458,13 @@ To test your plugin:
 Your plugin can access configuration provided by the plugin manager:
 
 ```typescript
-async initialize(app: FastifyInstance, db: BetterSQLite3Database) {
+async initialize(app: FastifyInstance, db: AnyDatabase) {
   // Access plugin-specific configuration
   const config = app.pluginManager.getPluginConfig(this.meta.id);
-  
+
   // Use configuration values
   const apiKey = config?.apiKey as string;
-  
+
   // Initialize with configuration
 }
 ```
@@ -613,8 +558,8 @@ Plugins can contribute their own global settings to the DeployStack system. Thes
 ```typescript
 // In your plugin's index.ts
 
-import { 
-  type Plugin, 
+import {
+  type Plugin,
   type GlobalSettingsExtension,
   // ... other imports
 } from '../../plugin-system/types';
@@ -682,9 +627,8 @@ class MyAwesomePlugin implements Plugin {
 
   // ... rest of your plugin implementation (databaseExtension, initialize, etc.)
   async initialize(app: FastifyInstance, db: AnyDatabase | null, logger?: FastifyBaseLogger) {
-    // Note: In actual implementation, logger should be passed from PluginManager
     logger?.info(`Initializing...`);
-    
+
     // You can try to access your plugin's settings here if needed during init,
     // using GlobalSettingsService.get('myAwesomePlugin.features.enableSuperFeature')
     // Note: Ensure GlobalSettingsService is available or handle potential errors.

@@ -5,16 +5,17 @@ sidebarTitle: MCP User Configuration
 ---
 
 
-Individual users customize personal MCP settings within boundaries set by their team administrators. You configure only the settings made available to you, focusing on personal productivity while automatically inheriting secure team credentials and standards.
+Individual users configure personal MCP settings within boundaries set by their team administrators. You can use your own private credentials that are NOT shared with other team members, or inherit team credentials automatically. Your personal configuration remains private while working within the same team installation.
 
 ## Overview
 
 As a user, you personalize your MCP server experience within team-defined boundaries:
 
+- **Private Credentials** - Use your own API keys and secrets that remain private from other team members
 - **Personal Settings** that adapt to your individual workflow
-- **Automatic Team Integration** with shared credentials and team standards
+- **Flexible Credential Choice** - Use team credentials OR configure your own private ones
 - **Simplified Interface** showing only settings you can modify
-- **Secure Experience** without credential management burden
+- **Credential Privacy** - Your personal credentials are never visible to other team members
 
 The user tier builds on team configurations, which build on global schemas. For an overview of the complete system, see [MCP Configuration System](/mcp-configuration).
 
@@ -23,18 +24,21 @@ The user tier builds on team configurations, which build on global schemas. For 
 Your configuration options are precisely determined by how global administrators categorized elements during schema creation and your team administrator's lock/unlock decisions:
 
 **🔓 You Can Configure:**
+- **Private Credentials** - Your personal API keys and secrets (NOT shared with team members)
 - **Unlocked Elements** - Settings your team admin made available for personal customization
 - **User-Specific Elements** - Settings designed for individual workflow (like local file paths)
 
 **🔒 You Cannot See or Modify:**
 - **Locked Team Settings** - Shared configuration controlled by team administrators
-- **Hidden Credentials** - API keys and secrets managed securely by your team
+- **Other Users' Credentials** - You cannot see other team members' personal credentials
 - **Template Elements** - System-level parameters locked by global administrators
 
-**🔗 You Automatically Inherit:**
-- **Team Credentials** - API keys and authentication tokens
-- **Team Standards** - Shared settings and organizational preferences
-- **Template Configuration** - System-level parameters locked by global administrators
+**🔗 You Can Choose To:**
+- **Use Team Credentials** - Automatically inherit shared API keys and authentication tokens
+- **Use Private Credentials** - Configure your own personal credentials that override team settings
+- **Mix Both** - Use team credentials for some services and personal credentials for others
+
+**Note on OAuth-Enabled MCP Servers:** If your team uses OAuth servers (Box, Google Drive, etc.), you must authorize individually with your own account even after your team admin installs the server. For complete details, see [OAuth-Enabled MCP Servers](/mcp-oauth).
 
 For details on how global administrators define these boundaries and team administrators control access, see [Admin Schema Workflow](/mcp-admin-schema-workflow) and [Team Installation](/mcp-team-installation).
 
@@ -45,29 +49,37 @@ When you configure an MCP server, you see a clean interface focused only on your
 ```
 Personal Configuration: "Team Web Search"
 
+YOUR PRIVATE CREDENTIALS (Not shared with team)
+
+API Configuration:
+├─ Use Personal API Key: ✓
+├─ Your API Key: ••••• (encrypted, private)
+└─ Personal Rate Limit: 5000 queries/day
+
 YOUR PERSONAL SETTINGS
 
 Search Preferences:
 ├─ Default Search Engine: Google ▼
-├─ Results Per Page: 10 ▼  
+├─ Results Per Page: 10 ▼
 └─ Safe Search: Moderate ▼
 
 Cache Settings:
 ├─ Enable Result Caching: ✓
 └─ Cache Duration: 1 hour ▼
 
-TEAM-MANAGED SETTINGS (You inherit these automatically)
+TEAM SETTINGS (You can choose to inherit or override)
 
-✓ Team API credentials: ••••• (encrypted, see Security)
-✓ Shared search quotas: 1000 queries/day
-✓ Team content filters: Enabled
+□ Use team API credentials: ••••• (shared with team)
+✓ Use team search quotas: 1000 queries/day
+✓ Use team content filters: Enabled
 
 [Save Configuration] [Test Configuration]
 ```
 
 **Key Interface Features:**
-- **Only Personal Options** - You see only settings you can modify
-- **Clear Inheritance** - Understanding of what you get from your team
+- **Private Credential Section** - Configure personal API keys separate from team
+- **Clear Credential Choice** - Choose between personal or team credentials
+- **Privacy Indicators** - Clear marking of what's private vs. shared
 - **Validation** - Immediate feedback on configuration validity
 
 ## Personal Configuration Types
@@ -76,6 +88,11 @@ TEAM-MANAGED SETTINGS (You inherit these automatically)
 
 Most commonly, you'll configure:
 
+**Private Credentials:**
+- Personal API keys (not shared with team members)
+- Individual authentication tokens
+- Private service URLs and endpoints
+
 **API Preferences:**
 - Search result limits and pagination
 - Content filtering and safety settings
@@ -83,10 +100,16 @@ Most commonly, you'll configure:
 
 ### User Environment Variables
 
+**Private Credentials and Secrets:**
+- Personal API keys (`PERSONAL_API_KEY`, `GITHUB_TOKEN`)
+- Individual OAuth tokens (`OAUTH_ACCESS_TOKEN`)
+- Private database credentials (`DB_PASSWORD`)
+
 **Personal Preferences:**
 - Search engine preferences and result formatting
 - Cache settings and performance tuning
 - Interface customization options
+- Local file paths (`/Users/yourname/workspace`)
 
 ## Configuration Process
 
@@ -110,25 +133,35 @@ Template (System):
 ├─ Package: "@brightdata/mcp-server-web-search"
 └─ System flags: "-y"
 
-+ Team (Shared):
-├─ Team API Key: "••••• (encrypted secret, hidden from you)"
++ Team (Shared - Available to All Team Members):
+├─ Team API Key: "team_shared_key_abc123"
 ├─ Search quota: "1000 queries/day"
 └─ Content filters: "enabled"
 
-+ Your Personal Settings:
++ Your Personal Settings (Private - Not Shared):
+├─ Personal API Key: "your_private_key_xyz789" (OVERRIDES team key)
+├─ Personal Rate Limit: "5000 queries/day" (OVERRIDES team quota)
 ├─ Default search engine: "google"
 ├─ Results per page: 10
 └─ Cache duration: "1 hour"
 
-= Final Runtime Configuration:
+= Final Runtime Configuration FOR YOU:
 Command: npx -y @brightdata/mcp-server-web-search
 Environment: {
-  "TEAM_API_KEY": "decrypted-for-runtime-only",
-  "SEARCH_QUOTA": "1000", 
-  "CONTENT_FILTERS": "enabled",
-  "DEFAULT_ENGINE": "google",
-  "RESULTS_PER_PAGE": "10",
-  "CACHE_DURATION": "3600"
+  "API_KEY": "your_private_key_xyz789",  ← YOUR private key used
+  "SEARCH_QUOTA": "5000",                 ← YOUR personal limit used
+  "CONTENT_FILTERS": "enabled",          ← Team setting inherited
+  "DEFAULT_ENGINE": "google",            ← Your preference
+  "RESULTS_PER_PAGE": "10",              ← Your preference
+  "CACHE_DURATION": "3600"               ← Your preference
+}
+
+= Other Team Members See DIFFERENT Configuration:
+Environment: {
+  "API_KEY": "team_shared_key_abc123",   ← Team key (you're using yours)
+  "SEARCH_QUOTA": "1000",                 ← Team limit (you're using yours)
+  "CONTENT_FILTERS": "enabled",          ← Same team setting
+  ... (their own preferences)
 }
 ```
 
