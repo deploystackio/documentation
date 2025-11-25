@@ -600,9 +600,9 @@ const REQUEST_SCHEMA = {
       minimum: 1,
       description: 'How many items (must be positive)'
     },
-    type: { 
-      type: 'string', 
-      enum: ['mysql', 'sqlite'],
+    type: {
+      type: 'string',
+      enum: ['postgresql', 'mysql'],
       description: 'Database engine type'
     }
   },
@@ -649,7 +649,7 @@ const ERROR_RESPONSE_SCHEMA = {
 interface RequestBody {
   name: string;
   count: number;
-  type: 'mysql' | 'sqlite';
+  type: 'postgresql' | 'mysql';
 }
 
 interface SuccessResponse {
@@ -824,7 +824,7 @@ if (request.body.name.length < 3) {
 }
 
 // BAD: Manual enum validation (redundant)
-if (request.body.type !== 'mysql' && request.body.type !== 'sqlite') {
+if (request.body.type !== 'postgresql' && request.body.type !== 'mysql') {
   return reply.status(400).send({ error: 'Invalid database type' });
 }
 ```

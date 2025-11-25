@@ -133,7 +133,7 @@ Implements RFC 7591 Dynamic Client Registration:
 
 #### Database Storage
 - **Table**: `dynamic_oauth_clients`
-- **Schema**: See `services/backend/src/db/schema.sqlite.ts`
+- **Schema**: See `services/backend/src/db/schema.ts`
 - **Fields**: client_id, client_name, redirect_uris, grant_types, response_types, scope, token_endpoint_auth_method, client_id_issued_at, expires_at
 - **Persistence**: Survives server restarts and supports multiple instances
 
@@ -178,7 +178,7 @@ Handles token lifecycle:
 ### Database Schema
 
 #### Dynamic OAuth Clients Table
-- **File**: `services/backend/src/db/schema.sqlite.ts`
+- **File**: `services/backend/src/db/schema.ts`
 - **Table**: `dynamic_oauth_clients`
 - **Migration**: `0006_keen_firestar.sql`
 - **Purpose**: Persistent storage for dynamically registered MCP clients

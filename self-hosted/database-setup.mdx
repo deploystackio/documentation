@@ -1,6 +1,6 @@
 ---
 title: Database Setup for Self-Hosting
-description: Step-by-step guide to configure your database when self-hosting DeployStack - designed for non-technical users.
+description: Step-by-step guide to configure PostgreSQL for your self-hosted DeployStack instance.
 Sidebar: Database Setup
 Icon: Database
 ---
@@ -8,161 +8,361 @@ Icon: Database
 
 ## Overview
 
-When you first start your self-hosted DeployStack instance, you'll need to choose and configure a database. This guide will walk you through the process step-by-step.
+DeployStack uses PostgreSQL as its database backend, providing enterprise-grade reliability with ACID compliance, connection pooling, and advanced features for production deployments.
 
-**Important**: This setup only needs to be done once when you first install DeployStack.
+**Important**: PostgreSQL must be running and accessible before starting your DeployStack instance.
 
 ## What You'll Need
 
-- Your DeployStack instance running (backend and frontend)
-- Access to your server's environment variables (if choosing cloud databases)
-- About 5-10 minutes to complete the setup
+- PostgreSQL 13+ installed and running (or included in Docker Compose)
+- Database connection details (host, port, username, password)
+- About 5-10 minutes to complete the configuration
 
-## Step 1: Access the Setup Page
+## Deployment Options
 
-1. **Start your DeployStack instance** following your installation guide
-2. **Open your web browser** and navigate to your DeployStack URL
-3. **You'll be automatically redirected** to the setup page at `/setup`
+### Option 1: Docker Compose (Recommended)
 
-If you see a message like "Database setup required" or are redirected to a setup page, you're in the right place!
-
-## Step 2: Choose Your Database
-
-You'll see two database options. Here's what each one means:
-
-### Option 1: SQLite (Recommended for Most Users)
-- **Best for**: Small to medium teams, development, testing
-- **Pros**: 
-  - No additional setup required
-  - Works immediately
-  - No external dependencies
-  - Perfect for getting started
-- **Cons**: 
-  - Single server only (no clustering)
-  - Limited to one database file
-
-**Choose this if**: You're just getting started, have a small team, or want the simplest setup.
-
-### Option 2: Turso (For Advanced Users)
-- **Best for**: Advanced users needing distributed databases
-- **Pros**: 
-  - Multi-region replication
-  - Advanced SQLite features
-  - Good performance
-- **Cons**: 
-  - Requires Turso account
-  - More complex setup
-
-**Choose this if**: You need advanced database features or multi-region deployment.
-
-## Step 3: Configure Your Chosen Database
-
-### If You Chose SQLite (Easiest)
-
-1. **Select "SQLite"** from the options
-2. **Click "Setup Database"**
-3. **Wait for confirmation** (usually takes 10-30 seconds)
-4. **Done!** You'll be redirected to the main application
-
-No additional configuration needed - SQLite works out of the box!
-
-### If You Chose Turso
-
-Before you can use Turso, you need to set up environment variables:
-
-#### Prerequisites
-1. **Create a Turso account** at [turso.tech](https://turso.tech)
-2. **Install Turso CLI** and create a database:
-   ```bash
-   turso db create deploystack-db
-   ```
-3. **Get your database URL and auth token**:
-   ```bash
-   turso db show deploystack-db
-   turso db tokens create deploystack-db
-   ```
-
-#### Server Configuration
-Add these environment variables to your server:
+If you're using our Docker Compose setup, PostgreSQL is included and automatically configured. No manual database setup required!
 
 ```bash
-TURSO_DATABASE_URL=libsql://your-database-url
-TURSO_AUTH_TOKEN=your_auth_token_here
+# PostgreSQL is automatically included
+docker-compose up -d
 ```
 
-#### Complete Setup
-1. **Restart your DeployStack instance** after setting the environment variables
-2. **Go back to the setup page** (`/setup`)
-3. **Select "Turso"**
-4. **Click "Setup Database"**
-5. **Wait for confirmation**
+The Docker Compose setup includes:
+- PostgreSQL 18 Alpine
+- Automatic health checks
+- Persistent data volume
+- Pre-configured connection details
 
-## Step 4: Verify Setup
+### Option 2: External PostgreSQL Server
 
-After successful setup, you should:
+For production deployments with existing PostgreSQL infrastructure:
 
-1. **See a success message** confirming database initialization
-2. **Be redirected to the main application**
-3. **Be able to create your first user account**
+## Step 1: Prepare PostgreSQL Database
 
-If you see any errors, check the troubleshooting section below.
+### Create Database and User
+
+Connect to your PostgreSQL server and create a dedicated database and user:
+
+```sql
+-- Connect to PostgreSQL as admin
+psql -U postgres
+
+-- Create database
+CREATE DATABASE deploystack;
+
+-- Create user with password
+CREATE USER deploystack_user WITH ENCRYPTED PASSWORD 'your_secure_password_here';
+
+-- Grant privileges
+GRANT ALL PRIVILEGES ON DATABASE deploystack TO deploystack_user;
+
+-- Grant schema privileges (PostgreSQL 15+)
+\c deploystack
+GRANT ALL ON SCHEMA public TO deploystack_user;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO deploystack_user;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO deploystack_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO deploystack_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO deploystack_user;
+
+-- Exit
+\q
+```
+
+### Verify Connection
+
+Test the database connection:
+
+```bash
+# Test connection
+psql -h localhost -U deploystack_user -d deploystack -c "SELECT version();"
+
+# You should see PostgreSQL version information
+```
+
+## Step 2: Configure Environment Variables
+
+Set PostgreSQL connection details in your environment:
+
+### For Docker Deployments
+
+Add to your `.env` file:
+
+```bash
+# PostgreSQL Configuration
+POSTGRES_HOST=your-postgres-host     # e.g., localhost or postgres.example.com
+POSTGRES_PORT=5432                   # Default PostgreSQL port
+POSTGRES_DATABASE=deploystack        # Database name
+POSTGRES_USER=deploystack_user       # Database user
+POSTGRES_PASSWORD=your_secure_password_here
+POSTGRES_SSL=false                   # Set to 'true' for SSL connections
+```
+
+### For Local Development
+
+Edit `services/backend/.env`:
+
+```bash
+# PostgreSQL Configuration
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=deploystack
+POSTGRES_USER=deploystack
+POSTGRES_PASSWORD=deploystack
+POSTGRES_SSL=false
+```
+
+## Step 3: Start DeployStack
+
+Once PostgreSQL is configured, start your DeployStack instance:
+
+### Docker Compose
+
+```bash
+docker-compose up -d
+```
+
+### Individual Containers
+
+```bash
+# Start backend with PostgreSQL configuration
+docker run -d \
+  --name deploystack-backend \
+  -p 3000:3000 \
+  -e POSTGRES_HOST=your-postgres-host \
+  -e POSTGRES_PORT=5432 \
+  -e POSTGRES_DATABASE=deploystack \
+  -e POSTGRES_USER=deploystack_user \
+  -e POSTGRES_PASSWORD=your_secure_password_here \
+  -e POSTGRES_SSL=false \
+  -e DEPLOYSTACK_ENCRYPTION_SECRET=your-secret-here \
+  -v deploystack_backend_persistent:/app/persistent_data \
+  deploystack/backend:latest
+```
+
+## Step 4: Complete Setup Wizard
+
+1. **Access DeployStack**: Navigate to your frontend URL (e.g., `http://localhost:8080`)
+2. **Automatic Redirect**: You'll be redirected to `/setup`
+3. **Database Initialization**: The wizard will:
+   - Test PostgreSQL connection
+   - Apply database migrations
+   - Create necessary tables
+   - Initialize system data
+4. **Create Admin Account**: Set up your administrator account
+5. **Configuration**: Complete basic platform settings
+
+## SSL/TLS Connection
+
+For secure connections to PostgreSQL:
+
+### Enable SSL in PostgreSQL
+
+1. **Configure PostgreSQL** (`postgresql.conf`):
+   ```conf
+   ssl = on
+   ssl_cert_file = '/path/to/server.crt'
+   ssl_key_file = '/path/to/server.key'
+   ssl_ca_file = '/path/to/root.crt'
+   ```
+
+2. **Set Environment Variable**:
+   ```bash
+   POSTGRES_SSL=true
+   ```
+
+3. **Restart PostgreSQL** and DeployStack backend
+
+## Production Considerations
+
+### Connection Pooling
+
+DeployStack uses `node-postgres` with connection pooling:
+
+- Default max connections: 20
+- Idle timeout: 30 seconds
+- Connection timeout: 2 seconds
+
+### Database Maintenance
+
+```bash
+# Vacuum database (reclaim storage)
+psql -U deploystack_user -d deploystack -c "VACUUM ANALYZE;"
+
+# Check database size
+psql -U deploystack_user -d deploystack -c "SELECT pg_size_pretty(pg_database_size('deploystack'));"
+
+# View active connections
+psql -U deploystack_user -d deploystack -c "SELECT count(*) FROM pg_stat_activity WHERE datname = 'deploystack';"
+```
+
+### Backup Strategy
+
+```bash
+# Create backup
+pg_dump -h localhost -U deploystack_user deploystack > backup.sql
+
+# Compressed backup
+pg_dump -h localhost -U deploystack_user deploystack | gzip > backup.sql.gz
+
+# Custom format (supports parallel restore)
+pg_dump -h localhost -U deploystack_user -Fc deploystack > backup.dump
+
+# Restore from backup
+psql -h localhost -U deploystack_user deploystack < backup.sql
+
+# Restore from custom format
+pg_restore -h localhost -U deploystack_user -d deploystack backup.dump
+```
+
+### Performance Tuning
+
+Edit PostgreSQL configuration (`postgresql.conf`):
+
+```conf
+# Memory settings
+shared_buffers = 256MB              # 25% of RAM
+effective_cache_size = 1GB          # 50-75% of RAM
+maintenance_work_mem = 64MB
+work_mem = 16MB
+
+# Connections
+max_connections = 100
+
+# Write-ahead log
+wal_buffers = 16MB
+checkpoint_completion_target = 0.9
+
+# Query planner
+random_page_cost = 1.1              # For SSD storage
+effective_io_concurrency = 200      # For SSD storage
+```
 
 ## Troubleshooting
 
-### "Database setup has already been performed"
-- This means your database is already configured
-- You can proceed to use the application normally
-- If you need to change databases, contact your system administrator
+### "Connection refused" or "Cannot connect"
 
-### "Configuration incomplete" or "Missing environment variables"
-- **For Turso**: Check that both Turso environment variables are set correctly
-- **Restart your server** after setting environment variables
+**Solutions**:
+1. **Check PostgreSQL is running**:
+   ```bash
+   # For system service
+   sudo systemctl status postgresql
 
-### "Failed to connect" or "Network error"
-- **Check your internet connection**
-- **For Turso**: Verify your database URL and auth token are correct
-- **Check server logs** for more detailed error messages
+   # For Docker
+   docker ps | grep postgres
+   ```
 
-### Setup page keeps loading
-- **Check that your backend server is running**
-- **Verify the backend is accessible** from your browser
-- **Check browser console** for any JavaScript errors
+2. **Check PostgreSQL is listening**:
+   ```bash
+   netstat -an | grep 5432
+   ```
 
-## Changing Databases Later
+3. **Check PostgreSQL configuration** (`postgresql.conf`):
+   ```conf
+   listen_addresses = '*'              # Or specific IP
+   ```
 
-**Important**: Once you've set up a database, changing to a different type requires:
+4. **Check firewall rules**:
+   ```bash
+   # Allow PostgreSQL port
+   sudo ufw allow 5432
+   ```
 
-1. **Backing up your data** (if you have important information)
-2. **Stopping your DeployStack instance**
-3. **Removing the database selection file** (`persistent_data/db.selection.json`)
-4. **Updating environment variables** for the new database type
-5. **Restarting and going through setup again**
+### "Authentication failed"
 
-**Note**: This will reset your application data, so make sure to backup anything important first.
+**Solutions**:
+1. **Verify credentials**: Double-check username and password
+2. **Check pg_hba.conf**:
+   ```conf
+   # Allow password authentication
+   host    all             all             0.0.0.0/0               md5
+   ```
+3. **Reload PostgreSQL** after config changes:
+   ```bash
+   sudo systemctl reload postgresql
+   ```
 
-## Getting Help
+### "Database does not exist"
 
-If you're having trouble with database setup:
+**Solutions**:
+1. **Create database** as shown in Step 1
+2. **Check database name** matches environment variable
+3. **Verify user has access**:
+   ```sql
+   \l    -- List all databases
+   ```
 
-1. **Check the server logs** for detailed error messages
-2. **Verify environment variables** are set correctly
-3. **Ensure your server has internet access** (for cloud databases)
-4. **Contact support** with your error messages and setup details
+### "Permission denied"
+
+**Solutions**:
+1. **Grant proper privileges** as shown in Step 1
+2. **Check user permissions**:
+   ```sql
+   \du   -- List user permissions
+   ```
+
+### Migration Errors
+
+**Solutions**:
+1. **Check PostgreSQL version**: DeployStack requires PostgreSQL 13+
+2. **Verify user privileges**: User needs CREATE, ALTER, DROP permissions
+3. **Check logs**: Review backend logs for detailed error messages
+4. **Manual migration reset** (development only):
+   ```sql
+   -- Connect to database
+   psql -U deploystack_user -d deploystack
+
+   -- Drop all tables
+   DROP SCHEMA public CASCADE;
+   CREATE SCHEMA public;
+   GRANT ALL ON SCHEMA public TO deploystack_user;
+
+   -- Restart backend to re-apply migrations
+   ```
+
+## Monitoring
+
+### Check Database Health
+
+```sql
+-- Check active connections
+SELECT count(*) FROM pg_stat_activity WHERE datname = 'deploystack';
+
+-- Check table sizes
+SELECT schemaname, tablename, pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename))
+FROM pg_tables
+WHERE schemaname = 'public'
+ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+
+-- Check index usage
+SELECT schemaname, tablename, indexname, idx_scan as scans
+FROM pg_stat_user_indexes
+ORDER BY idx_scan DESC;
+
+-- Check slow queries
+SELECT pid, now() - query_start as duration, query
+FROM pg_stat_activity
+WHERE state = 'active' AND now() - query_start > interval '1 second'
+ORDER BY duration DESC;
+```
 
 ## Security Notes
 
-- **Keep your API tokens secure** - never share them publicly
-- **Use environment variables** - don't put credentials directly in code
-- **Regularly rotate API tokens** for cloud databases
-- **Backup your SQLite database file** if using SQLite
+- **Use strong passwords** for database users
+- **Enable SSL/TLS** for production deployments
+- **Restrict network access** using pg_hba.conf
+- **Regular backups** are essential for data protection
+- **Rotate passwords** periodically
+- **Monitor access logs** for suspicious activity
 
 ## Next Steps
 
 After successful database setup:
 
-1. **Create your administrator account**
-2. **Configure your application settings**
-3. **Set up user authentication** (email, GitHub, etc.)
-4. **Invite your team members**
+1. **Complete Setup Wizard** - Create your admin account
+2. **Configure Global Settings** - Set up email, authentication, etc.
+3. **Deploy Satellites** - Set up MCP server management infrastructure
+4. **Create Teams** - Invite team members and set up workspaces
 
 Your DeployStack instance is now ready to use!

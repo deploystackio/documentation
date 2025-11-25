@@ -32,7 +32,8 @@
               "/general/mcp-catalog",
               "/general/mcp-installation",
               "/general/mcp-categories",
-              "/general/mcp-admin-schema-workflow"
+              "/general/mcp-admin-schema-workflow",
+              "/general/mcp-oauth"
             ]
           },
           {
@@ -142,8 +143,7 @@
             "group": "Database",
             "pages": [
               "/development/backend/database/index",
-              "/development/backend/database/sqlite",
-              "/development/backend/database/turso"
+              "/development/backend/database/postgresql"
             ]
           },
           {
