@@ -618,14 +618,18 @@ export const smtpSettings: GlobalSettingsModule = {
   settings: [
     {
       key: 'smtp.host',
+      name: 'SMTP Host',
       defaultValue: '',
+      type: 'string',
       description: 'SMTP server hostname (e.g., smtp.gmail.com)',
       encrypted: false,
       required: true
     },
     {
       key: 'smtp.password',
+      name: 'SMTP Password',
       defaultValue: '',
+      type: 'string',
       description: 'SMTP authentication password',
       encrypted: true,
       required: true
@@ -634,6 +638,20 @@ export const smtpSettings: GlobalSettingsModule = {
   ]
 };
 ```
+
+### Setting Properties
+
+Each setting in the `settings` array requires these properties:
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `key` | `string` | Yes | Unique identifier using dot notation (e.g., `smtp.host`) |
+| `name` | `string` | Yes | Human-readable label for frontend display (e.g., `SMTP Host`) |
+| `defaultValue` | `string \| number \| boolean` | Yes | Default value when setting is created |
+| `type` | `'string' \| 'number' \| 'boolean'` | Yes | Value type for validation and UI rendering |
+| `description` | `string` | Yes | Help text explaining what the setting does |
+| `encrypted` | `boolean` | Yes | Whether to encrypt the value in the database |
+| `required` | `boolean` | Yes | Whether the setting must have a non-empty value |
 
 ### Startup Behavior
 
@@ -750,14 +768,18 @@ export const myServiceSettings: GlobalSettingsModule = {
   settings: [
     {
       key: 'my-service.api_key',
+      name: 'API Key',
       defaultValue: '',
+      type: 'string',
       description: 'API key for My Service',
       encrypted: true,
       required: true
     },
     {
       key: 'my-service.enabled',
-      defaultValue: 'false',
+      name: 'Enable Service',
+      defaultValue: false,
+      type: 'boolean',
       description: 'Enable My Service integration',
       encrypted: false,
       required: false

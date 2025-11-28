@@ -99,7 +99,8 @@
               "/development/frontend/ui/design-system-pagination",
               "/development/frontend/ui/design-system-structured-data",
               "/development/frontend/ui/design-system-table",
-              "/development/frontend/ui/custom-ui-components"
+              "/development/frontend/ui/custom-ui-components",
+              "/development/frontend/ui/siteHeader-with-breadcrumbs"
             ]
           }
         ]
