@@ -1,0 +1,128 @@
+---
+title: SiteHeader with Breadcrumbs
+description: Guide for implementing dynamic breadcrumb navigation in the dashboard header.
+---
+
+
+The SiteHeader component displays a sidebar toggle and breadcrumb navigation at the top of each dashboard page. Views set their breadcrumbs using the `useBreadcrumbs` composable.
+
+## Component Locations
+
+```
+services/frontend/src/
+ ├─ composables/
+    └─ useBreadcrumbs.ts     # Shared breadcrumb state management
+ ├─ components/
+    ├─ SiteHeader.vue        # Header with sidebar trigger + breadcrumbs
+    └─ DashboardLayout.vue   # Layout wrapper that includes SiteHeader
+```
+
+## Composable API
+
+The `useBreadcrumbs` composable manages breadcrumb state across all views.
+
+### BreadcrumbItem Interface
+
+```typescript
+interface BreadcrumbItem {
+  label: string   // Display text
+  href?: string   // Optional link - omit for current page
+}
+```
+
+### Returned Values
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `breadcrumbs` | `Readonly<Ref<BreadcrumbItem[]>>` | Current breadcrumb items |
+| `setBreadcrumbs` | `(items: BreadcrumbItem[]) => void` | Set the breadcrumb trail |
+| `clearBreadcrumbs` | `() => void` | Clear all breadcrumbs |
+
+## Usage Patterns
+
+### Static Pages
+
+For pages with fixed titles like Dashboard or Settings:
+
+```vue
+<script setup lang="ts">
+import { onMounted } from 'vue'
+import { useBreadcrumbs } from '@/composables/useBreadcrumbs'
+
+const { setBreadcrumbs } = useBreadcrumbs()
+
+onMounted(() => {
+  setBreadcrumbs([{ label: 'Dashboard' }])
+})
+</script>
+```
+
+### Detail Pages with Dynamic Data
+
+For pages that load data (team detail, server view), set breadcrumbs twice:
+
+```vue
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
+import { useBreadcrumbs } from '@/composables/useBreadcrumbs'
+import { TeamService } from '@/services/teamService'
+
+const route = useRoute()
+const { setBreadcrumbs } = useBreadcrumbs()
+const team = ref(null)
+
+onMounted(async () => {
+  // Initial loading state
+  setBreadcrumbs([
+    { label: 'Teams', href: '/teams' },
+    { label: 'Loading...' }
+  ])
+
+  // Fetch and update with actual name
+  team.value = await TeamService.getTeam(route.params.id)
+  setBreadcrumbs([
+    { label: 'Teams', href: '/teams' },
+    { label: team.value.name }
+  ])
+})
+</script>
+```
+
+### Nested Pages
+
+For deeply nested pages, include the full path:
+
+```vue
+setBreadcrumbs([
+  { label: 'MCP Catalog', href: '/admin/mcp-server-catalog' },
+  { label: server.name, href: `/admin/mcp-server-catalog/view/${serverId}` },
+  { label: 'Edit' }
+])
+```
+
+## Header Layout
+
+The SiteHeader renders in this order:
+1. **SidebarTrigger** - Toggle button for collapsing/expanding sidebar
+2. **Separator** - Vertical divider
+3. **Breadcrumbs** - Navigation trail with responsive visibility
+
+On mobile, intermediate breadcrumb items are hidden, showing only the current page.
+
+## View Template
+
+Views no longer pass a `:title` prop to DashboardLayout:
+
+```vue
+<template>
+  <DashboardLayout>
+    <!-- Page content -->
+  </DashboardLayout>
+</template>
+```
+
+## Related Documentation
+
+- [UI Design System](/development/frontend/ui/) - Component design patterns
+- [Frontend Architecture](/development/frontend/architecture) - View and composable guidelines
