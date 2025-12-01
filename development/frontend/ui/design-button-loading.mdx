@@ -1,43 +1,32 @@
 ---
 title: Button with Loading States
-description: Guide for using the enhanced Button component with built-in loading states.
+description: Guide for implementing loading states in buttons using the Spinner component.
 ---
 
 
-The Button component includes built-in loading state functionality for async operations.
+Use the shadcn-vue Spinner component inside buttons to show loading states during async operations.
 
-## Component Location
+## Component Locations
 
 ```
 services/frontend/src/components/ui/button/
-├── Button.vue      # Enhanced button component with loading states
+├── Button.vue      # Standard shadcn-vue button
 └── index.ts        # Button variants and exports
+
+services/frontend/src/components/ui/spinner/
+├── Spinner.vue     # Animated loading spinner
+└── index.ts        # Spinner exports
 ```
 
-## Features
+## Usage
 
-- **Automatic spinner** with `Loader2` icon from lucide-vue-next
-- **Auto-disable** during loading to prevent double submissions
-- **Optional loading text** to display custom messages
-- **Size-aware spinner** that scales with button size
-- **Works with all variants** (default, destructive, outline, etc.)
-
-## Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `loading` | `boolean` | `false` | Shows spinner and disables button |
-| `loadingText` | `string` | `undefined` | Optional text during loading |
-| `disabled` | `boolean` | `false` | Disable independent of loading |
-| `variant` | `string` | `'default'` | Button style variant |
-| `size` | `string` | `'default'` | Button size (sm, default, lg, icon) |
-
-## Usage Example
+Import both Button and Spinner, then conditionally render the Spinner inside the button:
 
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
 import { toast } from 'vue-sonner'
 
 const isSubmitting = ref(false)
@@ -56,26 +45,71 @@ const handleSubmit = async () => {
 </script>
 
 <template>
-  <Button 
-    :loading="isSubmitting"
-    loading-text="Saving..."
+  <Button
+    :disabled="isSubmitting"
     @click="handleSubmit"
   >
+    <Spinner v-if="isSubmitting" class="mr-2" />
     Save Changes
   </Button>
 </template>
 ```
 
-## Implementation Details
+## Pattern
 
-The component automatically:
-- Displays a spinning `Loader2` icon when `loading` is true
-- Hides the original slot content during loading
-- Shows `loadingText` alongside the spinner (if provided)
-- Disables the button to prevent multiple clicks
-- Adjusts spinner size based on button size prop
+The loading button pattern consists of three parts:
 
-For implementation details, see the source code at `services/frontend/src/components/ui/button/Button.vue`.
+1. **Disable the button** - Add `:disabled="isLoading"` to prevent double clicks
+2. **Show the spinner** - Add `<Spinner v-if="isLoading" class="mr-2" />` before the text
+3. **Keep the text visible** - The button text remains visible during loading
+
+## Spinner Customization
+
+The Spinner component accepts a `class` prop for styling:
+
+```vue
+<!-- Smaller spinner -->
+<Spinner v-if="isLoading" class="mr-2 size-3" />
+
+<!-- Different color -->
+<Spinner v-if="isLoading" class="mr-2 text-white" />
+```
+
+## Examples
+
+### Form Submit Button
+
+```vue
+<Button :disabled="isSubmitting" @click="handleSubmit">
+  <Spinner v-if="isSubmitting" class="mr-2" />
+  {{ isSubmitting ? 'Saving...' : 'Save Changes' }}
+</Button>
+```
+
+### Delete Button
+
+```vue
+<Button
+  variant="destructive"
+  :disabled="isDeleting"
+  @click="handleDelete"
+>
+  <Spinner v-if="isDeleting" class="mr-2" />
+  Delete
+</Button>
+```
+
+### With Validation
+
+```vue
+<Button
+  :disabled="!isFormValid || isSubmitting"
+  @click="handleSubmit"
+>
+  <Spinner v-if="isSubmitting" class="mr-2" />
+  Submit
+</Button>
+```
 
 ## Related Documentation
 
