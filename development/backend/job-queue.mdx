@@ -30,7 +30,7 @@ Background worker loop that polls the database every second, processes jobs sequ
 Plugin-style pattern where each worker implements the `Worker` interface. Workers are registered by type (e.g., `send_email`, `process_csv`, `sync_registry`) and execute specific job types.
 
 ### Database Tables
-Two tables provide persistence: `queueJobs` stores individual jobs with payload and status, while `queueJobBatches` tracks groups of related jobs for progress monitoring.
+Two tables provide persistence: `queueJobs` stores individual jobs with payload, status, and result data, while `queueJobBatches` tracks groups of related jobs for progress monitoring.
 
 ## Core Concepts
 
@@ -92,9 +92,11 @@ interface Worker {
 interface WorkerResult {
   success: boolean;
   message?: string;
-  data?: any;
+  data?: any;  // Persisted to database on job completion
 }
 ```
+
+The `data` field in `WorkerResult` is automatically stored in the database when a job completes successfully. This allows you to inspect job results through the admin UI or database queries.
 
 ### Basic Worker Pattern
 
@@ -136,7 +138,8 @@ export class EmailWorker implements Worker {
 
       return {
         success: true,
-        message: 'Email sent successfully'
+        message: 'Email sent successfully',
+        data: { sentAt: new Date().toISOString(), recipient: emailPayload.to }
       };
     } catch (error) {
       this.logger.error({ 
@@ -365,25 +368,25 @@ Jobs transition through these states:
 
 ### Database Queries
 
-Check job status:
+Check job status and result:
 
 ```sql
-SELECT id, type, status, created_at, started_at, completed_at, attempts
-FROM queue_jobs 
+SELECT id, type, status, payload, result, error, created_at, completed_at, attempts
+FROM "queueJobs"
 WHERE id = ?;
 ```
 
 Monitor batch progress:
 
 ```sql
-SELECT 
+SELECT
   b.id,
   b.total_jobs,
   COUNT(CASE WHEN j.status = 'completed' THEN 1 END) as completed,
   COUNT(CASE WHEN j.status = 'failed' THEN 1 END) as failed,
   COUNT(CASE WHEN j.status = 'processing' THEN 1 END) as processing
-FROM queue_job_batches b
-LEFT JOIN queue_jobs j ON j.batch_id = b.id
+FROM "queueJobBatches" b
+LEFT JOIN "queueJobs" j ON j.batch_id = b.id
 WHERE b.id = ?
 GROUP BY b.id;
 ```
@@ -414,32 +417,42 @@ For the complete database schema, see [schema.ts](https://github.com/deploystack
 ### Jobs Table
 
 ```sql
-CREATE TABLE queue_jobs (
+CREATE TABLE "queueJobs" (
   id TEXT PRIMARY KEY,
   type TEXT NOT NULL,
-  payload TEXT,
+  payload TEXT NOT NULL,
   status TEXT DEFAULT 'pending',
+  scheduled_for TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   attempts INTEGER DEFAULT 0,
   max_attempts INTEGER DEFAULT 3,
-  scheduled_for INTEGER,
-  created_at INTEGER DEFAULT (unixepoch()),
-  started_at INTEGER,
-  completed_at INTEGER,
-  last_error TEXT,
-  batch_id TEXT,
-  FOREIGN KEY (batch_id) REFERENCES queue_job_batches(id)
+  error TEXT,
+  result TEXT,
+  batch_id TEXT REFERENCES "queueJobBatches"(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  completed_at TIMESTAMP WITH TIME ZONE
 );
 ```
+
+| Column | Description |
+|--------|-------------|
+| `payload` | JSON input data passed to the worker |
+| `error` | Error message if job failed |
+| `result` | JSON output data returned by the worker on success |
 
 ### Batches Table
 
 ```sql
-CREATE TABLE queue_job_batches (
+CREATE TABLE "queueJobBatches" (
   id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
+  type TEXT NOT NULL,
   total_jobs INTEGER NOT NULL,
-  created_at INTEGER DEFAULT (unixepoch()),
-  metadata TEXT
+  completed_jobs INTEGER DEFAULT 0,
+  failed_jobs INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'pending',
+  metadata TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  completed_at TIMESTAMP WITH TIME ZONE
 );
 ```
 
@@ -451,8 +464,8 @@ CREATE TABLE queue_job_batches (
 2. Check if job's `scheduled_for` time has passed
 3. Lock job by setting status to `processing`
 4. Execute worker for job type
-5. Update status based on result
-6. Implement exponential backoff for retries (1s, 2s, 4s, etc.)
+5. On success: store worker's `data` in `result` column, set status to `completed`
+6. On failure: implement exponential backoff for retries (1s, 2s, 4s, etc.)
 
 ### Resource Usage
 
@@ -486,8 +499,11 @@ Balance between responsiveness and database load. Adequate latency for backgroun
 
 - Not suitable for sub-second latency requirements
 - Single-server deployment (no distributed workers)
-- No built-in job scheduling (cron-like patterns)
 - Sequential processing limits throughput
+
+<Info>
+For recurring scheduled tasks, see the [Cron Job Scheduling](/development/backend/cron) documentation which integrates with this job queue system.
+</Info>
 
 ## Migration Path
 
@@ -501,10 +517,10 @@ Worker interface remains compatible, simplifying migration.
 
 ## Related Documentation
 
+- [Cron Job Scheduling](/development/backend/cron) - Schedule recurring tasks using cron expressions
 - [Database Management](/development/backend/database/) - Database configuration and schema
 - [Global Event Bus](/development/backend/events) - Event system for real-time notifications
 - [Logging](/development/backend/logging) - Logging best practices and patterns
-- [API Documentation](/development/backend/api/) - REST API endpoints and patterns
 
 ## Common Use Cases
 
