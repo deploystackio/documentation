@@ -56,7 +56,8 @@
               "self-hosted/setup",
               "self-hosted/docker-compose",
               "self-hosted/upgrade-guide",
-              "self-hosted/database-setup"
+              "self-hosted/database-setup",
+              "self-hosted/production-satellite"
             ]
           },
           {
