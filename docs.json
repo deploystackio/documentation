@@ -18,6 +18,7 @@
             "pages": [
               "index",
               "general/quick-start",
+              "general/limitations",
               "general/architecture",
               "general/teams",
               "general/roles",
