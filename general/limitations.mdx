@@ -1,0 +1,148 @@
+---
+title: Platform Limitations
+description: Understand when DeployStack global satellites work and when you need local MCP or team satellites instead
+---
+
+DeployStack runs MCP servers on **remote satellite infrastructure** - not on your local machine. This architecture provides zero-installation convenience but means some MCP servers won't work on global satellites.
+
+This page helps you understand what works, what doesn't, and your alternatives.
+
+## How Satellites Work
+
+When you install an MCP server from the DeployStack catalog, the satellite:
+
+1. Spawns the MCP server process on remote infrastructure
+2. Executes tool calls on the satellite, not your machine
+3. Returns results back to your AI client
+
+This means the MCP server has access to the **satellite's environment**, not yours.
+
+## What Doesn't Work on Global Satellites
+
+### Local File Access
+
+MCP servers that need to read or write files on your machine won't work:
+
+| MCP Server | Why It Doesn't Work |
+|------------|---------------------|
+| SQLite MCP | Cannot access your local `.db` files |
+| Filesystem MCP | Cannot browse your local directories |
+| Obsidian MCP | Cannot access your local vault |
+| Desktop Commander | Cannot control your local desktop |
+
+<Warning>
+Any MCP server that reads `~/Documents`, `/home/user/`, or similar local paths will only see the satellite's filesystem - not yours.
+</Warning>
+
+### Local Network Resources
+
+MCP servers that connect to `localhost` or internal network services:
+
+| Resource | Example |
+|----------|---------|
+| Local databases | `localhost:5432` (PostgreSQL), `localhost:3306` (MySQL) |
+| Local APIs | `http://localhost:8080/api` |
+| Internal services | `http://internal.company.com` (behind firewall) |
+| Development servers | Your local dev environment |
+
+The satellite cannot reach services running on your machine or inside your corporate network.
+
+### Desktop & GUI Applications
+
+MCP servers requiring graphical interfaces or desktop integration:
+
+| MCP Server | Limitation |
+|------------|------------|
+| Playwright (headed mode) | No display server on satellites |
+| Puppeteer (headed mode) | Same issue - no visible browser |
+| Screenshot tools | No desktop to capture |
+| Clipboard MCP | No access to your clipboard |
+
+<Info>
+**Playwright and Puppeteer can work in headless mode**, but require browser binaries pre-installed on the satellite. This is not available on global satellites by default.
+</Info>
+
+### Hardware Access
+
+MCP servers that interact with physical devices:
+
+- USB devices
+- Printers
+- Cameras and microphones
+- Serial ports
+- Bluetooth devices
+
+## Your Alternatives
+
+### Option 1: Run Locally
+
+For MCP servers that need local resources, run them on your machine i.e.:
+
+```json
+{
+  "mcpServers": {
+    "sqlite": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-sqlite", "/path/to/your/database.db"]
+    }
+  }
+}
+```
+
+You can use DeployStack for most MCP servers and run specific ones locally.
+
+### Option 2: Deploy a Team Satellite
+
+For internal network access, deploy a [Team Satellite](/self-hosted/production-satellite) inside your infrastructure:
+
+- Runs within your corporate network
+- Can access internal databases and APIs
+- You control what's installed (including browser binaries)
+- Full process isolation with nsjail
+
+Team satellites connect to your DeployStack control plane but run on your hardware.
+
+### Option 3: Use Cloud-Accessible Resources
+
+Instead of local resources, use cloud alternatives:
+
+| Local Resource | Cloud Alternative |
+|----------------|-------------------|
+| Local SQLite | Turso, PlanetScale, Supabase |
+| Local files | S3, Google Drive, Dropbox |
+| Local PostgreSQL | Neon, Supabase, RDS |
+| Internal APIs | Expose via tunnel (Cloudflare, ngrok) |
+
+## What Works Well on Global Satellites
+
+Global satellites excel at MCP servers that:
+
+- **Call external APIs** - GitHub, Slack, Notion, Linear, etc.
+- **Process data** - Text manipulation, calculations, transformations
+- **Search the web** - Brave Search, Exa, web scraping (headless)
+- **Interact with SaaS** - Any service with a public API
+- **Generate content** - Image generation, text processing
+
+These MCP servers only need internet access and API credentials - both available on satellites.
+
+## Quick Reference
+
+| MCP Server Type | Global Satellite | Team Satellite | Local |
+|-----------------|------------------|----------------|-------|
+| GitHub, Slack, Notion |  |  |  |
+| External APIs |  |  |  |
+| Web scraping (headless) | � Requires setup |  |  |
+| Local SQLite files | L | L |  |
+| Local filesystem | L | L |  |
+| Internal databases | L |  |  |
+| Internal APIs | L |  |  |
+| Desktop automation | L | L |  |
+| Hardware access | L | L |  |
+
+<Note>
+**Team Satellites** bridge the gap between convenience and local access. They run on your infrastructure but integrate with DeployStack's control plane for credential management and team governance.
+</Note>
+
+---
+
+**Need help deciding?** Join our [Discord community](https://discord.gg/42Ce3S7b3b) and we'll help you figure out what works best for your use case.
