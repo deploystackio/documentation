@@ -116,6 +116,10 @@ All communication uses newline-delimited JSON following JSON-RPC 2.0 specificati
 **Idle Process Management**: Processes that remain inactive for extended periods are automatically terminated and respawned on-demand to optimize memory usage. See [Idle Process Management](/development/satellite/idle-process-management) for details on automatic termination, dormant state tracking, and respawning.
 </Info>
 
+<Info>
+**Configuration Updates**: When a user updates their MCP server configuration (args, env) via the dashboard, the backend sends a configure command to the satellite. For stdio servers, the satellite automatically restarts the process with the new configuration. See [Backend Communication](/development/satellite/backend-communication) for the command flow.
+</Info>
+
 ### Lifecycle States
 
 **starting:**
@@ -161,7 +165,7 @@ Process termination follows a two-phase graceful shutdown approach to ensure cle
 
 #### Termination Types
 
-The system handles three types of intentional terminations differently:
+The system handles four types of intentional terminations differently:
 
 **1. Manual Termination**
 - Triggered by explicit restart or stop commands
@@ -183,6 +187,19 @@ The system handles three types of intentional terminations differently:
 - Complete cleanup: process, dormant config, tools, restart tracking
 - No auto-restart triggered (intentional removal)
 - Invoked via `removeServerCompletely()` method
+
+**4. Configuration Update Restart**
+- Triggered when stdio server configuration is modified (e.g., user args change)
+- Detected via `DynamicConfigManager` comparing old vs new configuration
+- Existing process terminated with graceful shutdown
+- Tools cleared from cache via `stdioToolDiscoveryManager.clearServerTools()`
+- New process spawned with updated configuration (new args, env)
+- Tool discovery runs automatically on the new process
+- Enables real-time configuration updates without satellite restart
+
+<Info>
+**HTTP/SSE Servers**: Unlike stdio servers, HTTP/SSE servers don't require restart on config changes. Their configuration (headers, query params, URL) is read fresh on each request, so updates are immediate.
+</Info>
 
 #### Crash Detection vs Intentional Shutdown
 
