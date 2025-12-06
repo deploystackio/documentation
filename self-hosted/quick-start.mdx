@@ -38,6 +38,10 @@ The fastest way to get DeployStack backend and frontend running with proper netw
     <Info>
     **Note**: This deploys the backend and frontend only. The satellite service must be deployed separately after completing the setup wizard (see [Satellite Service](#satellite-service) section below).
     </Info>
+
+    <Info>
+    **Default Database Password**: The Docker Compose file uses a default PostgreSQL password (`deploystack`) for quick demos and local testing. For production or internet-exposed deployments, add `POSTGRES_PASSWORD=your_secure_password` before the command.
+    </Info>
   </Step>
 
   <Step title="Access DeployStack">
