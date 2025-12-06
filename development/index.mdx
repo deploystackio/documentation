@@ -53,30 +53,70 @@ DeployStack implements an MCP-as-a-Service architecture that eliminates installa
 - Node.js 18 or higher
 - npm 8 or higher
 - Git for version control
-- DeployStack account at [cloud.deploystack.io](https://cloud.deploystack.io) (for satellite testing)
+- Docker (for local PostgreSQL)
 
 ### Quick Setup
 
-```bash
-# Clone the repository
-git clone https://github.com/deploystackio/deploystack.git
-cd deploystack
+<Steps>
+  <Step title="Clone Repository">
+    ```bash
+    git clone https://github.com/deploystackio/deploystack.git
+    cd deploystack
+    ```
+  </Step>
 
-# Install dependencies for all services
-cd services/frontend && npm install
-cd ../backend && npm install
-cd ../satellite && npm install
+  <Step title="Start PostgreSQL (Terminal 1)">
+    ```bash
+    cd services/backend
+    npm install
+    npm run postgres:local
+    ```
 
-# Start development servers (in separate terminals)
-# Terminal 1 - Backend
-cd services/backend && npm run dev  # http://localhost:3000
+    This starts PostgreSQL 18 in Docker with default credentials (`deploystack`/`deploystack`).
+  </Step>
 
-# Terminal 2 - Frontend
-cd services/frontend && npm run dev  # http://localhost:5173
+  <Step title="Configure and Start Backend (Terminal 1)">
+    ```bash
+    cp .env.example .env
+    npm run dev
+    ```
 
-# Terminal 3 - Satellite (for local satellite testing)
-cd services/satellite && npm run dev   # http://localhost:9095
-```
+    Backend runs at http://localhost:3000
+  </Step>
+
+  <Step title="Complete Setup Wizard">
+    Open http://localhost:5173/setup in your browser to:
+    - Initialize the database
+    - Create your admin account
+    - Configure basic settings
+  </Step>
+
+  <Step title="Start Frontend (Terminal 2)">
+    ```bash
+    cd services/frontend
+    npm install
+    npm run dev
+    ```
+
+    Frontend runs at http://localhost:5173
+  </Step>
+
+  <Step title="Start Satellite (Terminal 3 - Optional)">
+    ```bash
+    cd services/satellite
+    npm install
+    cp .env.example .env
+    # Edit .env: add DEPLOYSTACK_REGISTRATION_TOKEN from admin panel
+    npm run dev
+    ```
+
+    Satellite runs at http://localhost:3001
+
+    <Info>
+    To get a registration token, go to Admin → Satellites → Pairing in the DeployStack UI after completing the setup wizard.
+    </Info>
+  </Step>
+</Steps>
 
 ## Development Workflow
 
