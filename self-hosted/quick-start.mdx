@@ -46,14 +46,14 @@ The fastest way to get DeployStack backend and frontend running with proper netw
     - **Backend API**: [http://localhost:3000](http://localhost:3000)
   </Step>
 
-  <Step title="Complete Setup Wizard">
-    Follow the on-screen setup wizard to:
-    - Create your admin account
-    - Configure basic settings
+  <Step title="Create Admin Account">
+    When opening the frontend, you will be redirected to `http://localhost:8080/login`
+    - Go to "Create Account" to set up your admin user ([read more about user types](/roles))
+    - Login with your new admin account
   </Step>
 
   <Step title="Deploy Satellite">
-    After completing the setup wizard, proceed to the [Satellite Service](#satellite-service) section below to deploy your first satellite and start managing MCP servers.
+    After creating your admin account, proceed to the [Satellite Service](#satellite-service) section below to deploy your first satellite and start managing MCP servers.
   </Step>
 </Steps>
 
@@ -209,25 +209,43 @@ After completing the basic backend and frontend setup, deploy at least one satel
     The token format will be: `deploystack_satellite_global_eyJhbGciOi...`
   </Step>
   
+  <Step title="Find Docker Network">
+    The satellite must join the same Docker network as the backend. Find your network name:
+
+    ```bash
+    docker network ls | grep deploystack
+    ```
+
+    You'll see something like `docker-compose_deploystack-network` or similar. Use this name in the next step.
+  </Step>
+
   <Step title="Start Satellite Service">
+    <Warning>
+    The satellite requires a running backend. If the backend is not reachable, the satellite will exit immediately. Make sure the backend is running before proceeding.
+    </Warning>
+
     **For local development (connecting from same machine):**
     ```bash
-    docker run -d \
-      --name deploystack-satellite \
+    docker run \
+      --network <your-network-name> \
       -p 3001:3001 \
-      -e DEPLOYSTACK_BACKEND_URL="http://localhost:3000" \
+      -e DEPLOYSTACK_BACKEND_URL="http://deploystack-backend:3000" \
       -e DEPLOYSTACK_SATELLITE_NAME="my-satellite-001" \
       -e DEPLOYSTACK_REGISTRATION_TOKEN="your-token-here" \
       -v deploystack_satellite_persistent:/app/persistent_data \
       deploystack/satellite:latest
     ```
 
+    Replace `<your-network-name>` with the network from the previous step (e.g., `docker-compose_deploystack-network`).
+
+    The logs will be displayed directly in your terminal. You should see the satellite connect to the backend and register successfully.
+
     **For remote access (connecting from MCP clients via domain/IP):**
     ```bash
-    docker run -d \
-      --name deploystack-satellite \
+    docker run \
+      --network <your-network-name> \
       -p 3001:3001 \
-      -e DEPLOYSTACK_BACKEND_URL="http://YOUR_SERVER_IP:3000" \
+      -e DEPLOYSTACK_BACKEND_URL="http://deploystack-backend:3000" \
       -e DEPLOYSTACK_SATELLITE_URL="https://satellite.example.com" \
       -e DEPLOYSTACK_SATELLITE_NAME="my-satellite-001" \
       -e DEPLOYSTACK_REGISTRATION_TOKEN="your-token-here" \
@@ -242,7 +260,7 @@ After completing the basic backend and frontend setup, deploy at least one satel
     - Use base URL only (e.g., `https://satellite.example.com`) - no `/mcp` or `/sse` paths
     - Required for OAuth authentication to work with remote MCP clients
     </Info>
-    
+
     <Warning>
     **Satellite Name Requirements:**
     - 10-32 characters
@@ -250,19 +268,15 @@ After completing the basic backend and frontend setup, deploy at least one satel
     - No spaces or special characters
     </Warning>
   </Step>
-  
+
   <Step title="Verify Satellite Registration">
-    Check the satellite logs to confirm successful registration:
-    
-    ```bash
-    docker logs deploystack-satellite
-    ```
-    
-    You should see:
+    In the terminal output, you should see:
     ```
     ✅ Satellite registered successfully: my-satellite-001
     🔑 API key received and ready for authenticated communication
     ```
+
+    Once verified, you can stop the container with `Ctrl+C` and restart it in detached mode by adding `-d` flag to the command.
   </Step>
 </Steps>
 

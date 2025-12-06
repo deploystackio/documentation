@@ -144,13 +144,25 @@ The satellite must be deployed separately after completing the setup wizard:
    - Click "Generate Token" and copy the full token
    - Token format: `deploystack_satellite_global_eyJhbGc...`
 
-3. **Deploy Satellite with Docker**:
+3. **Find your Docker network name**:
+
+   The satellite must join the same network as the backend. Find your network name:
+   ```bash
+   docker network ls | grep deploystack
+   ```
+
+   You'll see something like `docker-compose_deploystack-network` or similar. Use this name in the next step.
+
+4. **Deploy Satellite with Docker**:
+
+   <Warning>
+   The satellite requires a running backend. If the backend is not reachable, the satellite will exit immediately. Make sure `docker-compose ps` shows the backend as healthy before proceeding.
+   </Warning>
 
    **For local development (connecting from same machine):**
    ```bash
    docker run -d \
-     --name deploystack-satellite \
-     --network deploystack-network \
+     --network <your-network-name> \
      -p 3001:3001 \
      -e DEPLOYSTACK_BACKEND_URL="http://deploystack-backend:3000" \
      -e DEPLOYSTACK_SATELLITE_NAME="docker-satellite-001" \
@@ -159,11 +171,12 @@ The satellite must be deployed separately after completing the setup wizard:
      deploystack/satellite:latest
    ```
 
+   Replace `<your-network-name>` with the network from step 3 (e.g., `docker-compose_deploystack-network`).
+
    **For remote access (connecting from MCP clients via domain/IP):**
    ```bash
    docker run -d \
-     --name deploystack-satellite \
-     --network deploystack-network \
+     --network <your-network-name> \
      -p 3001:3001 \
      -e DEPLOYSTACK_BACKEND_URL="http://deploystack-backend:3000" \
      -e DEPLOYSTACK_SATELLITE_URL="https://satellite.example.com" \
@@ -181,11 +194,13 @@ The satellite must be deployed separately after completing the setup wizard:
    - Required for OAuth authentication to work with remote MCP clients
    </Info>
 
-4. **Verify Satellite Registration**:
+5. **Verify Satellite Registration**:
    ```bash
-   docker logs deploystack-satellite
+   docker logs <container-id>
    # Should show: ✅ Satellite registered successfully: docker-satellite-001
    ```
+
+   Get the container ID from `docker ps`.
 
 <Info>
 **Note**: After initial registration, the satellite saves its API key to persistent storage. The registration token is only needed for the first startup. Container restarts will use the saved API key automatically.
