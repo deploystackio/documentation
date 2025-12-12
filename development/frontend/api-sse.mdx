@@ -1,0 +1,226 @@
+---
+title: Using Server-Sent Events (SSE)
+description: How to consume real-time SSE endpoints from the backend using the useSSE composable
+---
+
+# Using Server-Sent Events (SSE)
+
+Server-Sent Events (SSE) provide real-time, unidirectional communication from the backend to the frontend. This is useful for live updates without polling.
+
+## When to Use SSE
+
+Use SSE when you need:
+- Real-time updates from the server (activity streams, notifications, live stats)
+- Automatic reconnection on connection loss
+- Lower network overhead compared to polling
+
+<Note>
+SSE is unidirectional (server � client). For bidirectional communication, use WebSockets instead.
+</Note>
+
+## The useSSE Composable
+
+The `useSSE<T>` composable handles all SSE logic including connection management, auto-reconnect, and cleanup.
+
+### Import
+
+```typescript
+import { useSSE } from '@/composables/useSSE'
+import type { McpClientActivity } from '@/services/mcpClientActivityService'
+```
+
+### Basic Usage
+
+<Steps>
+  <Step title="Initialize the composable">
+    Call `useSSE<T>()` with your expected data type and the SSE event name:
+
+    ```typescript
+    const {
+      data: activities,
+      isLoading,
+      error,
+      connect,
+      disconnect
+    } = useSSE<McpClientActivity[]>('client_activity')
+    ```
+  </Step>
+
+  <Step title="Connect to the SSE endpoint">
+    Call `connect()` with the full SSE stream URL:
+
+    ```typescript
+    onMounted(() => {
+      const url = McpClientActivityService.getStreamUrl(teamId, {
+        limit: 20,
+        active_within_minutes: 30
+      })
+      connect(url)
+    })
+    ```
+  </Step>
+
+  <Step title="Use the reactive data">
+    The `data` ref will automatically update when the server sends new events:
+
+    ```vue
+    <template>
+      <div v-if="isLoading">Loading...</div>
+      <div v-else-if="error">{{ error }}</div>
+      <div v-else-if="activities">
+        <Item v-for="activity in activities" :key="activity.id">
+          {{ activity.client_name }}
+        </Item>
+      </div>
+    </template>
+    ```
+  </Step>
+</Steps>
+
+## Complete Example
+
+Here's the complete implementation from [McpClientConnectionsCard.vue](https://github.com/deploystackio/deploystack/blob/main/services/frontend/src/components/mcp-server/McpClientConnectionsCard.vue):
+
+```vue
+<script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue'
+import { useEventBus } from '@/composables/useEventBus'
+import { useSSE } from '@/composables/useSSE'
+import { McpClientActivityService } from '@/services/mcpClientActivityService'
+import type { McpClientActivity } from '@/services/mcpClientActivityService'
+
+const eventBus = useEventBus()
+
+const {
+  data: activities,
+  isLoading,
+  error,
+  connect,
+  disconnect
+} = useSSE<McpClientActivity[]>('client_activity')
+
+function connectToTeam(teamId: string) {
+  const url = McpClientActivityService.getStreamUrl(teamId, {
+    limit: 20,
+    active_within_minutes: 30
+  })
+  connect(url)
+}
+
+function handleTeamChange() {
+  const teamId = eventBus.getState<string>('selected_team_id')
+  if (teamId) {
+    connectToTeam(teamId)
+  } else {
+    disconnect()
+  }
+}
+
+onMounted(() => {
+  const teamId = eventBus.getState<string>('selected_team_id')
+  if (teamId) {
+    connectToTeam(teamId)
+  }
+  eventBus.on('team-selected', handleTeamChange)
+})
+
+onUnmounted(() => {
+  eventBus.off('team-selected', handleTeamChange)
+})
+</script>
+
+<template>
+  <div v-if="isLoading && !activities?.length">
+    Loading...
+  </div>
+
+  <div v-else-if="error">
+    <p>{{ error }}</p>
+    <button @click="handleTeamChange">Retry</button>
+  </div>
+
+  <div v-else-if="!activities?.length">
+    No active connections
+  </div>
+
+  <div v-else>
+    <Item v-for="activity in activities" :key="activity.id">
+      {{ activity.client_name }}
+    </Item>
+  </div>
+</template>
+```
+
+## API Reference
+
+### useSSE\<T\>()
+
+```typescript
+function useSSE<T>(
+  eventName: string,
+  options?: UseSSEOptions
+): UseSSEReturn<T>
+```
+
+**Parameters:**
+- `eventName`: The SSE event name to listen for (must match backend event name)
+- `options`: Optional configuration
+
+**Options:**
+```typescript
+interface UseSSEOptions {
+  reconnectDelay?: number      // Default: 5000ms
+  withCredentials?: boolean    // Default: true
+}
+```
+
+**Returns:**
+```typescript
+interface UseSSEReturn<T> {
+  data: Ref<T | null>           // Reactive data from SSE stream
+  isConnected: Ref<boolean>     // Connection status
+  isLoading: Ref<boolean>       // Initial loading state
+  error: Ref<string | null>     // Error message if any
+  connect: (url: string) => void    // Connect to SSE endpoint
+  disconnect: () => void            // Close connection
+}
+```
+
+## Auto-Reconnection
+
+The composable automatically handles reconnection when the connection is lost:
+- Reconnects after 5 seconds by default (configurable via `reconnectDelay`)
+- Maintains the last URL for reconnection
+- Clears any pending reconnection attempts on manual `disconnect()`
+
+<Info>
+The composable automatically disconnects when the component unmounts via `onUnmounted()`.
+</Info>
+
+## Backend SSE Event Format
+
+Your backend SSE endpoint must send events in this format:
+
+```typescript
+// Backend sends:
+reply.sse.send({
+  event: 'client_activity',  // Must match eventName in useSSE()
+  data: JSON.stringify({
+    activities: [...]  // Your actual data
+  })
+})
+```
+
+The composable will:
+1. Parse the JSON data
+2. Extract the first key's value (e.g., `activities` array)
+3. Update the `data` ref
+
+<Warning>
+Make sure the `event` name in your backend matches the `eventName` parameter in `useSSE()`. Mismatched event names will cause the composable to never receive data.
+</Warning>
+
+## Related Documentation
+
+- [Backend SSE Plugin Configuration](/development/backend/api/sse)
+- [useEventBus Composable](/development/frontend/event-bus)

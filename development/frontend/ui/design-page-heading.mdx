@@ -1,0 +1,252 @@
+---
+title: Page Heading
+description: Vercel-style page heading component with title, optional content, and action buttons.
+---
+
+The `DsPageHeading` component displays a page title with optional subtitle content and action buttons. It features a full-width bottom border that spans the entire viewport.
+
+## Component Location
+
+```
+services/frontend/src/components/ui/ds-page-heading/
+   DsPageHeading.vue   # Page heading component
+   index.ts            # Component exports
+```
+
+## Props
+
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `title` | `string` | Yes | Main page title |
+| `description` | `string` | No | Short description below title |
+
+## Slots
+
+| Slot | Description |
+|------|-------------|
+| `default` | Optional subtitle content below title (text-sm, normal text color, gap-4 from title) |
+| `actions` | Action buttons displayed on the right side |
+
+## Basic Usage
+
+```vue
+<script setup lang="ts">
+import NavbarLayout from '@/components/NavbarLayout.vue'
+import { DsPageHeading } from '@/components/ui/ds-page-heading'
+</script>
+
+<template>
+  <NavbarLayout>
+    <DsPageHeading title="Dashboard" />
+    <!-- Page content -->
+  </NavbarLayout>
+</template>
+```
+
+## With Description
+
+```vue
+<DsPageHeading
+  title="MCP Servers"
+  description="Manage your installed MCP server configurations"
+/>
+```
+
+## With Action Buttons
+
+Use the `#actions` slot to add buttons on the right side:
+
+```vue
+<script setup lang="ts">
+import { DsPageHeading } from '@/components/ui/ds-page-heading'
+import { Button } from '@/components/ui/button'
+import { Plus } from 'lucide-vue-next'
+</script>
+
+<template>
+  <DsPageHeading title="MCP Servers">
+    <template #actions>
+      <Button @click="handleInstall" class="flex items-center gap-2">
+        <Plus class="h-4 w-4" />
+        Install Server
+      </Button>
+    </template>
+  </DsPageHeading>
+</template>
+```
+
+## With Custom Content (Default Slot)
+
+Use the default slot to add flexible content below the title. This can include text, Vue components, or any custom markup:
+
+```vue
+<DsPageHeading title="Deployments">
+  All deployments from <span class="font-mono">lasims-projects-93a8104b</span>
+</DsPageHeading>
+```
+
+### With Dynamic Content
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const teamName = ref('My Team')
+</script>
+
+<template>
+  <DsPageHeading title="Team Settings">
+    Managing settings for <span class="font-semibold">{{ teamName }}</span>
+  </DsPageHeading>
+</template>
+```
+
+### With Vue Components
+
+```vue
+<DsPageHeading title="Server Details">
+  <Badge variant="secondary">Active</Badge>
+  <span class="ml-2">Last updated 5 minutes ago</span>
+</DsPageHeading>
+```
+
+## With Breadcrumb Navigation
+
+When adding breadcrumb navigation to a page heading, you **MUST** use `RouterLink` with the `as-child` pattern. Never use the `href` attribute directly on `BreadcrumbLink` as it creates a regular `<a>` element that causes full page reloads.
+
+```vue
+<script setup lang="ts">
+import { DsPageHeading } from '@/components/ui/ds-page-heading'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
+</script>
+
+<template>
+  <DsPageHeading title="Job Details">
+    <Breadcrumb>
+      <BreadcrumbList>
+        <BreadcrumbItem>
+          <BreadcrumbLink as-child>
+            <RouterLink to="/admin/jobs">Background Jobs</RouterLink>
+          </BreadcrumbLink>
+        </BreadcrumbItem>
+        <BreadcrumbSeparator />
+        <BreadcrumbItem>
+          <BreadcrumbPage>Job Details</BreadcrumbPage>
+        </BreadcrumbItem>
+      </BreadcrumbList>
+    </Breadcrumb>
+  </DsPageHeading>
+</template>
+```
+
+### Breadcrumb Rules
+
+| Do | Don't |
+|----|-------|
+| `<BreadcrumbLink as-child><RouterLink to="/path">` | `<BreadcrumbLink href="/path">` |
+| Use `RouterLink` for client-side navigation | Use `href` which causes full page reload |
+| Use `to` prop on RouterLink | Use `href` prop on BreadcrumbLink |
+
+### With Breadcrumb and Actions
+
+```vue
+<DsPageHeading title="Satellite Pairing">
+  <Breadcrumb>
+    <BreadcrumbList>
+      <BreadcrumbItem>
+        <BreadcrumbLink as-child>
+          <RouterLink to="/admin/satellites">Satellites</RouterLink>
+        </BreadcrumbLink>
+      </BreadcrumbItem>
+      <BreadcrumbSeparator />
+      <BreadcrumbItem>
+        <BreadcrumbPage>Pairing</BreadcrumbPage>
+      </BreadcrumbItem>
+    </BreadcrumbList>
+  </Breadcrumb>
+
+  <template #actions>
+    <Button @click="handleCreate">
+      <Plus class="h-4 w-4 mr-2" />
+      Create Token
+    </Button>
+  </template>
+</DsPageHeading>
+```
+
+## Full Example
+
+Combining all features:
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+import NavbarLayout from '@/components/NavbarLayout.vue'
+import { DsPageHeading } from '@/components/ui/ds-page-heading'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Plus, Settings } from 'lucide-vue-next'
+
+const projectId = ref('proj-abc123')
+</script>
+
+<template>
+  <NavbarLayout>
+    <DsPageHeading title="Deployments">
+      <!-- Default slot: custom content below title -->
+      All deployments from <span class="font-mono">{{ projectId }}</span>
+      <Badge variant="outline" class="ml-2">Production</Badge>
+
+      <!-- Actions slot: buttons on the right -->
+      <template #actions>
+        <Button variant="outline" size="sm">
+          <Settings class="h-4 w-4 mr-2" />
+          Settings
+        </Button>
+        <Button size="sm">
+          <Plus class="h-4 w-4 mr-2" />
+          New Deployment
+        </Button>
+      </template>
+    </DsPageHeading>
+
+    <!-- Page content -->
+    <div class="mt-6">
+      <!-- ... -->
+    </div>
+  </NavbarLayout>
+</template>
+```
+
+## Styling
+
+The component uses these key styles:
+
+- **Title**: 32px font size, medium weight, tight letter-spacing (`text-[32px] tracking-[-0.79px] font-medium`)
+- **Description prop**: Muted color (`text-muted-foreground`), tight gap from title (`gap-1`)
+- **Default slot**: Smaller text (`text-sm`), normal text color, spaced from title (`gap-4`)
+- **Full-width border**: Uses CSS pseudo-element (`after:w-screen`) to extend beyond container
+- **Responsive layout**: Stacks vertically on mobile, horizontal on `lg` breakpoint
+
+### Visual Hierarchy
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Title (32px, font-medium)                    [Actions]     │
+│  Description (muted, gap-1 from title)                      │
+│                                                             │
+│  Default slot content (text-sm, gap-4 from title section)   │
+├─────────────────────────────────────────────────────────────┤ ← full-width border
+```
+
+## Related Documentation
+
+- [Navbar Component](/development/frontend/ui/design-navbar) - Top navigation bar
+- [UI Design System](/development/frontend/ui/) - Overall design patterns
