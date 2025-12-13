@@ -18,6 +18,32 @@ Use SSE when you need:
 SSE is unidirectional (server � client). For bidirectional communication, use WebSockets instead.
 </Note>
 
+## SSE Endpoint URL Pattern
+
+All SSE endpoints use the `/stream` suffix:
+
+```typescript
+// REST API endpoint (polling)
+const response = await fetch('/api/users/me/mcp/client-activity?team_id=123&limit=20')
+const data = await response.json()
+
+// SSE streaming endpoint (real-time)
+const url = '/api/users/me/mcp/client-activity/stream?team_id=123&limit=20'
+connect(url)
+```
+
+### URL Structure
+
+- **REST:** `/api/{resource}/{action}` - Returns snapshot of current data
+- **SSE:** `/api/{resource}/{action}/stream` - Pushes real-time updates
+
+Both endpoints:
+- Accept the same query parameters
+- Return the same data structure
+- Apply the same filters and limits
+
+The REST endpoint serves as a fallback for clients that don't support SSE.
+
 ## The useSSE Composable
 
 The `useSSE<T>` composable handles all SSE logic including connection management, auto-reconnect, and cleanup.

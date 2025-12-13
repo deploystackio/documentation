@@ -9,6 +9,45 @@ DeployStack Backend includes `@fastify/sse` for Server-Sent Events support. SSE 
 
 The plugin is globally registered with a 30-second heartbeat interval to keep connections alive.
 
+## Naming Convention Standard
+
+All SSE endpoints **MUST** follow this URL pattern:
+
+- **REST endpoint:** `/api/{resource}/{action}`
+- **SSE endpoint:** `/api/{resource}/{action}/stream`
+
+### URL Pattern Examples
+
+```bash
+# Client Activity
+GET /api/users/me/mcp/client-activity          # REST API (polling)
+GET /api/users/me/mcp/client-activity/stream   # SSE stream
+
+# Notifications
+GET /api/teams/:teamId/notifications            # REST API (polling)
+GET /api/teams/:teamId/notifications/stream     # SSE stream
+
+# Metrics
+GET /api/satellites/:satelliteId/metrics        # REST API (polling)
+GET /api/satellites/:satelliteId/metrics/stream # SSE stream
+```
+
+### Paired Endpoints
+
+Every SSE endpoint should have a corresponding REST endpoint:
+
+1. **Same Query Parameters**: Both endpoints accept identical query parameters
+2. **Same Data Structure**: Both return the same data format
+3. **Consistent Behavior**: Both apply the same filters and limits
+4. **Fallback Support**: REST endpoint serves as fallback for clients without SSE support
+
+### Why `/stream`?
+
+- **Industry Standard**: Used by GitHub, Stripe, and Twitter APIs
+- **RESTful**: Treats streaming as a sub-resource
+- **Technology Agnostic**: Works for SSE, WebSockets, or any streaming protocol
+- **Clear Intent**: Immediately indicates real-time streaming capability
+
 ## Enabling SSE on a Route
 
 Add the `sse: true` option to any route definition:
