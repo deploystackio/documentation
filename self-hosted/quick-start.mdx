@@ -231,6 +231,7 @@ After completing the basic backend and frontend setup, deploy at least one satel
     **For local development (connecting from same machine):**
     ```bash
     docker run \
+      --user 1001:1001 \
       --network <your-network-name> \
       -p 3001:3001 \
       -e DEPLOYSTACK_BACKEND_URL="http://deploystack-backend:3000" \
@@ -247,6 +248,7 @@ After completing the basic backend and frontend setup, deploy at least one satel
     **For remote access (connecting from MCP clients via domain/IP):**
     ```bash
     docker run \
+      --user 1001:1001 \
       --network <your-network-name> \
       -p 3001:3001 \
       -e DEPLOYSTACK_BACKEND_URL="http://deploystack-backend:3000" \
