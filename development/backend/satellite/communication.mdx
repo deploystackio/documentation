@@ -150,6 +150,17 @@ The backend maintains a priority-based command queue system:
 - `normal`: Standard commands processed during regular polling
 - `low`: Background maintenance commands
 
+### Command Event Types
+
+Configure commands include an `event` field in the payload for tracking purposes:
+
+- `mcp_installation_created` - New installation
+- `mcp_installation_updated` - Configuration change
+- `mcp_installation_deleted` - Installation removed
+- `mcp_recovery` - Server recovery
+
+See [Satellite Commands](/development/backend/satellite/commands) for complete event type documentation and usage patterns.
+
 ### Adaptive Polling Strategy
 
 Satellites adjust polling behavior based on backend signals:

@@ -169,7 +169,8 @@
             "group": "Satellite",
             "pages": [
               "/development/backend/satellite/communication",
-              "/development/backend/satellite/events"
+              "/development/backend/satellite/events",
+              "/development/backend/satellite/commands"
             ]
           }
         ]
