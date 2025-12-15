@@ -1,0 +1,319 @@
+---
+title: Satellite Commands
+description: Command queue system for satellite orchestration including command types, priorities, and event payload patterns.
+sidebarTitle: Commands
+---
+
+The backend uses a command queue system to orchestrate satellites, enabling dynamic MCP server management through prioritized commands with automatic retry logic.
+
+## Command Queue Architecture
+
+Commands are created by the backend and stored in the `satelliteCommands` table. Satellites poll for pending commands, execute them, and report results back to the backend.
+
+### Command Flow
+
+```
+Backend → Creates Command → satelliteCommands Table → Satellite Polls → Executes → Reports Result → Backend Updates Status
+```
+
+**Key Components:**
+- **Command Queue**: PostgreSQL table with priority-based ordering
+- **Polling**: Satellites poll every 2-60 seconds based on priority
+- **Execution**: Satellite processes command and performs action
+- **Result Reporting**: Satellite reports success/failure back to backend
+
+## Command Types
+
+The system supports 5 command types defined in the `command_type` enum:
+
+| Command Type | Purpose | Satellite Action |
+|---|---|---|
+| `configure` | Trigger configuration refresh | Fetch fresh config, apply changes |
+| `spawn` | Start MCP server process | Launch HTTP proxy or stdio process |
+| `kill` | Stop MCP server process | Terminate process gracefully |
+| `restart` | Restart MCP server | Stop and start process |
+| `health_check` | Verify server health | Call tools/list to check connectivity |
+
+### Configure Commands
+
+**Most Common**: Used for all MCP installation lifecycle events (create/update/delete).
+
+**How It Works:**
+1. Backend creates `configure` command with event metadata
+2. Satellite fetches fresh configuration from backend
+3. DynamicConfigManager compares old vs. new config
+4. Identifies added/removed/modified servers
+5. Takes appropriate action (spawn/restart/terminate)
+
+**Key Insight**: The satellite doesn't parse individual event types. All `configure` commands trigger a full configuration refresh where changes are detected by comparing configurations.
+
+## Command Priorities
+
+Commands are processed based on priority:
+
+| Priority | Use Case | Polling Interval |
+|---|---|---|
+| `immediate` | New installations, deletions | 2 seconds |
+| `high` | Server recovery, critical updates | 10 seconds |
+| `normal` | Configuration updates | 30 seconds |
+| `low` | Maintenance tasks | 60 seconds |
+
+Higher priority commands are retrieved first when satellite polls.
+
+## Command Payload Structure
+
+All commands include a JSON payload with event-specific data:
+
+```typescript
+interface CommandPayload {
+  event?: string;                 // Event type for logging/tracking
+  installation_id?: string;       // MCP installation identifier
+  team_id?: string;              // Team context
+  server_name?: string;          // Legacy server identifier
+  // Additional command-specific fields
+}
+```
+
+## Command Event Types
+
+All `configure` commands include an `event` field in the payload for tracking and logging:
+
+| Event Type | When Sent | Purpose |
+|---|---|---|
+| `mcp_installation_created` | New MCP installation | Satellite refreshes config, spawns new servers |
+| `mcp_installation_updated` | Config changes (args/env/headers) | Satellite refreshes config, restarts affected servers |
+| `mcp_installation_deleted` | Installation removed | Satellite refreshes config, terminates removed servers |
+| `mcp_recovery` | Server recovered from failure | Satellite rediscovers tools for recovered server |
+
+### Event Field Usage
+
+**Current Implementation**: The satellite does NOT parse the `event` field. All configure commands trigger a full configuration refresh where the satellite:
+
+1. Fetches fresh config from backend
+2. Compares with current running config
+3. Identifies added/removed/modified servers
+4. Takes appropriate action
+
+**Purpose of Event Field**:
+- Database record keeping
+- Structured logging
+- Future extensibility
+- Developer debugging
+
+**Example payload** for deletion:
+```json
+{
+  "event": "mcp_installation_deleted",
+  "installation_id": "U3hCfHenbK5kH2_8ehSGx",
+  "team_id": "4vj7igb2fcwzmko"
+}
+```
+
+## SatelliteCommandService API
+
+The backend provides convenience methods for creating commands:
+
+### notifyMcpInstallation()
+
+Creates immediate priority configure commands when a new MCP server is installed.
+
+```typescript
+await satelliteCommandService.notifyMcpInstallation(
+  installationId,
+  teamId,
+  userId
+);
+```
+
+**Payload**: `event: 'mcp_installation_created'`
+
+### notifyMcpUpdate()
+
+Creates immediate priority configure commands when MCP configuration is updated.
+
+```typescript
+await satelliteCommandService.notifyMcpUpdate(
+  installationId,
+  teamId,
+  userId
+);
+```
+
+**Payload**: `event: 'mcp_installation_updated'`
+
+### notifyMcpDeletion()
+
+Creates immediate priority configure commands when an MCP installation is deleted.
+
+```typescript
+await satelliteCommandService.notifyMcpDeletion(
+  installationId,
+  teamId,
+  userId
+);
+```
+
+**Payload**: `event: 'mcp_installation_deleted'`
+
+### notifyMcpRecovery()
+
+Creates high priority configure commands when a server recovers from failure.
+
+```typescript
+await satelliteCommandService.notifyMcpRecovery(
+  installationId,
+  teamId
+);
+```
+
+**Payload**: `event: 'mcp_recovery'`
+
+## Critical Pattern
+
+**ALWAYS use the correct convenience method**:
+
+- Installation created → `notifyMcpInstallation()`
+- Installation updated → `notifyMcpUpdate()`
+- Installation deleted → `notifyMcpDeletion()`
+- Server recovered → `notifyMcpRecovery()`
+
+**NEVER** call the wrong method for an operation! For example, don't call `notifyMcpInstallation()` for delete operations.
+
+## Command Lifecycle
+
+Commands progress through the following states:
+
+| Status | Description |
+|---|---|
+| `pending` | Command created, awaiting satellite poll |
+| `acknowledged` | Satellite retrieved command |
+| `executing` | Satellite processing command |
+| `completed` | Command executed successfully |
+| `failed` | Command execution failed |
+
+### Retry Logic
+
+Failed commands are automatically retried:
+
+- **Max Retries**: 3 attempts
+- **Retry Delay**: Exponential backoff
+- **Expiration**: Commands expire after 5 minutes
+
+## Database Schema
+
+**Table**: `satelliteCommands`
+
+**Key Fields**:
+- `id`: Command UUID
+- `satellite_id`: Target satellite
+- `command_type`: One of 5 command types
+- `priority`: Command priority level
+- `payload`: JSON command data (includes event type)
+- `status`: Current execution state
+- `target_team_id`: Team context
+- `correlation_id`: Request tracing
+- `retry_count`: Retry attempts
+- `error_message`: Failure details
+- `result`: Execution result
+
+## Command Processing on Satellite
+
+When satellites receive commands:
+
+**For `configure` commands**:
+1. Fetch fresh configuration from backend
+2. Compare with current running config
+3. Identify changes (added/removed/modified servers)
+4. Execute appropriate actions:
+   - **Added**: Spawn new processes
+   - **Modified**: Restart affected processes
+   - **Removed**: Terminate processes
+
+**For `spawn` commands**:
+1. Parse server configuration
+2. For stdio: Launch subprocess with JSON-RPC
+3. For HTTP/SSE: Create proxy tracker entry
+4. Discover tools via tools/list call
+
+**For `kill` commands**:
+1. Locate running process
+2. Send SIGTERM for graceful shutdown
+3. Wait for timeout (10 seconds)
+4. Send SIGKILL if needed
+
+**For `restart` commands**:
+1. Execute kill sequence
+2. Wait for process termination
+3. Execute spawn sequence
+
+**For `health_check` commands**:
+1. Call tools/list on target server
+2. Verify response
+3. Report health status
+
+## Example Usage
+
+### Creating Commands for Installation Deletion
+
+```typescript
+// In route handler
+const satelliteCommandService = new SatelliteCommandService(db, logger);
+const commands = await satelliteCommandService.notifyMcpDeletion(
+  installationId,
+  teamId,
+  userId
+);
+
+logger.info({
+  installationId,
+  commandsCreated: commands.length,
+  satelliteIds: commands.map(c => c.satellite_id)
+}, 'Satellite commands created for deletion');
+```
+
+### Creating Commands for Configuration Update
+
+```typescript
+// After updating environment variables
+const satelliteCommandService = new SatelliteCommandService(db, logger);
+const commands = await satelliteCommandService.notifyMcpUpdate(
+  installationId,
+  teamId,
+  userId
+);
+```
+
+## Monitoring Commands
+
+### Check Command Status
+
+```sql
+SELECT id, command_type, status, priority, created_at, updated_at
+FROM "satelliteCommands"
+WHERE satellite_id = 'sat-123'
+ORDER BY created_at DESC
+LIMIT 10;
+```
+
+### View Command Payload
+
+```sql
+SELECT id, command_type, payload::json->>'event' as event_type, payload
+FROM "satelliteCommands"
+WHERE id = 'cmd-456';
+```
+
+### Monitor Failed Commands
+
+```sql
+SELECT id, command_type, status, retry_count, error_message
+FROM "satelliteCommands"
+WHERE status = 'failed'
+AND retry_count >= max_retries;
+```
+
+## Related Documentation
+
+- [Satellite Communication](/development/backend/satellite/communication) - Overall communication architecture
+- [Satellite Events](/development/backend/satellite/events) - Event system for real-time updates
+- [Database Management](/development/backend/database/) - Schema and migrations

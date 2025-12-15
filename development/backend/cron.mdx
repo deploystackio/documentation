@@ -33,21 +33,28 @@ Create a new file in `src/cron/jobs/`:
 ```typescript
 // src/cron/jobs/dailyCleanup.ts
 import type { CronJob } from '../cronManager';
-import type { JobQueueService } from '../../services/jobQueueService';
 
-export function createDailyCleanupJob(jobQueueService: JobQueueService): CronJob {
+export function createDailyCleanupJob(): CronJob {
   return {
     name: 'daily-cleanup',
     schedule: '0 2 * * *', // Every day at 2 AM
-    
-    task: async () => {
-      await jobQueueService.createJob('cleanup_old_data', {
-        daysToKeep: 30
-      });
-    }
+    jobType: 'cleanup_old_data',
+    payload: {
+      daysToKeep: 30,
+    },
   };
 }
 ```
+
+The `CronJob` interface has these fields:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Unique identifier for logging and tracking |
+| `schedule` | Yes | Cron expression (see syntax below) |
+| `jobType` | Yes | Job type that matches a registered worker |
+| `payload` | No | Static object or function returning payload data |
+| `maxAttempts` | No | Override default retry attempts (default: 3) |
 
 ### Step 2: Create the Worker
 
@@ -136,13 +143,15 @@ export function initializeCronJobs(
   jobQueueService: JobQueueService,
   logger: FastifyBaseLogger
 ): CronManager {
-  const cronManager = new CronManager(logger);
+  const cronManager = new CronManager(logger, jobQueueService);
 
-  cronManager.register(createDailyCleanupJob(jobQueueService));
+  cronManager.register(createDailyCleanupJob());
 
   return cronManager;
 }
 ```
+
+The `CronManager` handles job creation automatically when the schedule fires. You don't need to call `createJob()` yourself - just define the `jobType` and `payload` in your cron job definition.
 
 ## Cron Expression Syntax
 
@@ -194,24 +203,37 @@ Here's a complete example showing how to create a cron job that sends a daily em
 ```typescript
 // src/cron/jobs/dailyDigest.ts
 import type { CronJob } from '../cronManager';
-import type { JobQueueService } from '../../services/jobQueueService';
 
-export function createDailyDigestJob(jobQueueService: JobQueueService): CronJob {
+export function createDailyDigestJob(): CronJob {
   return {
     name: 'daily-digest-email',
     schedule: '0 8 * * *', // Every day at 8 AM
-    
-    task: async () => {
-      // Create job to send digest email
-      await jobQueueService.createJob('send_email', {
-        to: 'admin@example.com',
-        subject: 'Daily Activity Digest',
-        template: 'daily_digest',
-        variables: {
-          date: new Date().toISOString().split('T')[0]
-        }
-      });
-    }
+    jobType: 'send_email',
+    payload: {
+      to: 'admin@example.com',
+      subject: 'Daily Activity Digest',
+      template: 'daily_digest',
+    },
+  };
+}
+```
+
+For dynamic payload values computed at runtime, use a function:
+
+```typescript
+export function createDailyDigestJob(): CronJob {
+  return {
+    name: 'daily-digest-email',
+    schedule: '0 8 * * *',
+    jobType: 'send_email',
+    payload: () => ({
+      to: 'admin@example.com',
+      subject: 'Daily Activity Digest',
+      template: 'daily_digest',
+      variables: {
+        date: new Date().toISOString().split('T')[0],
+      },
+    }),
   };
 }
 ```

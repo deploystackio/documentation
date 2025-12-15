@@ -1,0 +1,186 @@
+---
+title: Card (DsCard)
+description: Vercel-style card component with title, description, content area, and flexible footer.
+---
+
+The `DsCard` component is a Vercel-style fieldset/card for forms and settings. It features a content area with title and description, plus a footer with flexible slots for status text and action buttons.
+
+## Component Location
+
+```
+services/frontend/src/components/ui/ds-card/
+   DsCard.vue    # Card component
+   index.ts      # Component exports
+```
+
+## Props
+
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `title` | `string` | No | Card heading (hidden when not provided) |
+
+## Slots
+
+| Slot | Description |
+|------|-------------|
+| `default` | Main content area (description, forms, inputs, etc.) |
+| `footer-status` | Left side of footer (text, links, hints) |
+| `footer-actions` | Right side of footer (buttons, button groups) |
+
+## Basic Usage
+
+```vue
+<script setup lang="ts">
+import { DsCard } from '@/components/ui/ds-card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+</script>
+
+<template>
+  <DsCard title="Team Name">
+    <p class="text-sm text-foreground">
+      This is your team's visible name. For example, the name of your company or department.
+    </p>
+    <Input v-model="teamName" placeholder="Enter team name" class="mt-4" />
+
+    <template #footer-status>
+      Please use 32 characters at maximum.
+    </template>
+
+    <template #footer-actions>
+      <Button>Save</Button>
+    </template>
+  </DsCard>
+</template>
+```
+
+## Examples
+
+### Simple Card with Action
+
+```vue
+<DsCard title="Delete Team">
+  <p class="text-sm text-muted-foreground">
+    Permanently delete this team and all its data. This action cannot be undone.
+  </p>
+
+  <template #footer-actions>
+    <Button variant="destructive">Delete Team</Button>
+  </template>
+</DsCard>
+```
+
+### Card with Status Link
+
+```vue
+<DsCard title="API Key">
+  <p class="text-sm text-foreground mb-4">
+    Use this key to authenticate API requests.
+  </p>
+  <div class="flex items-center gap-2">
+    <Input :model-value="apiKey" readonly class="font-mono" />
+    <Button variant="outline" @click="copyKey">Copy</Button>
+  </div>
+
+  <template #footer-status>
+    <a href="/docs/api" class="text-primary hover:underline">
+      Learn more about API authentication
+    </a>
+  </template>
+
+  <template #footer-actions>
+    <Button variant="outline">Regenerate</Button>
+  </template>
+</DsCard>
+```
+
+### Card with Multiple Actions
+
+```vue
+<DsCard title="Billing Plan">
+  <p class="text-sm text-foreground mb-4">
+    Manage your subscription and billing settings.
+  </p>
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="font-medium">Pro Plan</p>
+      <p class="text-sm text-muted-foreground">$20/month</p>
+    </div>
+    <Badge>Active</Badge>
+  </div>
+
+  <template #footer-status>
+    Next billing date: January 15, 2025
+  </template>
+
+  <template #footer-actions>
+    <Button variant="outline">Change Plan</Button>
+    <Button variant="destructive">Cancel</Button>
+  </template>
+</DsCard>
+```
+
+### Card Without Footer
+
+```vue
+<DsCard title="Team Members">
+  <p class="text-sm text-foreground mb-4">People with access to this team.</p>
+  <ul class="divide-y">
+    <li class="py-2">John Doe - Admin</li>
+    <li class="py-2">Jane Smith - Member</li>
+  </ul>
+</DsCard>
+```
+
+### Card with Only Status (No Actions)
+
+```vue
+<DsCard title="Usage">
+  <p class="text-sm text-foreground mb-4">
+    Current resource usage for this billing period.
+  </p>
+  <Progress :value="75" class="h-2" />
+
+  <template #footer-status>
+    75% of 1,000 requests used
+  </template>
+</DsCard>
+```
+
+### Card Without Title
+
+Use DsCard without a title when the content has its own heading or when wrapping existing components that manage their own titles.
+
+```vue
+<DsCard>
+  <MyConfigurationSection />
+</DsCard>
+```
+
+## Styling
+
+The component uses these key styles:
+
+- **Container**: `rounded-lg border border-neutral-200 bg-white`
+- **Content padding**: `p-6`
+- **Title**: `text-xl font-medium leading-8 tracking-tight`
+- **Footer**: `bg-neutral-50 border-t border-neutral-200 px-6 py-4`
+- **Footer status**: `text-sm text-muted-foreground`
+
+### Visual Structure
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Title (text-xl, font-medium)                               │
+│                                                             │
+│  [Default slot - description, forms, inputs, content]       │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│  #footer-status (left)             #footer-actions (right)  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Related Documentation
+
+- [Page Heading](/development/frontend/ui/design-page-heading) - Page title component
+- [UI Design System](/development/frontend/ui/) - Overall design patterns

@@ -87,6 +87,7 @@ For detailed event system documentation, see [Event System](/development/satelli
 - Process status for all running MCP servers
 - Network information and connectivity status
 - Performance metrics and error counts
+- Satellite URL (first heartbeat only) - Updates backend with satellite's public URL
 
 **Command Result Reporting:**
 - Execution status and timing
@@ -249,6 +250,7 @@ PORT=3001
 
 # Optional configuration
 NODE_ENV=development
+DEPLOYSTACK_SATELLITE_URL=https://satellite.example.com  # Optional - auto-detected if not set
 ```
 
 **Note:** `DEPLOYSTACK_REGISTRATION_TOKEN` is only required for initial satellite pairing. Once registered, satellites use their permanent API keys for all communication.

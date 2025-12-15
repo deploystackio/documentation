@@ -87,7 +87,8 @@
               "/development/frontend/internationalization",
               "/development/frontend/plugins",
               "/development/frontend/router-optimization",
-              "/development/frontend/storage"
+              "/development/frontend/storage",
+              "/development/frontend/api-sse"
             ]
           },
           {
@@ -103,7 +104,11 @@
               "/development/frontend/ui/design-system-table",
               "/development/frontend/ui/custom-ui-components",
               "/development/frontend/ui/siteHeader-with-breadcrumbs",
-              "/development/frontend/ui/design-settings-menu"
+              "/development/frontend/ui/design-settings-menu",
+              "/development/frontend/ui/design-stepper",
+              "/development/frontend/ui/design-page-heading",
+              "/development/frontend/ui/design-navbar",
+              "/development/frontend/ui/design-card"
             ]
           }
         ]
@@ -140,7 +145,8 @@
             "pages": [
               "/development/backend/api/index",
               "/development/backend/api/security",
-              "/development/backend/api/pagination"
+              "/development/backend/api/pagination",
+              "/development/backend/api/sse"
             ]
           },
           {
@@ -163,7 +169,8 @@
             "group": "Satellite",
             "pages": [
               "/development/backend/satellite/communication",
-              "/development/backend/satellite/events"
+              "/development/backend/satellite/events",
+              "/development/backend/satellite/commands"
             ]
           }
         ]

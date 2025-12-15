@@ -1,0 +1,148 @@
+---
+title: Stepper
+description: A vertical step indicator component for multi-step wizards and forms.
+---
+
+A vertical navigation component that shows progress through a multi-step process. Each step displays an icon and label, with visual states for completed, current, and pending steps.
+
+## Component Location
+
+```
+services/frontend/src/components/ui/ds-stepper/
+- DsStepper.vue    # Main stepper component
+- index.ts         # Exports
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `steps` | `WizardStep[]` | required | Array of step objects |
+| `interactive` | `boolean` | `false` | Allow clicking completed steps to navigate back |
+
+### WizardStep Interface
+
+```typescript
+interface WizardStep {
+  id: string
+  label: string
+  status: 'completed' | 'current' | 'pending'
+}
+```
+
+## Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `stepClick` | `[step: WizardStep, index: number]` | Emitted when a completed step is clicked (requires `interactive` prop) |
+
+## Usage
+
+Import the component and type from the ds-stepper index:
+
+```vue
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { DsStepper, type WizardStep } from '@/components/ui/ds-stepper'
+
+const currentStep = ref(0)
+
+const steps = [
+  { key: 'repository', label: 'Repository' },
+  { key: 'config', label: 'Configuration' },
+  { key: 'review', label: 'Review' }
+]
+
+const wizardSteps = computed((): WizardStep[] => {
+  return steps.map((step, index) => ({
+    id: step.key,
+    label: step.label,
+    status: index < currentStep.value
+      ? 'completed'
+      : index === currentStep.value
+        ? 'current'
+        : 'pending'
+  }))
+})
+
+function handleStepClick(step: WizardStep, index: number) {
+  if (step.status === 'completed') {
+    currentStep.value = index
+  }
+}
+</script>
+
+<template>
+  <div class="flex gap-8">
+    <DsStepper
+      :steps="wizardSteps"
+      interactive
+      @step-click="handleStepClick"
+    />
+
+    <div class="flex-1">
+      <!-- Step content -->
+    </div>
+  </div>
+</template>
+```
+
+## Visual States
+
+Each step renders differently based on its status:
+
+| Status | Icon | Icon Color | Label Color |
+|--------|------|------------|-------------|
+| `completed` | CircleCheck | `text-green-600` | `text-muted-foreground` |
+| `current` | CircleDashed | `text-primary` | `text-foreground` |
+| `pending` | CircleDashed | `text-neutral-400` | `text-neutral-400` |
+
+## Interactive Mode
+
+When `interactive` is `true`, completed steps become clickable:
+
+- Hover state: `bg-neutral-100`
+- Cursor changes to pointer
+- Clicking emits `stepClick` event
+
+Only completed steps respond to clicks. Current and pending steps remain non-interactive regardless of the `interactive` prop.
+
+```vue
+<DsStepper
+  :steps="wizardSteps"
+  interactive
+  @step-click="goToStep"
+/>
+```
+
+## Layout
+
+The stepper is designed to sit in a flex container alongside step content:
+
+```vue
+<template>
+  <div class="flex gap-8">
+    <!-- Stepper on left (fixed width) -->
+    <DsStepper :steps="steps" />
+
+    <!-- Content on right (flexible width) -->
+    <div class="flex-1">
+      <DsCard v-if="currentStep === 0" title="Step 1">
+        <!-- Step 1 content -->
+      </DsCard>
+    </div>
+  </div>
+</template>
+```
+
+The stepper has a fixed width of `w-56` (224px) and uses `shrink-0` to prevent compression.
+
+## Styling
+
+The component uses shadcn-vue design tokens:
+
+- **Container**: `w-56 shrink-0`
+- **List spacing**: `space-y-1`
+- **Item padding**: `px-3 py-2`
+- **Icon size**: `h-5 w-5`
+- **Label**: `text-sm font-medium`
