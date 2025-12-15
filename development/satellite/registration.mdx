@@ -128,7 +128,46 @@ DEPLOYSTACK_BACKEND_URL=http://localhost:3000
 
 # Registration token (required for secure pairing)
 DEPLOYSTACK_REGISTRATION_TOKEN=deploystack_satellite_global_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+# Optional satellite URL configuration
+DEPLOYSTACK_SATELLITE_URL=https://satellite.example.com
 ```
+
+### Satellite URL Configuration (Optional)
+
+**DEPLOYSTACK_SATELLITE_URL Environment Variable:**
+
+This optional environment variable configures the publicly accessible URL of the satellite instance.
+
+**Behavior:**
+- **If set**: Satellite sends explicit URL to backend during registration and first heartbeat
+- **If not set**: Backend auto-detects URL from incoming request headers (X-Forwarded-Proto, X-Forwarded-Host)
+
+**When to Use:**
+- Production deployments with known public URLs
+- OAuth 2.0 Protected Resource Metadata requirements
+- Satellites behind reverse proxies or load balancers
+
+**Format:**
+- Base URL without path suffix
+- Example: `https://satellite.example.com` (NOT `https://satellite.example.com/mcp`)
+
+**Examples:**
+```bash
+# Production global satellite
+DEPLOYSTACK_SATELLITE_URL=https://satellite.deploystack.io
+
+# Production team satellite
+DEPLOYSTACK_SATELLITE_URL=https://satellite-team1.example.com
+
+# Development (auto-detection)
+# DEPLOYSTACK_SATELLITE_URL=    # Leave blank or comment out
+```
+
+**URL Update Behavior:**
+- Registration: URL sent during initial satellite registration
+- Startup: URL updated on first heartbeat after satellite restart
+- Runtime: URL remains static until satellite restarts
 
 ## Registration Token Requirements
 
@@ -219,6 +258,7 @@ Satellites automatically collect and send system information during registration
 interface SatelliteRegistrationData {
   name: string;                    // From DEPLOYSTACK_SATELLITE_NAME
   capabilities: string[];         // ['stdio', 'http', 'sse']
+  satellite_url?: string;         // From DEPLOYSTACK_SATELLITE_URL (optional)
   system_info: {
     os: string;                   // e.g., "darwin arm64"
     arch: string;                 // e.g., "arm64"

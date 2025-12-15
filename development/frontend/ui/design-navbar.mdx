@@ -1,0 +1,242 @@
+---
+title: Top Navigation Bar
+description: Guide for implementing the two-row top navigation bar using the DsNavbar component.
+---
+
+Use the `DsNavbar` component to display a Vercel-style top navigation bar with two rows: a brand row and a navigation row. This component is designed to be used inside `NavbarLayout.vue`.
+
+## Component Location
+
+```
+services/frontend/src/components/ui/ds-navbar/
+ - DsNavbar.vue           # Main container (orchestrates all sub-components)
+ - DsNavbarBrand.vue      # Logo + Team selector dropdown
+ - DsNavbarLinks.vue      # Desktop navigation links
+ - DsNavbarTeamsMenu.vue  # Teams dropdown menu
+ - DsNavbarAdminMenu.vue  # Admin dropdown (global_admin only)
+ - DsNavbarUserMenu.vue   # User avatar dropdown
+ - DsNavbarMobileMenu.vue # Mobile hamburger menu (Sheet drawer)
+-- index.ts               # Exports + CVA variants
+```
+
+## Layout Structure
+
+The navbar has two rows:
+
+```
+---------------------------------------------------------------------
+ Row 1: [Logo] / [Team Dropdown]                    [User Menu] [a]  
+---------------------------------------------------------------------$
+ Row 2: Dashboard | MCP Server | Client Config | Statistics | Teams  | Admin  
+---------------------------------------------------------------------
+```
+
+- **Row 1** (h-14): Brand with team selector on the left, user menu on the right
+- **Row 2** (h-12): Navigation links and dropdown menus (desktop only)
+- **Mobile**: Row 2 is hidden, hamburger menu opens a Sheet drawer
+
+## Usage
+
+The navbar is typically used via `NavbarLayout`:
+
+```vue
+<script setup lang="ts">
+import NavbarLayout from '@/components/NavbarLayout.vue'
+</script>
+
+<template>
+  <NavbarLayout>
+    <!-- Your page content -->
+  </NavbarLayout>
+</template>
+```
+
+For direct usage of just the navbar:
+
+```vue
+<script setup lang="ts">
+import { DsNavbar } from '@/components/ui/ds-navbar'
+</script>
+
+<template>
+  <DsNavbar />
+</template>
+```
+
+## Sub-Components
+
+### DsNavbarBrand
+
+Displays the logo and team selector dropdown.
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `teams` | `Team[]` | List of teams available to select |
+| `selectedTeam` | `Team \| null` | Currently selected team |
+| `teamsLoading` | `boolean` | Shows loading state in dropdown |
+| `teamsError` | `string` | Error message to display |
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `select-team` | `Team` | Emitted when a team is selected |
+
+### DsNavbarLinks
+
+Renders the main navigation links (desktop only).
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `items` | `NavItem[]` | Array of navigation items |
+
+```typescript
+interface NavItem {
+  title: string
+  icon: any    // Lucide icon component
+  url: string
+}
+```
+
+### DsNavbarTeamsMenu
+
+Dropdown menu with team-related navigation items: My Teams, Manage Team.
+
+### DsNavbarAdminMenu
+
+Dropdown menu for admin navigation. Only visible to global admins.
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `isVisible` | `boolean` | Controls visibility based on user role |
+
+Admin menu items:
+- Global Settings
+- Users
+- Teams
+- MCP Catalog
+- MCP Categories
+- Satellites
+- Background Jobs
+
+### DsNavbarUserMenu
+
+User avatar with dropdown menu for account and logout.
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `userName` | `string` | User's display name |
+| `userEmail` | `string` | User's email |
+| `userLoading` | `boolean` | Shows loading state |
+
+| Event | Description |
+|-------|-------------|
+| `go-to-account` | Navigate to account page |
+| `logout` | Trigger logout |
+
+### DsNavbarMobileMenu
+
+Hamburger button that opens a Sheet drawer with all navigation on mobile.
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `navigationItems` | `NavItem[]` | Main navigation items |
+| `isGlobalAdmin` | `boolean` | Show admin section |
+| `teams` | `Team[]` | Available teams |
+| `selectedTeam` | `Team \| null` | Currently selected team |
+| `userName` | `string` | User's display name |
+| `userEmail` | `string` | User's email |
+
+## Variants
+
+The navbar supports style variants via CVA:
+
+```typescript
+import { navbarVariants } from '@/components/ui/ds-navbar'
+
+// Available variants
+navbarVariants({ variant: 'default' }) // Semi-transparent border
+navbarVariants({ variant: 'solid' })   // Solid border
+```
+
+```vue
+<DsNavbar variant="solid" />
+```
+
+## Active State Detection
+
+Navigation links show an active state when the current route matches:
+
+```typescript
+const isRouteActive = (url: string) => {
+  const currentPath = router.currentRoute.value.path
+
+  // Special case: '/teams' matches exactly
+  if (url === '/teams') {
+    return currentPath === '/teams'
+  }
+
+  // Other routes match with startsWith
+  return currentPath.startsWith(url)
+}
+```
+
+Active links get `bg-accent text-accent-foreground` styling.
+
+## Team Selection
+
+The navbar manages team selection state and persists it via EventBus:
+
+```typescript
+const selectTeam = (team: Team) => {
+  selectedTeam.value = team
+  eventBus.setState('selected_team_id', team.id)
+  eventBus.emit('team-selected', { teamId: team.id, teamName: team.name })
+}
+```
+
+Other components can listen for team changes:
+
+```typescript
+eventBus.on('team-selected', (data) => {
+  // Handle team change
+})
+```
+
+## Responsive Behavior
+
+| Breakpoint | Behavior |
+|------------|----------|
+| `< md` (768px) | Row 2 hidden, hamburger menu visible |
+| `>= md` | Both rows visible, hamburger hidden |
+| `>= lg` | User name shown next to avatar |
+
+## Styling
+
+Default navbar classes:
+
+```css
+/* Container */
+.sticky.top-0.z-50.w-full.border-b.bg-white
+
+/* Row 1 */
+.h-14.border-b.border-border/40
+
+/* Row 2 */
+.h-12.hidden.md:block
+
+/* Content max-width */
+.max-w-[1200px].mx-auto.px-4.sm:px-6.lg:px-8
+```
+
+## Architecture Notes
+
+1. **DsNavbar.vue** fetches user and team data on mount
+2. Sub-components are presentational and receive data via props
+3. Events bubble up from sub-components to DsNavbar for handling
+4. EventBus syncs team selection across the application
+5. i18n keys follow the existing `sidebar.*` namespace for compatibility
+
+## Related Documentation
+
+- [UI Design System](/development/frontend/ui/) - Overall design patterns
+- [Page Heading with Breadcrumbs](/development/frontend/ui/design-page-heading) - Breadcrumbs component for pages
+- [Custom UI Components](/development/frontend/ui/custom-ui-components) - Component development guide

@@ -163,6 +163,10 @@ The satellite must be deployed separately after completing the setup wizard:
    The satellite requires a running backend. If the backend is not reachable, the satellite will exit immediately. Make sure `docker-compose ps` shows the backend as healthy before proceeding.
    </Warning>
 
+   <Info>
+   **Automatic Permission Handling**: The satellite container automatically fixes Docker volume permissions on startup. This ensures credentials can be saved even when volumes have root ownership. You may notice a brief delay (~5 seconds) during first startup while permissions are being fixed.
+   </Info>
+
    **For local development (connecting from same machine):**
    ```bash
    docker run -d \
@@ -175,7 +179,7 @@ The satellite must be deployed separately after completing the setup wizard:
      deploystack/satellite:latest
    ```
 
-   Replace `<your-network-name>` with the network from step 3 (e.g., `docker-compose_deploystack-network`).
+   Replace `<your-network-name>` with the network from step 3.
 
    **For remote access (connecting from MCP clients via domain/IP):**
    ```bash

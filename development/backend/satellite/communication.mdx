@@ -46,6 +46,7 @@ The satellite communication system includes:
 - Satellites register with backend and receive API keys
 - Initial status set to 'inactive' for security
 - API keys stored as Argon2 hashes in database
+- Satellite URL sent during registration (optional - auto-detected if not provided)
 
 **Activation Process**:
 - Satellites send heartbeat after registration
@@ -82,8 +83,8 @@ The system uses three distinct communication patterns:
 
 **Heartbeat (Satellite → Backend, Periodic)**:
 - Satellites report status every 30 seconds
-- Contains: System metrics, process counts, resource usage
-- Used for: Health monitoring, capacity planning
+- Contains: System metrics, process counts, resource usage, satellite URL (first heartbeat only)
+- Used for: Health monitoring, capacity planning, satellite URL updates
 
 **Events (Satellite → Backend, Immediate)**:
 - Satellites emit events when actions occur, batched every 3 seconds
@@ -149,6 +150,17 @@ The backend maintains a priority-based command queue system:
 - `normal`: Standard commands processed during regular polling
 - `low`: Background maintenance commands
 
+### Command Event Types
+
+Configure commands include an `event` field in the payload for tracking purposes:
+
+- `mcp_installation_created` - New installation
+- `mcp_installation_updated` - Configuration change
+- `mcp_installation_deleted` - Installation removed
+- `mcp_recovery` - Server recovery
+
+See [Satellite Commands](/development/backend/satellite/commands) for complete event type documentation and usage patterns.
+
 ### Adaptive Polling Strategy
 
 Satellites adjust polling behavior based on backend signals:
@@ -191,6 +203,7 @@ Satellites report health and performance metrics:
 - Disk usage and network connectivity status
 - Process count and resource utilization
 - Uptime and stability indicators
+- Satellite URL (first heartbeat after startup only) - Updates public URL for satellite discovery
 
 **Process Metrics**:
 - Individual MCP server process status
@@ -259,6 +272,7 @@ The satellite system integrates with existing DeployStack schema through 5 speci
 - Type classification (global/team) and ownership
 - Capability tracking and status monitoring
 - API key management and authentication
+- Satellite URL tracking - Publicly accessible URL updated during registration and first heartbeat
 
 **Command Queue** (`satelliteCommands`):
 - Priority-based command orchestration

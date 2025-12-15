@@ -7,6 +7,25 @@ sidebarTitle: Pagination Guide
 
 This guide shows developers how to add pagination to any data table in the DeployStack frontend.
 
+## Pagination Style
+
+The pagination follows the shadcn-vue DataTable pattern:
+
+**Without selection (default):**
+```
+                                    [Rows per page ▼]  Page 1 of 7  [<<] [<] [>] [>>]
+```
+
+**With selection enabled:**
+```
+0 of 68 row(s) selected.           [Rows per page ▼]  Page 1 of 7  [<<] [<] [>] [>>]
+```
+
+- **Selection info** (left, optional) - "X of Y row(s) selected." Only shown when selection props are provided
+- **Rows per page selector** (right) - Dropdown with options: 10, 20, 30, 40, 50 (hidden on mobile)
+- **Page indicator** (right) - "Page X of Y"
+- **Navigation buttons** (right) - First, Previous, Next, Last (First/Last hidden on mobile)
+
 ## Quick Implementation
 
 ### 1. Service Layer
@@ -37,14 +56,14 @@ static async getItemsPaginated(
   pagination?: PaginationParams
 ): Promise<PaginatedResponse<Item>> {
   const url = new URL(`${this.baseUrl}/api/items`)
-  
+
   // Add filters and pagination params
   if (filters) {
     Object.entries(filters).forEach(([key, value]) => {
       if (value !== undefined) url.searchParams.append(key, String(value))
     })
   }
-  
+
   if (pagination) {
     if (pagination.limit) url.searchParams.append('limit', String(pagination.limit))
     if (pagination.offset) url.searchParams.append('offset', String(pagination.offset))
@@ -57,7 +76,7 @@ static async getItemsPaginated(
   })
 
   const data = await response.json()
-  
+
   return {
     items: data.data.items,
     pagination: data.data.pagination
@@ -89,7 +108,7 @@ async function fetchItems() {
       filters.value,
       { limit: pageSize.value, offset }
     )
-    
+
     items.value = response.items
     totalItems.value = response.pagination.total
   } finally {
@@ -116,7 +135,7 @@ onMounted(() => fetchItems())
   <div class="space-y-4">
     <!-- Your data table -->
     <YourTableComponent :items="items" />
-    
+
     <!-- Pagination controls -->
     <PaginationControls
       v-if="totalItems > 0"
@@ -137,61 +156,73 @@ Add to your i18n file (e.g., `i18n/locales/en/yourFeature.ts`):
 
 ```typescript
 pagination: {
-  showing: 'Showing {start} to {end} of {total} items',
-  noItems: 'No items to display',
-  itemsPerPage: 'Items per page:',
+  rowsPerPage: 'Rows per page',
   pageInfo: 'Page {current} of {total}',
-  previous: 'Previous',
-  next: 'Next'
+  firstPage: 'Go to first page',
+  previousPage: 'Go to previous page',
+  nextPage: 'Go to next page',
+  lastPage: 'Go to last page',
+  rowsSelected: '{selected} of {total} row(s) selected.'  // Only needed if using selection
 }
 ```
 
 ## PaginationControls Component
 
 ### Props
-- `currentPage: number` - Current page number (1-based)
-- `pageSize: number` - Items per page
-- `totalItems: number` - Total number of items
-- `isLoading?: boolean` - Loading state
-- `pageSizeOptions?: number[]` - Available page sizes (default: [10, 20, 50, 100])
+
+| Prop | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `currentPage` | `number` | Yes | - | Current page number (1-based) |
+| `pageSize` | `number` | Yes | - | Items per page |
+| `totalItems` | `number` | Yes | - | Total number of items |
+| `isLoading` | `boolean` | No | `false` | Loading state (disables navigation) |
+| `pageSizeOptions` | `number[]` | No | `[10, 20, 30, 40, 50]` | Available page sizes |
+| `selectedCount` | `number` | No | - | Number of selected rows (enables selection display) |
+| `totalRows` | `number` | No | - | Total rows for selection display |
 
 ### Events
 - `@page-change(page: number)` - Emitted when page changes
 - `@page-size-change(pageSize: number)` - Emitted when page size changes
 
+## With Row Selection
+
+When your table has row selection enabled, pass the `selectedCount` and `totalRows` props to show the selection info on the left:
+
+```vue
+<PaginationControls
+  :current-page="currentPage"
+  :page-size="pageSize"
+  :total-items="totalItems"
+  :selected-count="selectedRows.length"
+  :total-rows="items.length"
+  @page-change="handlePageChange"
+  @page-size-change="handlePageSizeChange"
+/>
+```
+
 ## shadcn-vue Components Used
 
 The `PaginationControls` component uses these shadcn-vue components:
-- `Button` - For Previous/Next navigation
-- `Select`, `SelectContent`, `SelectItem`, `SelectTrigger`, `SelectValue` - For page size selector
-- Lucide icons: `ChevronLeft`, `ChevronRight`
+- `Button` - For navigation buttons (icon-only, outline variant, `size-8`)
+- `Label` - For "Rows per page" label
+- `Select`, `SelectContent`, `SelectItem`, `SelectTrigger`, `SelectValue` - For page size selector (`w-20`)
+- Lucide icons: `ChevronLeft`, `ChevronRight`, `ChevronsLeft`, `ChevronsRight`
 
-## Search Integration
+## Responsive Behavior
 
-For search functionality, conditionally show pagination:
+The pagination is responsive:
 
-```vue
-<template>
-  <!-- Show pagination only when not searching -->
-  <PaginationControls
-    v-if="!searchQuery && totalItems > 0"
-    :current-page="currentPage"
-    :page-size="pageSize"
-    :total-items="totalItems"
-    @page-change="handlePageChange"
-    @page-size-change="handlePageSizeChange"
-  />
-  
-  <!-- Show search results count when searching -->
-  <div v-if="searchQuery" class="text-sm text-muted-foreground py-4">
-    {{ t('yourFeature.pagination.showing', {
-      start: filteredItems.length > 0 ? 1 : 0,
-      end: filteredItems.length,
-      total: filteredItems.length
-    }) }}
-  </div>
-</template>
-```
+| Element | Desktop | Mobile |
+|---------|---------|--------|
+| Selection info (if enabled) | Visible | Visible |
+| Rows per page selector | Visible | Hidden |
+| Page info | Visible | Visible |
+| First page button | Visible | Hidden |
+| Previous page button | Visible | Visible |
+| Next page button | Visible | Visible |
+| Last page button | Visible | Hidden |
+
+On mobile, the navigation buttons use `ml-auto` to push them to the right edge.
 
 ## Backend Requirements
 

@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { MoreHorizontal, Edit, Trash2 } from 'lucide-vue-next'
+import { MoreVertical, Edit, Trash2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -62,7 +62,7 @@ const formatDate = (dateString: string) => {
           <TableHead>{{ t('table.columns.description') }}</TableHead>
           <TableHead>{{ t('table.columns.status') }}</TableHead>
           <TableHead>{{ t('table.columns.created') }}</TableHead>
-          <TableHead class="w-[100px]">{{ t('table.columns.actions') }}</TableHead>
+          <TableHead class="w-[50px]"></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -139,7 +139,7 @@ import {
   <TableRow>
     <TableHead>Column Name</TableHead>
     <TableHead>Another Column</TableHead>
-    <TableHead class="w-[100px]">Actions</TableHead> <!-- Fixed width for actions -->
+    <TableHead class="w-[50px]"></TableHead> <!-- Empty header for actions column -->
   </TableRow>
 </TableHeader>
 ```
@@ -193,10 +193,23 @@ import {
 
 ## Action Menu Pattern
 
-For table actions, use DropdownMenu with AlertDialog for destructive actions:
+For table actions, use DropdownMenu with AlertDialog for destructive actions.
+
+### Rules
+
+| Rule | Do | Don't |
+|------|-----|-------|
+| Action icon | `MoreVertical` | `MoreHorizontal` |
+| Actions header | Empty `<TableHead>` | "Actions" text |
+| Column width | `w-[50px]` | `w-[100px]` or wider |
+| Dropdown alignment | `align="end"` | `align="start"` |
+| Destructive actions | `text-destructive` class | Default styling |
+
+### Implementation
 
 ```vue
 <script setup lang="ts">
+import { MoreVertical, Edit, Trash2 } from 'lucide-vue-next'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -222,7 +235,7 @@ import {
       <DropdownMenuTrigger as-child>
         <Button variant="ghost" class="h-8 w-8 p-0">
           <span class="sr-only">{{ t('table.openMenu') }}</span>
-          <MoreHorizontal class="h-4 w-4" />
+          <MoreVertical class="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
@@ -285,6 +298,34 @@ import {
   {{ item.sort_order }}
 </Badge>
 ```
+
+## Adding Pagination
+
+Tables with large datasets should use the `PaginationControls` component. Place it below the table container.
+
+```vue
+<template>
+  <div class="space-y-4">
+    <div class="rounded-md border">
+      <Table>
+        <!-- Table content -->
+      </Table>
+    </div>
+
+    <PaginationControls
+      v-if="totalItems > 0"
+      :current-page="currentPage"
+      :page-size="pageSize"
+      :total-items="totalItems"
+      :is-loading="isLoading"
+      @page-change="handlePageChange"
+      @page-size-change="handlePageSizeChange"
+    />
+  </div>
+</template>
+```
+
+For full implementation details including service layer setup, row selection support, and responsive behavior, see the [Pagination Guide](/development/frontend/ui/design-system-pagination).
 
 ## Migration from Raw HTML
 
@@ -360,8 +401,8 @@ table: {
     name: 'Name',
     description: 'Description',
     status: 'Status',
-    created: 'Created',
-    actions: 'Actions'
+    created: 'Created'
+    // Note: No 'actions' column - header is empty
   },
   actions: {
     edit: 'Edit',

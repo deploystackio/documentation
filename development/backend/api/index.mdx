@@ -577,6 +577,19 @@ interface Response {
 
 **Note**: TypeScript interfaces and JavaScript variables can use camelCase internally, but all external API fields MUST use snake_case.
 
+## Server-Sent Events (SSE)
+
+For real-time updates, use the `/stream` suffix pattern:
+
+- **REST endpoint:** `/api/{resource}/{action}`
+- **SSE endpoint:** `/api/{resource}/{action}/stream`
+
+Example:
+- `GET /api/users/me/mcp/client-activity` - REST API with pagination
+- `GET /api/users/me/mcp/client-activity/stream` - SSE real-time stream
+
+See [Server-Sent Events (SSE)](/development/backend/api/sse) for complete SSE documentation.
+
 ## Adding Documentation to Routes
 
 The DeployStack Backend uses **reusable JSON Schema constants** for both validation and documentation generation. This approach provides a single source of truth for API schemas.

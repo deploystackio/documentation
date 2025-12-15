@@ -19,62 +19,109 @@ This document establishes the official UI design patterns and component standard
 
 ### Primary Colors
 
-The DeployStack color palette uses teal as the primary brand color, ensuring WCAG compliance for accessibility.
+The DeployStack color palette uses neutral black as the primary color, following the default shadcn design system for a clean, professional appearance.
 
 ```css
 /* Primary Brand Colors */
---primary: #0f766e;        /* teal-700 - WCAG AA compliant on white */
---primary-hover: #115e59;  /* teal-800 - WCAG AAA compliant on white */
+--primary: hsl(240 5.9% 10%);     /* neutral-900 - Dark gray/black */
+--primary-foreground: hsl(0 0% 98%);  /* White text on primary */
 ```
 
 #### WCAG Compliance
-- **Primary (teal-700)**: Contrast ratio 5.47:1 on white - ✅ AA Pass, ❌ AAA Fail
-- **Primary-hover (teal-800)**: Contrast ratio 7.58:1 on white - ✅ AA Pass, ✅ AAA Pass
+- **Primary (neutral-900)**: Contrast ratio ~16:1 on white - ✅ AA Pass, ✅ AAA Pass
+- **Dark mode primary (white)**: Contrast ratio ~16:1 on dark background - ✅ AA Pass, ✅ AAA Pass
 
-This ensures our primary color meets accessibility standards, with enhanced contrast on hover states.
+This ensures excellent accessibility with high contrast ratios in both light and dark modes.
+
+### Gray Colors
+
+<Warning>
+**Only use Tailwind's `neutral` gray palette.** Do not use `zinc`, `gray`, `slate`, or `stone` for gray colors. This ensures consistent gray tones across the application matching our design system (#EBEBEB = neutral-200).
+</Warning>
+
+```css
+/* Approved gray scale */
+neutral-50   /* #fafafa - Page backgrounds */
+neutral-100  /* #f5f5f5 */
+neutral-200  /* #e5e5e5 - Borders, dividers */
+neutral-300  /* #d4d4d4 */
+neutral-400  /* #a3a3a3 - Muted text */
+neutral-500  /* #737373 */
+neutral-600  /* #525252 - Secondary text */
+neutral-700  /* #404040 */
+neutral-800  /* #262626 - Primary text */
+neutral-900  /* #171717 */
+```
 
 ### Text Colors
 ```css
 /* Light Mode / Dark Mode */
---text-primary: theme('colors.zinc.800') / theme('colors.zinc.100');
---text-secondary: theme('colors.zinc.600') / theme('colors.zinc.400');
+--text-primary: theme('colors.neutral.800') / theme('colors.neutral.100');
+--text-secondary: theme('colors.neutral.600') / theme('colors.neutral.400');
 ```
 
 ### Background Colors
 ```css
 /* Light Mode / Dark Mode */
---bg-primary: white / theme('colors.zinc.900');
---bg-secondary: theme('colors.zinc.50') / theme('colors.zinc.800');
+--bg-primary: white / theme('colors.neutral.900');
+--bg-secondary: theme('colors.neutral.50') / theme('colors.neutral.800');
 ```
 
-### Link Color Scheme
+### Link Utility Class
 
-DeployStack implements intelligent link styling with automatic teal coloring for text links while preserving button styling:
+DeployStack provides a `.link` utility class for styled text links. This is an opt-in approach - links are unstyled by default to avoid conflicts with navigation components and buttons.
 
-#### Text Links
-- **Light mode**: `text-teal-700` → `hover:text-teal-800` (WCAG AA → AAA on hover)
-- **Dark mode**: `text-teal-400` → `hover:text-teal-300` (Already WCAG AAA compliant)
-- **Underlines**: `decoration-teal-700/30` → `hover:decoration-teal-700/60`
-- **Focus states**: `outline-teal-700` (light) / `outline-teal-400` (dark)
+#### The `.link` Class
+
+Apply the `.link` class to anchor elements when you want styled text links:
+
+```html
+<a href="https://docs.deploystack.io" target="_blank" class="link">
+  View documentation
+</a>
+```
+
+**Styling applied:**
+- `text-blue-600` - Blue color
+- `underline underline-offset-4` - Underline with offset
+- `hover:text-blue-800` - Darker blue on hover
 
 #### Usage Examples
-```html
-<!-- ✅ Gets teal link styling automatically -->
-<a href="/about">Learn more about us</a>
-<a href="https://example.com" class="font-semibold">External link</a>
 
-<!-- ❌ Excluded from link styling (keeps button appearance) -->
-<a href="/signup" class="rounded-md bg-primary px-4 py-2">Sign Up</a>
-<a href="/login" class="button-primary">Login</a>
+```html
+<!-- ✅ Styled text link with .link class -->
+<a href="/about" class="link">Learn more about us</a>
+
+<!-- ✅ External link with .link class -->
+<span>
+  Read more in our <a href="https://docs.deploystack.io" target="_blank" class="link">documentation</a>.
+</span>
+
+<!-- ✅ Unstyled link (default behavior) -->
+<a href="/dashboard">Dashboard</a>
+
+<!-- ✅ Button-styled link (no .link class needed) -->
+<a href="/signup" class="rounded-md bg-primary px-4 py-2 text-white">Sign Up</a>
 ```
+
+#### When to Use `.link`
+
+| Use Case | Use `.link`? |
+|----------|-------------|
+| Inline text links in paragraphs | ✅ Yes |
+| Documentation/help links | ✅ Yes |
+| External links | ✅ Yes |
+| Navigation menu items | ❌ No |
+| Button-styled links | ❌ No |
+| Sidebar/header links | ❌ No |
 
 ### Color Usage Guidelines
 
-1. **Primary Actions**: Use `--primary` (teal-700) for primary buttons and key interactive elements
-2. **Hover States**: Transition to `--primary-hover` (teal-800) for enhanced contrast
-3. **Text Links**: Automatically styled with teal colors - no additional classes needed
+1. **Primary Actions**: Use `--primary` (neutral-900) for primary buttons and key interactive elements
+2. **Hover States**: Use slightly lighter/darker variants for hover feedback
+3. **Text Links**: Add `.link` class for blue styled links in content areas
 4. **Button Links**: Include styling classes (`bg-*`, `rounded-*`) to maintain button appearance
-5. **Focus States**: Ensure all interactive elements have visible focus indicators using the teal color scheme
+5. **Focus States**: Ensure all interactive elements have visible focus indicators
 
 ## Layout Design Patterns
 
@@ -150,6 +197,45 @@ Badges are used for status indicators, categories, and metadata.
 </Badge>
 ```
 
+## Dialog Patterns
+
+### Confirmation Dialogs
+
+For simple yes/no confirmation dialogs (delete confirmations, enable/disable toggles, destructive actions), always use `AlertDialog`. This component interrupts the user with important content and expects a response.
+
+```vue
+<AlertDialog :open="isOpen" @update:open="(value) => isOpen = value">
+  <AlertDialogContent>
+    <AlertDialogHeader>
+      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+      <AlertDialogDescription>
+        This action cannot be undone.
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+    <AlertDialogFooter>
+      <AlertDialogCancel>Cancel</AlertDialogCancel>
+      <AlertDialogAction @click="handleConfirm">
+        Continue
+      </AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
+```
+
+#### When to Use AlertDialog
+
+- Delete confirmations
+- Enable/disable toggles
+- Destructive actions that cannot be undone
+- Any action requiring explicit user confirmation
+
+#### Extracting Reusable Dialogs
+
+For dialogs used in multiple places, extract them as reusable components in `components/mcp-server/` or similar directories. Examples:
+
+- `McpServerDeleteDialog.vue` - Delete confirmation for MCP servers
+- `McpServerStatusDialog.vue` - Enable/disable confirmation
+
 ## Form Design Patterns
 
 ### Modal Forms
@@ -210,6 +296,69 @@ Use `AlertDialog` for forms in modals:
   </div>
 </div>
 ```
+
+## Loading State Patterns
+
+Choose the appropriate loading indicator based on what's being loaded:
+
+### Content Loading → Use Skeleton
+
+When loading page content, data lists, or complex UI sections, use `Skeleton` components that match the shape of the content being loaded. This provides a better user experience by showing users what to expect.
+
+```vue
+<script setup lang="ts">
+import { Skeleton } from '@/components/ui/skeleton'
+</script>
+
+<template>
+  <!-- Loading state mimics actual content structure -->
+  <div v-if="isLoading" class="space-y-4">
+    <Skeleton class="h-4 w-64" />           <!-- Title placeholder -->
+    <Skeleton class="h-4 w-48" />           <!-- Subtitle placeholder -->
+    <div class="flex gap-2">
+      <Skeleton class="h-10 w-10 rounded" /> <!-- Icon placeholder -->
+      <Skeleton class="h-10 w-full" />       <!-- Content placeholder -->
+    </div>
+  </div>
+
+  <!-- Actual content -->
+  <div v-else>
+    <!-- Real content here -->
+  </div>
+</template>
+```
+
+Use Skeleton for:
+- Page content loading
+- Data tables and lists
+- Cards and detail views
+- Form sections loading from API
+- Any content where you can predict the layout
+
+### Button Actions → Use Spinner
+
+For button clicks and quick actions, use the built-in button loading state with a spinner. This indicates the action is processing without disrupting the page layout.
+
+```vue
+<Button :loading="isSubmitting" loading-text="Saving...">
+  Save Changes
+</Button>
+```
+
+Use Spinner for:
+- Form submissions
+- Button click actions
+- Quick API calls (enable/disable toggles)
+- Actions that don't change page structure
+
+### Why Skeleton Over Spinner for Content
+
+| Aspect | Skeleton | Spinner |
+|--------|----------|---------|
+| User expectation | Shows content shape | Shows "something is happening" |
+| Layout shift | Minimal (matches content) | Can cause layout shift |
+| Perceived speed | Feels faster | Can feel slower |
+| Use case | Content loading | Action processing |
 
 ## Button Patterns
 
