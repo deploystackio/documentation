@@ -15,10 +15,11 @@ services/frontend/src/components/ui/ds-page-heading/
 
 ## Props
 
-| Prop | Type | Required | Description |
-|------|------|----------|-------------|
-| `title` | `string` | Yes | Main page title |
-| `description` | `string` | No | Short description below title |
+| Prop | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `title` | `string` | Yes | - | Main page title |
+| `description` | `string` | No | - | Short description below title |
+| `showBorder` | `boolean` | No | `true` | Show full-width bottom border |
 
 ## Slots
 
@@ -49,6 +50,17 @@ import { DsPageHeading } from '@/components/ui/ds-page-heading'
 <DsPageHeading
   title="MCP Servers"
   description="Manage your installed MCP server configurations"
+/>
+```
+
+## Without Border
+
+Use `:show-border="false"` to disable the bottom border. This is useful when the page has its own border elements (like tabs with full-width borders):
+
+```vue
+<DsPageHeading
+  title="Installation Details"
+  :show-border="false"
 />
 ```
 

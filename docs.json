@@ -108,7 +108,8 @@
               "/development/frontend/ui/design-stepper",
               "/development/frontend/ui/design-page-heading",
               "/development/frontend/ui/design-navbar",
-              "/development/frontend/ui/design-card"
+              "/development/frontend/ui/design-card",
+              "/development/frontend/ui/design-ds-meter"
             ]
           }
         ]

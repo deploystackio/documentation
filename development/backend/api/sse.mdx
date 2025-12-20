@@ -200,6 +200,95 @@ export default async function sseRoute(server: FastifyInstance) {
 }
 ```
 
+## Polling Pattern with Async Operations
+
+When using `setInterval` with async database queries or API calls, you **must** check connection state **after** the async operation completes to prevent crashes:
+
+```typescript
+export default async function pollingStreamRoute(server: FastifyInstance) {
+  server.get('/metrics/stream', {
+    sse: true,
+    preValidation: requirePermission('metrics.view'),
+    schema: {
+      tags: ['Metrics'],
+      summary: 'Stream metrics via SSE with polling',
+      security: [{ cookieAuth: [] }]
+    }
+  }, async (request, reply) => {
+    const userId = request.user!.id
+    let pollInterval: NodeJS.Timeout | null = null
+
+    // Keep connection open
+    reply.sse.keepAlive()
+
+    // Send initial snapshot
+    const initialData = await fetchMetrics(userId)
+    reply.sse.send({ event: 'snapshot', data: initialData })
+
+    // Poll for updates every 3 seconds
+    pollInterval = setInterval(async () => {
+      // Check #1: Before starting async work
+      if (!reply.sse.isConnected) {
+        if (pollInterval) clearInterval(pollInterval)
+        return
+      }
+
+      try {
+        // Async database query or API call
+        const data = await fetchMetrics(userId)
+
+        // ⚠️ CRITICAL: Check #2 after async operation completes
+        if (!reply.sse.isConnected) {
+          if (pollInterval) clearInterval(pollInterval)
+          return
+        }
+
+        // If sending multiple items in a loop, check before each send
+        for (const item of data) {
+          if (!reply.sse.isConnected) {
+            if (pollInterval) clearInterval(pollInterval)
+            return
+          }
+          reply.sse.send({ event: 'update', data: item })
+        }
+      } catch (error) {
+        server.log.error(error, 'Failed to fetch metrics')
+        // Don't crash - just log the error
+      }
+    }, 3000)
+
+    // Cleanup on disconnect
+    reply.sse.onClose(() => {
+      if (pollInterval) {
+        clearInterval(pollInterval)
+        pollInterval = null
+      }
+      server.log.debug({ userId }, 'Metrics stream closed')
+    })
+  })
+}
+```
+
+### Why Multiple Checks Are Needed
+
+**Without the second check after async operations:**
+```
+Time 0ms:   setInterval fires → Check isConnected ✅ (connected)
+Time 5ms:   Start database query (async)
+Time 50ms:  Client disconnects → isConnected = false
+Time 100ms: Query completes → Call send() → CRASH! ❌
+```
+
+**With proper checks:**
+```
+Time 0ms:   setInterval fires → Check #1 ✅ (connected)
+Time 5ms:   Start database query (async)
+Time 50ms:  Client disconnects → isConnected = false
+Time 100ms: Query completes → Check #2 ✅ (disconnected) → Return early ✅
+```
+
+The client can disconnect **during** async operations, so checking only at the start of the interval is insufficient.
+
 ## Frontend Client
 
 ```javascript

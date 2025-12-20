@@ -65,6 +65,72 @@ views/
 
 Components are **reusable UI building blocks** that encapsulate specific functionality and presentation logic.
 
+#### Component Organization Structure
+
+**MANDATORY**: All feature-specific components must follow a hierarchical directory structure that mirrors the view organization. This creates clear ownership boundaries and improves code discoverability.
+
+```
+components/
+├── ui/                           # Design system components (shadcn-vue)
+│   ├── button/
+│   ├── card/
+│   └── input/
+├── [feature]/                    # Feature-specific components
+│   ├── [sub-feature]/           # Nested feature organization
+│   │   ├── ComponentName.vue    # Individual components
+│   │   ├── AnotherComponent.vue
+│   │   └── index.ts             # Barrel exports (mandatory)
+│   └── index.ts
+├── AppSidebar.vue               # Top-level shared components
+└── NavbarLayout.vue
+```
+
+#### Real-World Example: MCP Server Components
+
+```
+components/
+├── mcp-server/
+│   ├── installation/
+│   │   ├── InstallationInfo.vue
+│   │   ├── InstallationTabs.vue
+│   │   ├── McpToolsTab.vue
+│   │   ├── TeamConfiguration.vue
+│   │   ├── UserConfiguration.vue
+│   │   ├── DangerZone.vue
+│   │   └── index.ts              # Export all installation components
+│   └── catalog/
+│       ├── ServerCard.vue
+│       ├── ServerFilters.vue
+│       └── index.ts
+```
+
+#### Barrel Export Pattern (Mandatory)
+
+Every feature component directory must include an `index.ts` file that exports all components. This creates a clean import API and makes refactoring easier.
+
+```typescript
+// components/mcp-server/installation/index.ts
+export { default as InstallationInfo } from './InstallationInfo.vue'
+export { default as InstallationTabs } from './InstallationTabs.vue'
+export { default as McpToolsTab } from './McpToolsTab.vue'
+export { default as TeamConfiguration } from './TeamConfiguration.vue'
+export { default as UserConfiguration } from './UserConfiguration.vue'
+export { default as DangerZone } from './DangerZone.vue'
+```
+
+#### Usage in Views
+
+```vue
+<script setup lang="ts">
+// Clean, single-line imports for all related components
+import {
+  InstallationInfo,
+  InstallationTabs,
+  DangerZone
+} from '@/components/mcp-server/installation'
+</script>
+```
+
 #### Component Categories
 
 1. **UI Components** (`/ui`): Generic, design-system components - read the [UI Design System](/development/frontend/ui/)
@@ -74,16 +140,34 @@ Components are **reusable UI building blocks** that encapsulate specific functio
    - Follow shadcn-vue patterns
    - No business logic
    - Highly reusable across features
-   - Follow shadcn-vue patterns
 
-2. **Feature Components** (`/components/[feature]`): Domain-specific components
+2. **Feature Components** (`/components/[feature]/[sub-feature]`): Domain-specific components
+   - Must follow hierarchical organization matching views
    - Contain feature-specific logic
    - Reusable within their domain
+   - Must include barrel exports via `index.ts`
    - May compose UI components
 
 3. **Shared Components** (`/components`): Cross-feature components
    - Used across multiple features
-   - Examples: `AppSidebar`, `DashboardLayout`
+   - Examples: `AppSidebar`, `NavbarLayout`
+   - Only place components here if they truly span features
+
+#### Component Organization Rules
+
+1. **Mirror View Structure**: Component organization should parallel view hierarchy
+2. **Feature Isolation**: Keep feature components within their feature directory
+3. **Mandatory Barrel Exports**: Every feature directory must export via `index.ts`
+4. **No Deep Nesting**: Maximum 3 levels deep (feature/sub-feature/component)
+5. **Colocation**: Related components stay together
+
+#### When to Create a New Feature Directory
+
+Create a new feature component directory when:
+- You have 3+ components related to the same feature
+- The components are reused across multiple views within the feature
+- The feature has clear boundaries and ownership
+- The components share common types or logic
 
 #### Component Design Rules
 
@@ -91,6 +175,13 @@ Components are **reusable UI building blocks** that encapsulate specific functio
 2. **Props Down, Events Up**: Maintain unidirectional data flow
 3. **Composition Pattern**: Break complex components into smaller parts
 4. **Self-Contained**: Components should work in isolation
+
+#### Exceptions to the Structure
+
+You may deviate from the structure for:
+- **One-off components**: Components used in a single view can stay in the view file
+- **UI library components**: shadcn-vue components in `/ui` follow their own structure
+- **Extremely small features**: Features with only 1-2 simple components
 
 ### Services Layer (`/services`)
 
@@ -115,9 +206,85 @@ Services handle **all external communication and business logic processing**. Th
 
 Composables are **reusable logic units** that leverage Vue's Composition API to share stateful logic across components.
 
+#### Composable Organization Structure
+
+**MANDATORY**: Feature-specific composables must follow a hierarchical directory structure that mirrors the component and view organization. This creates consistency across the codebase and makes related logic easy to find.
+
+```
+composables/
+├── [feature]/                    # Feature-specific composables
+│   ├── [sub-feature]/           # Nested feature organization
+│   │   ├── useFeatureLogic.ts   # Individual composables
+│   │   ├── useAnotherLogic.ts
+│   │   └── index.ts             # Barrel exports (mandatory)
+│   └── index.ts
+├── useAuth.ts                    # Top-level shared composables
+├── useEventBus.ts
+└── useBreadcrumbs.ts
+```
+
+#### Real-World Example: MCP Server Composables
+
+```
+composables/
+├── mcp-server/
+│   ├── installation/
+│   │   ├── useInstallationCache.ts
+│   │   ├── useInstallationForm.ts
+│   │   └── index.ts              # Export all installation composables
+│   └── catalog/
+│       ├── useCatalogFilters.ts
+│       ├── useCatalogSearch.ts
+│       └── index.ts
+├── useAuth.ts
+└── useEventBus.ts
+```
+
+#### Barrel Export Pattern (Mandatory)
+
+Every feature composable directory must include an `index.ts` file that exports all composables. This mirrors the component structure and provides a clean import API.
+
+```typescript
+// composables/mcp-server/installation/index.ts
+export { useMcpInstallationCache } from './useInstallationCache'
+export { useInstallationForm } from './useInstallationForm'
+```
+
+#### Usage in Components
+
+```vue
+<script setup lang="ts">
+// Clean imports matching the component import pattern
+import { useMcpInstallationCache } from '@/composables/mcp-server/installation'
+import { InstallationTabs } from '@/components/mcp-server/installation'
+
+const {
+  installation,
+  isLoading,
+  loadInstallation
+} = useMcpInstallationCache()
+</script>
+```
+
+#### Composable Organization Rules
+
+1. **Mirror Component Structure**: Composable organization should parallel component hierarchy
+2. **Feature Isolation**: Keep feature composables within their feature directory
+3. **Mandatory Barrel Exports**: Every feature directory must export via `index.ts`
+4. **No Deep Nesting**: Maximum 3 levels deep (feature/sub-feature/composable)
+5. **Colocation**: Keep related composables together
+
+#### When to Create a Feature Composable Directory
+
+Create a new feature composable directory when:
+- You have 2+ composables related to the same feature
+- The composables are reused across multiple components within the feature
+- The feature has clear boundaries and ownership
+- The composables share common types or state
+
 #### Composable Design Patterns
 
-1. **Naming Convention**: Always prefix with `use` (e.g., `useAuth`, `useEventBus`)
+1. **Naming Convention**: Always prefix with `use` (e.g., `useAuth`, `useEventBus`, `useInstallationCache`)
 2. **Single Purpose**: Each composable solves one specific problem
 3. **Return Interface**: Clearly define what's returned (state, methods, computed)
 4. **Lifecycle Awareness**: Handle setup/cleanup in lifecycle hooks
@@ -127,7 +294,14 @@ Composables are **reusable logic units** that leverage Vue's Composition API to 
 - **Data Fetching**: `useAsyncData`, `usePagination`
 - **Form Handling**: `useForm`, `useValidation`
 - **UI State**: `useModal`, `useToast`
-- **Feature Logic**: `useTeamManagement`, `useCredentials`
+- **Feature Logic**: `useTeamManagement`, `useCredentials`, `useInstallationCache`
+
+#### Exceptions to the Structure
+
+You may deviate from the structure for:
+- **Global utilities**: Composables used across all features (e.g., `useAuth`, `useEventBus`)
+- **Single composable features**: Features with only one composable can stay at the root
+- **Third-party integrations**: External library wrappers may have their own structure
 
 ### Stores Layer (`/stores`)
 
