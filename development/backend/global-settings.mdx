@@ -904,11 +904,70 @@ const maxUploadSize = parseInt((await GlobalSettingsService.get('system.max_uplo
 - **Regular audits**: Review settings periodically for unused or outdated values
 - **Environment separation**: Use different encryption secrets for different environments
 
-### Performance Considerations
+### Performance: In-Memory Cache
 
-- **Cache frequently accessed settings**: Consider caching non-sensitive, frequently used settings
+The global settings system uses an **in-memory cache** to eliminate database queries for read operations. This is critical for high-frequency endpoints like health checks (`/`) and Swagger documentation (`/documentation`).
+
+#### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Architecture                           │
+├─────────────────────────────────────────────────────────────┤
+│  Server Start → GlobalSettingsCache.load() → Memory Cache   │
+│                                                             │
+│  READ:  GlobalSettings.get() → Memory (instant, no DB)      │
+│                                                             │
+│  WRITE: GlobalSettingsService.set/update/delete()           │
+│           → DB + Cache Invalidation (reload from DB)        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Cache Lifecycle
+
+1. **Startup**: After global settings initialization, all settings are loaded into memory
+2. **Reads**: All `GlobalSettings.get*()` calls read from memory (no database query)
+3. **Writes**: When settings are modified via `GlobalSettingsService`, the cache is automatically invalidated and reloaded
+4. **Fallback**: If cache is not initialized, reads fall back to database queries
+
+#### When Cache Is Invalidated
+
+The cache automatically reloads from the database after:
+
+- `GlobalSettingsService.set()` - Create or update a setting
+- `GlobalSettingsService.setTyped()` - Create or update with type
+- `GlobalSettingsService.update()` - Update an existing setting
+- `GlobalSettingsService.delete()` - Delete a setting
+
+#### Manual Cache Refresh
+
+If you modify settings outside of `GlobalSettingsService` (not recommended), refresh the cache manually:
+
+```typescript
+import { GlobalSettings } from '../global-settings';
+
+await GlobalSettings.refreshCaches();
+```
+
+#### Single-Instance Limitation
+
+The current cache implementation is designed for **single-instance deployments**. Multi-instance support (horizontal scaling) with shared cache synchronization is planned for a future release.
+
+#### Monitoring Cache Status
+
+```typescript
+import { GlobalSettingsCache } from '../global-settings';
+
+// Check if cache is ready
+if (GlobalSettingsCache.isInitialized()) {
+  console.log(`Cache has ${GlobalSettingsCache.size()} settings`);
+}
+```
+
+### Additional Performance Tips
+
 - **Batch operations**: Use bulk endpoints when creating multiple related settings
-- **Minimize database calls**: Retrieve settings by group when you need multiple related values
+- **Group retrieval**: Use `getGroupValues()` to fetch all settings in a group at once
 
 ### Error Handling
 

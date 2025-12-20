@@ -1,0 +1,341 @@
+---
+title: Meter Component
+description: Guide for implementing graphical displays of numeric values within a range using the DsMeter component.
+---
+
+The `DsMeter` component displays a numeric value as a graphical meter within a defined range. This component is useful for showing progress, usage statistics, capacity levels, or any metric that has minimum and maximum bounds.
+
+## Component Location
+
+```
+services/frontend/src/components/ui/ds-meter/
+├── Meter.vue           # Main container (manages state and accessibility)
+├── MeterTrack.vue      # Background track container
+├── MeterIndicator.vue  # Visual indicator showing the current value
+├── MeterLabel.vue      # Accessible label for the meter
+├── MeterValue.vue      # Displays formatted value
+└── index.ts            # Exports all components
+```
+
+## Basic Usage
+
+```vue
+<script setup lang="ts">
+import { DsMeter, DsMeterTrack, DsMeterIndicator, DsMeterLabel, DsMeterValue } from '@/components/ui/ds-meter'
+</script>
+
+<template>
+  <DsMeter :value="40">
+    <DsMeterLabel>Progress</DsMeterLabel>
+    <DsMeterTrack>
+      <DsMeterIndicator />
+    </DsMeterTrack>
+    <DsMeterValue />
+  </DsMeter>
+</template>
+```
+
+## Component API
+
+### DsMeter
+
+The root component that manages meter state and provides context to child components.
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `number` | Required | Current value of the meter |
+| `min` | `number` | `0` | Minimum value |
+| `max` | `number` | `100` | Maximum value |
+| `locale` | `string` | `'en-US'` | Locale for number formatting |
+| `format` | `Intl.NumberFormatOptions` | - | Custom formatting options |
+| `getAriaValueText` | `(value: number, min: number, max: number) => string` | - | Custom aria-valuetext generator |
+| `class` | `string` | - | Additional CSS classes |
+
+### DsMeterTrack
+
+Container for the meter indicator that represents the full range.
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `class` | `string` | - | Additional CSS classes |
+
+Default styling: `h-4 w-full overflow-hidden rounded-full bg-secondary`
+
+### DsMeterIndicator
+
+Visual indicator that shows the current value position within the range.
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `class` | `string` | - | Additional CSS classes |
+
+The width is automatically calculated as a percentage based on the current value.
+
+### DsMeterLabel
+
+Accessible label for the meter that connects to the root via `aria-labelledby`.
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `id` | `string` | Auto-generated | Optional ID for the label |
+| `class` | `string` | - | Additional CSS classes |
+
+### DsMeterValue
+
+Displays the formatted value, hidden from screen readers since the value is announced via ARIA.
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `class` | `string` | - | Additional CSS classes |
+
+**Slot Props:**
+- `formattedValue` (string): Formatted value string
+- `value` (number): Raw numeric value
+
+## Usage Examples
+
+### Without Label and Value
+
+Minimal meter showing only the visual indicator:
+
+```vue
+<DsMeter :value="65">
+  <DsMeterTrack>
+    <DsMeterIndicator />
+  </DsMeterTrack>
+</DsMeter>
+```
+
+### With Custom Formatting
+
+Display a currency value:
+
+```vue
+<DsMeter
+  :value="1250"
+  :min="0"
+  :max="2000"
+  :format="{ style: 'currency', currency: 'USD' }"
+>
+  <DsMeterLabel>Budget Used</DsMeterLabel>
+  <DsMeterTrack>
+    <DsMeterIndicator />
+  </DsMeterTrack>
+  <DsMeterValue />
+</DsMeter>
+```
+
+### With Custom Value Display
+
+Use scoped slots to customize the value display:
+
+```vue
+<DsMeter :value="75" :min="0" :max="100">
+  <DsMeterLabel>Disk Usage</DsMeterLabel>
+  <DsMeterTrack>
+    <DsMeterIndicator />
+  </DsMeterTrack>
+  <DsMeterValue v-slot="{ formattedValue, value }">
+    {{ value }} / 100 GB ({{ formattedValue }})
+  </DsMeterValue>
+</DsMeter>
+```
+
+### Percentage Display
+
+By default, values are treated as percentages (0-100 range):
+
+```vue
+<DsMeter :value="85">
+  <DsMeterLabel>Completion Rate</DsMeterLabel>
+  <DsMeterTrack>
+    <DsMeterIndicator />
+  </DsMeterTrack>
+  <DsMeterValue />
+</DsMeter>
+```
+
+This displays as "85%".
+
+### Custom Range Display
+
+For non-percentage ranges:
+
+```vue
+<DsMeter
+  :value="450"
+  :min="0"
+  :max="1000"
+  :format="{ style: 'decimal', maximumFractionDigits: 0 }"
+>
+  <DsMeterLabel>API Requests</DsMeterLabel>
+  <DsMeterTrack>
+    <DsMeterIndicator />
+  </DsMeterTrack>
+  <DsMeterValue />
+</DsMeter>
+```
+
+### Localized Formatting
+
+Format numbers according to different locales:
+
+```vue
+<DsMeter
+  :value="1234567.89"
+  :min="0"
+  :max="2000000"
+  locale="de-DE"
+  :format="{ style: 'decimal', maximumFractionDigits: 2 }"
+>
+  <DsMeterLabel>Revenue</DsMeterLabel>
+  <DsMeterTrack>
+    <DsMeterIndicator />
+  </DsMeterTrack>
+  <DsMeterValue />
+</DsMeter>
+```
+
+## Styling
+
+### Custom Colors
+
+Change indicator color using Tailwind classes:
+
+```vue
+<DsMeter :value="40">
+  <DsMeterLabel>Storage</DsMeterLabel>
+  <DsMeterTrack class="bg-neutral-200">
+    <DsMeterIndicator class="bg-blue-600" />
+  </DsMeterTrack>
+  <DsMeterValue />
+</DsMeter>
+```
+
+### Different Sizes
+
+Adjust the meter height:
+
+```vue
+<DsMeter :value="60">
+  <DsMeterLabel>Small Meter</DsMeterLabel>
+  <DsMeterTrack class="h-2">
+    <DsMeterIndicator />
+  </DsMeterTrack>
+  <DsMeterValue />
+</DsMeter>
+
+<DsMeter :value="60">
+  <DsMeterLabel>Large Meter</DsMeterLabel>
+  <DsMeterTrack class="h-6">
+    <DsMeterIndicator />
+  </DsMeterTrack>
+  <DsMeterValue />
+</DsMeter>
+```
+
+### Custom Layout
+
+Arrange label and value horizontally:
+
+```vue
+<DsMeter :value="73" class="space-y-2">
+  <div class="flex items-center justify-between">
+    <DsMeterLabel>Memory Usage</DsMeterLabel>
+    <DsMeterValue />
+  </div>
+  <DsMeterTrack>
+    <DsMeterIndicator />
+  </DsMeterTrack>
+</DsMeter>
+```
+
+## Accessibility
+
+The meter component includes proper accessibility features:
+
+- **Role**: `role="meter"` on the root element
+- **ARIA Attributes**:
+  - `aria-valuenow`: Current value
+  - `aria-valuemin`: Minimum value
+  - `aria-valuemax`: Maximum value
+  - `aria-valuetext`: Human-readable value
+  - `aria-labelledby`: Links to the label element
+- **Screen Reader Support**: The value display has `aria-hidden="true"` since the value is announced via ARIA attributes
+
+### Custom Accessibility Text
+
+Provide custom ARIA text for screen readers:
+
+```vue
+<DsMeter
+  :value="75"
+  :get-aria-value-text="(value, min, max) => `${value} out of ${max} items processed`"
+>
+  <DsMeterLabel>Processing Queue</DsMeterLabel>
+  <DsMeterTrack>
+    <DsMeterIndicator />
+  </DsMeterTrack>
+  <DsMeterValue />
+</DsMeter>
+```
+
+## Common Use Cases
+
+### Progress Tracking
+
+```vue
+<DsMeter :value="progressPercent">
+  <DsMeterLabel>Upload Progress</DsMeterLabel>
+  <DsMeterTrack>
+    <DsMeterIndicator />
+  </DsMeterTrack>
+  <DsMeterValue />
+</DsMeter>
+```
+
+### Resource Usage
+
+```vue
+<DsMeter :value="cpuUsage">
+  <DsMeterLabel>CPU Usage</DsMeterLabel>
+  <DsMeterTrack class="h-2">
+    <DsMeterIndicator :class="cpuUsage > 80 ? 'bg-red-600' : 'bg-primary'" />
+  </DsMeterTrack>
+  <DsMeterValue />
+</DsMeter>
+```
+
+### Quota Display
+
+```vue
+<DsMeter
+  :value="storageUsed"
+  :min="0"
+  :max="storageLimit"
+  :format="{ style: 'unit', unit: 'gigabyte', unitDisplay: 'short' }"
+>
+  <div class="flex justify-between mb-2">
+    <DsMeterLabel>Storage</DsMeterLabel>
+    <DsMeterValue v-slot="{ value }">
+      {{ value }} / {{ storageLimit }} GB
+    </DsMeterValue>
+  </div>
+  <DsMeterTrack>
+    <DsMeterIndicator />
+  </DsMeterTrack>
+</DsMeter>
+```
+
+## Architecture Notes
+
+1. **Context-Based State**: The root component provides context to child components using Vue's `provide/inject`
+2. **Automatic Calculation**: The indicator width is calculated automatically based on value, min, and max
+3. **Type-Safe**: All components have proper TypeScript interfaces
+4. **Composable**: Build custom layouts by arranging components differently
+5. **Formatting**: Uses `Intl.NumberFormat` for locale-aware number formatting
+
+## Related Documentation
+
+- [UI Design System](/development/frontend/ui/) - Overall design patterns
+- [Custom UI Components](/development/frontend/ui/custom-ui-components) - Component development guide
