@@ -1,0 +1,797 @@
+---
+title: MCP Server OAuth Token Injection
+description: How satellites retrieve and inject OAuth tokens into HTTP/SSE MCP servers for external service authentication
+sidebarTitle: OAuth Token Injection
+---
+
+<Note>
+**OAuth System Clarification**: This document covers **User → MCP Server OAuth token injection** (how satellites inject tokens for Notion/Box/Linear access).
+
+For **MCP Client → Satellite authentication** (how VS Code/Cursor/Claude.ai authenticate to DeployStack), see:
+- Backend Implementation: [OAuth2 Server](/development/backend/oauth2-server)
+- Satellite Integration: [Satellite OAuth Authentication](/development/satellite/oauth-authentication)
+</Note>
+
+## Overview
+
+This document covers how DeployStack satellites retrieve OAuth tokens from the backend and inject them into HTTP/SSE MCP servers that require user authorization (Notion, Box, Linear, GitHub Copilot).
+
+### When Token Injection is Needed
+
+OAuth token injection happens when:
+- MCP server requires OAuth authentication (`requires_oauth: true`)
+- MCP server uses HTTP or SSE transport (not stdio)
+- User has authorized the MCP server via OAuth flow
+- Satellite needs to connect to MCP server on behalf of user
+
+### Token Injection Flow
+
+1. **Configuration Received** - Satellite receives MCP server config with `requires_oauth: true`
+2. **Token Retrieval** - Satellite calls backend to retrieve user's OAuth tokens
+3. **Header Construction** - Satellite builds `Authorization` header with Bearer token
+4. **MCP Request** - Satellite sends request to MCP server with injected token
+5. **Response** - MCP server validates token and returns tools/results
+
+## Architecture Overview
+
+The token injection system includes:
+
+- **OAuthTokenService** - Retrieves tokens from backend with 5-minute caching
+- **MCP Server Wrapper** - Injects tokens into tool execution requests
+- **Remote Tool Discovery Manager** - Injects tokens into tool discovery requests
+- **Backend Token Endpoint** - Decrypts and returns user's OAuth tokens
+- **Token Status Endpoint** - Lightweight endpoint to check token validity
+
+## Token Retrieval Process
+
+### OAuthTokenService
+
+**File**: [services/satellite/src/services/oauth-token-service.ts](https://github.com/deploystackio/deploystack/blob/main/services/satellite/src/services/oauth-token-service.ts)
+
+**Purpose**: Retrieves OAuth tokens from backend and caches them for 5 minutes.
+
+#### Token Retrieval
+
+```typescript
+async getTokens(
+  installationId: string,
+  userId: string,
+  teamId: string
+): Promise<OAuthTokens | null> {
+  const cacheKey = `${installationId}:${userId}:${teamId}`;
+
+  // Check cache first (5-minute TTL)
+  const cached = this.tokenCache.get(cacheKey);
+  if (cached && this.isCacheValid(cached.cachedAt, cached.tokens.expires_at)) {
+    return cached.tokens;
+  }
+
+  // Fetch from backend
+  const response = await fetch(
+    `${backendUrl}/api/satellites/${satelliteId}/tokens/retrieve`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${satelliteApiKey}`
+      },
+      body: JSON.stringify({
+        installation_id: installationId,
+        user_id: userId,
+        team_id: teamId
+      })
+    }
+  );
+
+  const tokens = await response.json();
+
+  // Cache for 5 minutes
+  this.tokenCache.set(cacheKey, {
+    tokens,
+    cachedAt: Date.now()
+  });
+
+  return tokens;
+}
+```
+
+**Token response structure**:
+```typescript
+interface OAuthTokens {
+  access_token: string;
+  refresh_token: string | null;
+  token_type: string; // "Bearer"
+  expires_at: string | null; // ISO timestamp
+  scope: string | null;
+}
+```
+
+**Example response**:
+```json
+{
+  "access_token": "ya29.a0AfB_byABC123...",
+  "refresh_token": "1//0gABC123...",
+  "token_type": "Bearer",
+  "expires_at": "2025-12-22T12:00:00Z",
+  "scope": "read write"
+}
+```
+
+#### Token Status Check
+
+Before retrieving full tokens, satellite can check if tokens exist and are valid:
+
+```typescript
+async checkTokenStatus(
+  installationId: string,
+  userId: string,
+  teamId: string
+): Promise<OAuthTokenStatus> {
+  const response = await fetch(
+    `${backendUrl}/api/satellites/${satelliteId}/tokens/status`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${satelliteApiKey}`
+      },
+      body: JSON.stringify({
+        installation_id: installationId,
+        user_id: userId,
+        team_id: teamId
+      })
+    }
+  );
+
+  return await response.json();
+}
+```
+
+**Status response structure**:
+```typescript
+interface OAuthTokenStatus {
+  exists: boolean; // Tokens found in database
+  expired: boolean | null; // Token expired (null if no expiry)
+  expires_at: string | null; // Expiration timestamp
+  can_refresh: boolean; // Has refresh_token
+}
+```
+
+**Example responses**:
+
+**Valid tokens**:
+```json
+{
+  "exists": true,
+  "expired": false,
+  "expires_at": "2025-12-22T12:00:00Z",
+  "can_refresh": true
+}
+```
+
+**Expired tokens (can refresh)**:
+```json
+{
+  "exists": true,
+  "expired": true,
+  "expires_at": "2025-12-22T10:00:00Z",
+  "can_refresh": true
+}
+```
+
+**No tokens found**:
+```json
+{
+  "exists": false,
+  "expired": null,
+  "expires_at": null,
+  "can_refresh": false
+}
+```
+
+#### Caching Strategy
+
+**Cache key format**: `${installationId}:${userId}:${teamId}`
+
+**Cache TTL**: 5 minutes
+
+**Cache invalidation**:
+- Automatic expiration after 5 minutes
+- Token expiration detected (expires_at passed)
+- Manual cache clear on token refresh
+- Manual cache clear on user logout
+
+**Why caching**:
+- Reduces backend load (tokens requested for every tool call)
+- Improves performance (no backend round-trip per request)
+- Tokens rarely change during short time windows
+
+**Cache validation**:
+```typescript
+private isCacheValid(cachedAt: number, expiresAt: string | null): boolean {
+  // Check cache age (5 minutes)
+  if (Date.now() - cachedAt > 5 * 60 * 1000) {
+    return false;
+  }
+
+  // Check token expiration
+  if (expiresAt && new Date(expiresAt) <= new Date()) {
+    return false;
+  }
+
+  return true;
+}
+```
+
+## HTTP/SSE Token Injection
+
+### Tool Execution Injection
+
+**File**: [services/satellite/src/core/mcp-server-wrapper.ts](https://github.com/deploystackio/deploystack/blob/main/services/satellite/src/core/mcp-server-wrapper.ts:711-760)
+
+**Purpose**: Injects OAuth tokens when executing tools on HTTP/SSE MCP servers.
+
+#### Header Construction
+
+<Steps>
+  <Step title="Initialize Empty Headers">
+    Start with empty headers object.
+
+    ```typescript
+    let headers: Record<string, string> = {};
+    ```
+  </Step>
+
+  <Step title="Add Team/User Headers">
+    Merge custom headers from team and user configuration.
+
+    ```typescript
+    if (config.headers) {
+      Object.assign(headers, config.headers);
+      // Custom headers: { "X-API-Key": "abc123", "X-Custom": "value" }
+    }
+    ```
+  </Step>
+
+  <Step title="Check OAuth Requirement">
+    Verify if MCP server requires OAuth and has necessary context.
+
+    ```typescript
+    if (config.requires_oauth && this.oauthTokenService) {
+      if (!config.installation_id || !config.user_id || !config.team_id) {
+        throw new Error(
+          `OAuth required but missing context for ${serverName}. ` +
+          'Installation ID, User ID, and Team ID are required.'
+        );
+      }
+      // Continue to token retrieval
+    }
+    ```
+  </Step>
+
+  <Step title="Check Token Status">
+    Verify tokens exist and are valid before retrieving.
+
+    ```typescript
+    const tokenStatus = await this.oauthTokenService.checkTokenStatus(
+      config.installation_id,
+      config.user_id,
+      config.team_id
+    );
+
+    if (!tokenStatus.exists) {
+      throw new Error(`No OAuth tokens found for ${serverName}. Please re-authorize.`);
+    }
+
+    if (tokenStatus.expired && !tokenStatus.can_refresh) {
+      throw new Error(`OAuth tokens expired for ${serverName}. Please re-authorize.`);
+    }
+    ```
+  </Step>
+
+  <Step title="Retrieve OAuth Tokens">
+    Fetch user's tokens from backend (uses cache if available).
+
+    ```typescript
+    const tokens = await this.oauthTokenService.getTokens(
+      config.installation_id,
+      config.user_id,
+      config.team_id
+    );
+
+    if (!tokens) {
+      throw new Error(`Failed to retrieve OAuth tokens for ${serverName}`);
+    }
+    ```
+  </Step>
+
+  <Step title="Inject Authorization Header">
+    Add OAuth token as Authorization Bearer header.
+
+    ```typescript
+    headers['Authorization'] = `${tokens.token_type} ${tokens.access_token}`;
+    // Example: "Authorization: Bearer ya29.a0AfB_byABC123..."
+    ```
+  </Step>
+
+  <Step title="Send MCP Request">
+    Forward request to MCP server with injected token.
+
+    ```typescript
+    const response = await fetch(config.url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'MCP-Protocol-Version': '1.0',
+        ...headers // Includes OAuth Authorization header
+      },
+      body: JSON.stringify({
+        method: 'tools/call',
+        params: { name: toolName, arguments: toolArgs }
+      })
+    });
+    ```
+  </Step>
+</Steps>
+
+#### Implementation Example
+
+```typescript
+// From mcp-server-wrapper.ts:711-760
+async handleHttpToolCall(serverName: string, originalToolName: string, args: unknown) {
+  const config = this.serverConfigs.get(serverName);
+
+  // Phase 10: OAuth token injection for HTTP/SSE MCP servers
+  let headers: Record<string, string> = {};
+
+  // Add regular headers from config (API keys, custom headers, etc.)
+  if (config.headers) {
+    Object.assign(headers, config.headers);
+  }
+
+  if (config.requires_oauth && this.oauthTokenService) {
+    if (!config.installation_id || !config.user_id || !config.team_id) {
+      throw new Error(
+        `OAuth required but missing context for ${serverName}. ` +
+        'Installation ID, User ID, and Team ID are required.'
+      );
+    }
+
+    this.logger.info({
+      operation: 'oauth_token_injection_http',
+      server_name: serverName,
+      installation_id: config.installation_id,
+      user_id: config.user_id,
+      team_id: config.team_id
+    }, 'HTTP server requires OAuth - fetching tokens');
+
+    try {
+      // Check token status first
+      const tokenStatus = await this.oauthTokenService.checkTokenStatus(
+        config.installation_id,
+        config.user_id,
+        config.team_id
+      );
+
+      if (!tokenStatus.exists) {
+        throw new Error(
+          `OAuth tokens not found for ${serverName}. ` +
+          'User needs to authorize this MCP server.'
+        );
+      }
+
+      if (tokenStatus.expired && !tokenStatus.can_refresh) {
+        throw new Error(
+          `OAuth tokens expired for ${serverName}. ` +
+          'User needs to re-authorize.'
+        );
+      }
+
+      // Retrieve tokens
+      const tokens = await this.oauthTokenService.getTokens(
+        config.installation_id,
+        config.user_id,
+        config.team_id
+      );
+
+      if (!tokens) {
+        throw new Error(`Failed to retrieve OAuth tokens for ${serverName}`);
+      }
+
+      // Inject Authorization header
+      headers['Authorization'] = `${tokens.token_type} ${tokens.access_token}`;
+
+      this.logger.info({
+        operation: 'oauth_token_injected',
+        server_name: serverName,
+        token_type: tokens.token_type,
+        expires_at: tokens.expires_at
+      }, 'OAuth token injected into HTTP headers');
+
+    } catch (error) {
+      this.logger.error({
+        operation: 'oauth_token_injection_failed',
+        server_name: serverName,
+        error: error instanceof Error ? error.message : String(error)
+      }, 'Failed to inject OAuth token');
+      throw error;
+    }
+  }
+
+  // Send request to MCP server
+  const response = await fetch(config.url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'MCP-Protocol-Version': '1.0',
+      ...headers // Includes custom headers + OAuth header
+    },
+    body: JSON.stringify({
+      method: 'tools/call',
+      params: { name: originalToolName, arguments: args }
+    })
+  });
+
+  return await response.json();
+}
+```
+
+### Tool Discovery Injection
+
+**File**: [services/satellite/src/services/remote-tool-discovery-manager.ts](https://github.com/deploystackio/deploystack/blob/main/services/satellite/src/services/remote-tool-discovery-manager.ts:376-440)
+
+**Purpose**: Injects OAuth tokens when discovering available tools from HTTP/SSE MCP servers.
+
+#### Discovery with OAuth
+
+```typescript
+// From remote-tool-discovery-manager.ts:376-440
+async discoverServerTools(serverName: string, config: ServerConfig) {
+  // Phase 10: OAuth token injection for tool discovery
+  let headers: Record<string, string> = {};
+
+  // Add regular headers from config (API keys, custom headers, etc.)
+  if (config.headers) {
+    Object.assign(headers, config.headers);
+  }
+
+  if (config.requires_oauth && this.oauthTokenService) {
+    if (!config.installation_id || !config.user_id || !config.team_id) {
+      throw new Error(
+        `OAuth required but missing context for ${serverName}. ` +
+        'Installation ID, User ID, and Team ID are required for tool discovery.'
+      );
+    }
+
+    this.logger.info({
+      operation: 'oauth_token_injection_tool_discovery',
+      server_name: serverName,
+      installation_id: config.installation_id
+    }, 'MCP server requires OAuth for tool discovery - fetching tokens');
+
+    try {
+      // Check token status
+      const tokenStatus = await this.oauthTokenService.checkTokenStatus(
+        config.installation_id,
+        config.user_id,
+        config.team_id
+      );
+
+      if (!tokenStatus.exists) {
+        throw new Error(
+          `OAuth tokens not found for ${serverName} tool discovery. ` +
+          'User needs to authorize.'
+        );
+      }
+
+      // Retrieve tokens
+      const tokens = await this.oauthTokenService.getTokens(
+        config.installation_id,
+        config.user_id,
+        config.team_id
+      );
+
+      if (!tokens) {
+        throw new Error(`Failed to retrieve OAuth tokens for ${serverName}`);
+      }
+
+      // Inject Authorization header
+      headers['Authorization'] = `${tokens.token_type} ${tokens.access_token}`;
+
+    } catch (error) {
+      this.logger.error({
+        operation: 'oauth_token_injection_tool_discovery_failed',
+        server_name: serverName,
+        error: error instanceof Error ? error.message : String(error)
+      }, 'Failed to inject OAuth token for tool discovery');
+      throw error;
+    }
+  }
+
+  // Discover tools with MCP SDK Client
+  const client = new Client({
+    name: 'deploystack-satellite',
+    version: '1.0.0'
+  });
+
+  const transport = new SSEClientTransport(
+    new URL(config.url),
+    {
+      requestInit: {
+        headers // Includes custom headers + OAuth header
+      }
+    }
+  );
+
+  await client.connect(transport);
+  const toolsResult = await client.listTools();
+  await client.close();
+
+  return toolsResult.tools;
+}
+```
+
+## Header Merging Priority
+
+When building HTTP requests to OAuth MCP servers, headers are merged in this order:
+
+1. **Base headers** (Content-Type, User-Agent, MCP-Protocol-Version)
+2. **Team configuration headers** (from `config.headers` - API keys, custom headers)
+3. **OAuth Authorization header** (from token retrieval)
+
+**Later headers override earlier ones if keys conflict**.
+
+### Example Header Merge
+
+**Team configuration**:
+```json
+{
+  "headers": {
+    "X-API-Key": "team_secret_key",
+    "X-Custom-Header": "team_value"
+  }
+}
+```
+
+**OAuth tokens**:
+```json
+{
+  "access_token": "ya29.a0AfB_byABC123...",
+  "token_type": "Bearer"
+}
+```
+
+**Final headers sent to MCP server**:
+```
+Content-Type: application/json
+MCP-Protocol-Version: 1.0
+User-Agent: DeployStack-Satellite/1.0
+X-API-Key: team_secret_key
+X-Custom-Header: team_value
+Authorization: Bearer ya29.a0AfB_byABC123...
+```
+
+**Important**: If team headers include an `Authorization` header, it will be **overridden** by the OAuth token. This ensures OAuth authentication takes precedence.
+
+## Error Handling
+
+### Missing Tokens (User Not Authorized)
+
+**Scenario**: User installed MCP server but never authorized OAuth.
+
+**Detection**:
+```typescript
+const tokenStatus = await oauthTokenService.checkTokenStatus(...);
+
+if (!tokenStatus.exists) {
+  throw new Error('OAuth tokens not found. User needs to authorize.');
+}
+```
+
+**Error message to MCP client**:
+```json
+{
+  "error": {
+    "code": -32000,
+    "message": "OAuth tokens not found for Notion MCP Server. User needs to authorize this MCP server."
+  }
+}
+```
+
+**User action**: Re-install MCP server and complete OAuth flow.
+
+### Expired Tokens (No Refresh Available)
+
+**Scenario**: Tokens expired and no refresh_token available.
+
+**Detection**:
+```typescript
+if (tokenStatus.expired && !tokenStatus.can_refresh) {
+  throw new Error('OAuth tokens expired. User needs to re-authorize.');
+}
+```
+
+**Error message to MCP client**:
+```json
+{
+  "error": {
+    "code": -32001,
+    "message": "OAuth tokens expired for Box MCP Server. User needs to re-authorize."
+  }
+}
+```
+
+**User action**: Delete and re-install MCP server to get new tokens.
+
+### Expired Tokens (Refresh In Progress)
+
+**Scenario**: Tokens expired but backend is refreshing them (background cron job).
+
+**Detection**:
+```typescript
+if (tokenStatus.expired && tokenStatus.can_refresh) {
+  // Backend should refresh tokens automatically
+  // Satellite can retry or wait
+}
+```
+
+**Handling**:
+1. Satellite logs warning about expired token
+2. Backend cron job refreshes tokens automatically (every 5 minutes)
+3. Satellite retries request after short delay (or cache clears automatically after 5 minutes)
+
+**Error message (temporary)**:
+```json
+{
+  "error": {
+    "code": -32002,
+    "message": "OAuth tokens are being refreshed. Please try again in a few seconds."
+  }
+}
+```
+
+### Token Retrieval Failure
+
+**Scenario**: Backend unreachable or token decryption fails.
+
+**Error handling**:
+```typescript
+try {
+  const tokens = await oauthTokenService.getTokens(...);
+} catch (error) {
+  this.logger.error({
+    operation: 'oauth_token_retrieval_failed',
+    error: error.message
+  }, 'Failed to retrieve OAuth tokens from backend');
+
+  throw new Error(
+    `Failed to retrieve OAuth tokens: ${error.message}. ` +
+    'Contact support if issue persists.'
+  );
+}
+```
+
+**Error message to MCP client**:
+```json
+{
+  "error": {
+    "code": -32003,
+    "message": "Failed to retrieve OAuth tokens: Network timeout. Contact support if issue persists."
+  }
+}
+```
+
+### MCP Server Rejects Token
+
+**Scenario**: MCP server returns 401 Unauthorized despite valid token.
+
+**Possible causes**:
+- Token revoked by user at OAuth provider
+- MCP server changed OAuth configuration
+- Token scope insufficient for requested operation
+
+**Detection**: Check HTTP response from MCP server.
+
+**Error handling**:
+```typescript
+if (response.status === 401) {
+  this.logger.warn({
+    operation: 'oauth_token_rejected',
+    server_name: serverName,
+    status: 401
+  }, 'MCP server rejected OAuth token - user may need to re-authorize');
+
+  // Clear cache to force fresh token retrieval
+  this.oauthTokenService.clearCache(
+    config.installation_id,
+    config.user_id,
+    config.team_id
+  );
+
+  throw new Error(
+    'MCP server rejected OAuth token. Please re-authorize this server.'
+  );
+}
+```
+
+**User action**: Delete and re-install MCP server.
+
+## Security Considerations
+
+### Token Transmission
+
+**HTTPS required**: All token transmissions between satellite and backend occur over HTTPS.
+
+**No token logging**: Satellite NEVER logs full access tokens, only metadata.
+
+**Good logging**:
+```typescript
+this.logger.info({
+  operation: 'oauth_token_injected',
+  server_name: 'notion',
+  token_type: 'Bearer',
+  expires_at: '2025-12-22T12:00:00Z',
+  access_token_preview: 'ya29...ABC' // First 5 and last 3 chars only
+}, 'OAuth token injected');
+```
+
+**Bad logging** (NEVER DO THIS):
+```typescript
+// ❌ NEVER LOG FULL TOKENS
+this.logger.info({
+  access_token: tokens.access_token // SECURITY VIOLATION
+}, 'Retrieved token');
+```
+
+### Token Storage
+
+**Satellite does NOT store tokens persistently**:
+- Tokens cached in memory only (5-minute TTL)
+- Cache cleared on satellite restart
+- Cache cleared on user logout
+- Tokens retrieved fresh from backend on cache miss
+
+**Why no persistent storage**:
+- Reduces attack surface (no encryption key management in satellite)
+- Backend handles encryption/decryption
+- Satellite process restart clears all tokens
+
+### Memory Cleanup
+
+**Automatic cleanup**:
+- Cache TTL (5 minutes) removes old entries
+- Token expiration detected and cache invalidated
+- User logout clears user-specific cache entries
+
+**Manual cleanup**:
+```typescript
+// Clear specific installation cache
+oauthTokenService.clearCache(installationId, userId, teamId);
+
+// Clear all tokens for user
+oauthTokenService.clearUserCache(userId);
+
+// Clear all cached tokens (satellite restart)
+oauthTokenService.clearAllCache();
+```
+
+### Token Scope Validation
+
+**Satellite trusts backend token validation**:
+- Backend ensures tokens have required scopes
+- Backend auto-refreshes expired tokens
+- Satellite focuses on injection, not validation
+
+**Scope checking happens at**:
+1. OAuth authorization (user approves scopes)
+2. Token issuance (OAuth provider validates)
+3. MCP server request (server validates scope)
+
+Satellite does NOT need to validate scopes - it simply injects whatever backend provides.
+
+## Related Documentation
+
+- [MCP Server OAuth](/development/backend/mcp-server-oauth) - Backend OAuth implementation (authorization, callback, token storage)
+- [MCP Transport](/development/satellite/mcp-transport) - HTTP/SSE transport architecture
+- [Satellite OAuth Authentication](/development/satellite/oauth-authentication) - MCP client authentication (different system)
+- [MCP OAuth User Guide](/general/mcp-oauth) - User-facing documentation

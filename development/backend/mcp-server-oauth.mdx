@@ -1,0 +1,1350 @@
+---
+title: MCP Server OAuth Implementation
+description: Developer guide for implementing OAuth 2.1 authentication with external MCP servers (Notion, Box, Linear, GitHub Copilot)
+sidebarTitle: MCP Server OAuth
+---
+
+<Note>
+**OAuth System Clarification**: DeployStack implements three distinct OAuth systems:
+
+1. **User → DeployStack OAuth** (Social Login) - See [OAuth Providers](/development/backend/oauth-providers)
+2. **MCP Client → DeployStack OAuth** (API Access) - See [OAuth2 Server](/development/backend/oauth2-server) - How VS Code, Cursor, Claude.ai authenticate to satellite APIs
+3. **User → MCP Server OAuth** (External Service Access) - **This document** - How users authorize external services like Notion, Box, Linear
+
+This document covers system #3 - OAuth authentication with external MCP servers.
+</Note>
+
+## Overview
+
+This document covers the backend implementation for OAuth 2.1 authentication with external MCP servers that require user authorization, such as Notion, Box, Linear, and GitHub Copilot.
+
+### When MCP Servers Require OAuth
+
+MCP servers that access user-specific resources (files, issues, repositories) require OAuth authorization. Examples:
+
+- **Notion MCP Server** (`https://mcp.notion.com/`) - Access user's Notion pages
+- **Box MCP Server** (`https://mcp.box.com/`) - Access user's Box files
+- **Linear MCP Server** (`https://mcp.linear.app/sse`) - Access user's Linear issues
+- **GitHub Copilot MCP** - Access GitHub repositories
+
+### User Flow
+
+1. **Install** - User initiates MCP server installation in frontend
+2. **Authorize** - Backend redirects to OAuth provider's authorization page
+3. **Callback** - OAuth provider redirects back with authorization code
+4. **Token Storage** - Backend exchanges code for tokens, encrypts and stores them
+5. **Use** - Satellite injects tokens when connecting to MCP server
+
+## Architecture Overview
+
+The OAuth implementation includes:
+
+- **OAuth Discovery Service** - Detects OAuth requirement and discovers endpoints using RFC 8414/9728
+- **Authorization Endpoint** - Initiates OAuth flow with PKCE, state parameter, and resource parameter
+- **Callback Endpoint** - Exchanges authorization code for tokens
+- **Token Service** - Handles token exchange and refresh operations
+- **Client Registration Service** - Implements RFC 7591 Dynamic Client Registration (DCR)
+- **Encryption Service** - AES-256-GCM encryption for tokens at rest
+- **Token Refresh Job** - Background cron job refreshing expiring tokens
+
+### Database Tables
+
+- `mcpOauthProviders` - Pre-registered OAuth providers (for non-DCR auth servers)
+- `oauthPendingFlows` - Temporary storage during OAuth flow (10-minute expiry)
+- `mcpServerInstallations` - MCP server installations
+- `mcpOauthTokens` - Encrypted access and refresh tokens
+
+## Implementation Components
+
+### OAuthDiscoveryService
+
+**File**: [services/backend/src/services/OAuthDiscoveryService.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/services/OAuthDiscoveryService.ts)
+
+**Purpose**: Detects if an MCP server requires OAuth and discovers OAuth endpoints using RFC 8414 and RFC 9728.
+
+#### OAuth Detection
+
+The service makes a test request to the MCP server and checks for OAuth requirement:
+
+```typescript
+// Detection logic
+const response = await fetch(mcpServerUrl);
+
+if (response.status === 401 && response.headers.get('www-authenticate')?.includes('Bearer')) {
+  // OAuth is required
+  requiresOauth = true;
+}
+```
+
+**Detection criteria**:
+- HTTP 401 Unauthorized response
+- `WWW-Authenticate: Bearer` header present
+
+#### OAuth Metadata Discovery
+
+Once OAuth is detected, the service discovers endpoints using two RFCs:
+
+**RFC 9728 - Protected Resource Metadata** (Primary method):
+```typescript
+const metadataUrl = `${mcpServerUrl}/.well-known/oauth-protected-resource`;
+const response = await fetch(metadataUrl);
+const metadata = await response.json();
+
+// metadata.authorization_servers contains auth server URLs
+```
+
+**RFC 8414 - Authorization Server Metadata** (Fallback):
+```typescript
+const metadataUrl = `${authServerUrl}/.well-known/oauth-authorization-server`;
+const response = await fetch(metadataUrl);
+const metadata = await response.json();
+
+// Contains: authorization_endpoint, token_endpoint, registration_endpoint, etc.
+```
+
+**Fallback**: OpenID Connect Discovery (`.well-known/openid-configuration`)
+
+#### Metadata Structure
+
+```typescript
+interface OAuthServerMetadata {
+  issuer: string;
+  authorization_endpoint: string;
+  token_endpoint: string;
+  registration_endpoint?: string; // RFC 7591 Dynamic Client Registration
+  revocation_endpoint?: string;
+  scopes_supported?: string[];
+  response_types_supported?: string[];
+  grant_types_supported?: string[];
+  code_challenge_methods_supported?: string[]; // PKCE support
+  token_endpoint_auth_methods_supported?: string[];
+}
+```
+
+#### Pre-registered Provider Matching
+
+If the discovered authorization server matches a pre-registered provider pattern, the service returns the provider configuration:
+
+```typescript
+// Check if auth server matches any registered provider
+const provider = await this.matchOAuthProvider(metadata.issuer);
+
+if (provider) {
+  return {
+    requiresOauth: true,
+    metadata,
+    provider: {
+      id: provider.id,
+      name: provider.name,
+      clientId: provider.client_id,
+      clientSecret: provider.client_secret, // Encrypted
+      authorizationEndpoint: provider.authorization_endpoint,
+      tokenEndpoint: provider.token_endpoint,
+      tokenEndpointAuthMethod: provider.token_endpoint_auth_method,
+      defaultScopes: JSON.parse(provider.default_scopes || '[]')
+    }
+  };
+}
+```
+
+### Authorization Endpoint
+
+**File**: [services/backend/src/routes/mcp/installations/authorize.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/routes/mcp/installations/authorize.ts)
+
+**Endpoint**: `POST /api/teams/:teamId/mcp/installations/authorize`
+
+**Purpose**: Initiates the OAuth 2.1 authorization flow with PKCE for MCP server installation.
+
+#### Request Body
+
+```typescript
+{
+  "server_id": "notion_mcp_server_id",
+  "installation_name": "My Notion Workspace",
+  "installation_type": "global", // or "team"
+  "team_config": {
+    "team_args": ["arg1", "arg2"],
+    "team_env": {"API_KEY": "value"},
+    "team_headers": {"X-Custom": "header"},
+    "team_url_query_params": {"param": "value"}
+  }
+}
+```
+
+#### Authorization Flow Steps
+
+<Steps>
+  <Step title="Verify OAuth Requirement">
+    Check that the MCP server has `requires_oauth: true` in the catalog.
+  </Step>
+
+  <Step title="Extract Server URL">
+    Retrieve MCP server URL from `remotes` (HTTP/SSE) or `packages` (stdio) configuration.
+  </Step>
+
+  <Step title="Discover OAuth Endpoints">
+    Call `OAuthDiscoveryService.detectAndDiscoverOAuth()` to get authorization endpoints.
+  </Step>
+
+  <Step title="Dynamic Client Registration or Provider Match">
+    - If `registration_endpoint` exists: Register new client via RFC 7591
+    - Else if pre-registered provider matches: Use provider credentials
+    - Else: Return error (cannot proceed)
+  </Step>
+
+  <Step title="Generate PKCE Pair">
+    Create code verifier (128 random bytes) and code challenge (SHA256 hash).
+
+    ```typescript
+    const pkce = generatePKCEPair();
+    // {
+    //   code_verifier: "base64url-encoded-128-bytes",
+    //   code_challenge: "base64url-encoded-sha256-hash",
+    //   code_challenge_method: "S256"
+    // }
+    ```
+  </Step>
+
+  <Step title="Generate State Parameter">
+    Create cryptographically secure random state for CSRF protection.
+
+    ```typescript
+    const state = generateState(); // 32 random bytes, base64url-encoded
+    ```
+  </Step>
+
+  <Step title="Generate Resource Parameter">
+    Create resource parameter (RFC 8707) for token audience binding.
+
+    ```typescript
+    const resource = generateResourceParameter(serverId, teamId);
+    // "deploystack:mcp:{server_id}:{team_id}"
+    ```
+  </Step>
+
+  <Step title="Create Pending Flow Record">
+    Store temporary OAuth flow data in `oauthPendingFlows` table (expires in 10 minutes).
+
+    ```typescript
+    await db.insert(oauthPendingFlows).values({
+      id: flowId,
+      team_id: teamId,
+      server_id: serverId,
+      created_by: userId,
+      oauth_state: state,
+      oauth_code_verifier: pkce.code_verifier,
+      oauth_client_id: clientId,
+      oauth_client_secret: clientSecret ? encrypt(clientSecret) : null,
+      oauth_provider_id: providerId,
+      oauth_token_endpoint: tokenEndpoint,
+      oauth_token_endpoint_auth_method: authMethod,
+      installation_name: "My Notion Workspace",
+      installation_type: "global",
+      team_config: JSON.stringify(teamConfig),
+      expires_at: new Date(Date.now() + 10 * 60 * 1000)
+    });
+    ```
+  </Step>
+
+  <Step title="Build Authorization URL">
+    Construct OAuth authorization URL with all parameters.
+
+    ```typescript
+    const authUrl = new URL(authorizationEndpoint);
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('client_id', clientId);
+    authUrl.searchParams.set('redirect_uri', redirectUri);
+    authUrl.searchParams.set('state', state);
+    authUrl.searchParams.set('code_challenge', pkce.code_challenge);
+    authUrl.searchParams.set('code_challenge_method', 'S256');
+    authUrl.searchParams.set('resource', resource);
+    authUrl.searchParams.set('scope', scopes.join(' '));
+    authUrl.searchParams.set('prompt', 'consent');
+    ```
+  </Step>
+
+  <Step title="Return Authorization URL">
+    Frontend opens this URL in a popup window for user authorization.
+
+    ```json
+    {
+      "flow_id": "abc123",
+      "authorization_url": "https://notion.com/oauth/authorize?...",
+      "requires_authorization": true,
+      "expires_at": "2025-12-22T10:30:00Z"
+    }
+    ```
+  </Step>
+</Steps>
+
+### Callback Endpoint
+
+**File**: [services/backend/src/routes/mcp/installations/callback.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/routes/mcp/installations/callback.ts)
+
+**Endpoint**: `GET /api/teams/:teamId/mcp/oauth/callback/:flowId`
+
+**Purpose**: Receives authorization code from OAuth provider, exchanges it for tokens, and completes installation.
+
+#### Callback Flow Steps
+
+<Steps>
+  <Step title="Validate OAuth Callback">
+    Check for errors and validate required parameters.
+
+    ```typescript
+    // Check for OAuth errors
+    if (query.error) {
+      return reply.type('text/html').send(errorPage);
+    }
+
+    // Validate required parameters
+    if (!query.state || !query.code) {
+      return reply.code(400).send({ error: 'Missing state or code' });
+    }
+    ```
+  </Step>
+
+  <Step title="Find Pending Flow">
+    Retrieve pending flow by flowId, teamId, and state parameter.
+
+    ```typescript
+    const [flow] = await db
+      .select()
+      .from(oauthPendingFlows)
+      .where(
+        and(
+          eq(oauthPendingFlows.id, flowId),
+          eq(oauthPendingFlows.team_id, teamId),
+          eq(oauthPendingFlows.oauth_state, query.state)
+        )
+      )
+      .limit(1);
+
+    if (!flow) {
+      return reply.code(404).send({ error: 'Flow not found or state invalid' });
+    }
+    ```
+  </Step>
+
+  <Step title="Check Flow Expiration">
+    Ensure flow hasn't expired (10-minute window).
+
+    ```typescript
+    if (flow.expires_at < new Date()) {
+      await db.delete(oauthPendingFlows).where(eq(oauthPendingFlows.id, flow.id));
+      return reply.code(400).send({ error: 'Flow expired. Please try again.' });
+    }
+    ```
+  </Step>
+
+  <Step title="Exchange Code for Tokens">
+    Use PKCE verifier to exchange authorization code for access/refresh tokens.
+
+    ```typescript
+    const tokenService = new OAuthTokenService(logger);
+    const tokenResponse = await tokenService.exchangeCodeForToken({
+      code: query.code,
+      codeVerifier: flow.oauth_code_verifier,
+      clientId: flow.oauth_client_id,
+      redirectUri,
+      tokenEndpoint: flow.oauth_token_endpoint,
+      clientSecret: flow.oauth_client_secret ? decrypt(flow.oauth_client_secret) : null,
+      tokenEndpointAuthMethod: flow.oauth_token_endpoint_auth_method
+    });
+    ```
+  </Step>
+
+  <Step title="Create Installation">
+    Create the MCP server installation record (not pending anymore).
+
+    ```typescript
+    const installationId = nanoid();
+    await db.insert(mcpServerInstallations).values({
+      id: installationId,
+      team_id: flow.team_id,
+      server_id: flow.server_id,
+      created_by: flow.created_by,
+      installation_name: flow.installation_name,
+      installation_type: flow.installation_type,
+      team_args: teamConfig.team_args ? JSON.stringify(teamConfig.team_args) : null,
+      team_env: teamConfig.team_env ? JSON.stringify(teamConfig.team_env) : null,
+      team_headers: teamConfig.team_headers ? JSON.stringify(teamConfig.team_headers) : null,
+      team_url_query_params: teamConfig.team_url_query_params ? JSON.stringify(teamConfig.team_url_query_params) : null,
+      oauth_pending: false, // Installation complete
+      status: 'connecting',
+      status_message: 'Authenticated successfully, waiting for satellite to connect'
+    });
+    ```
+  </Step>
+
+  <Step title="Encrypt and Store Tokens">
+    Encrypt access and refresh tokens using AES-256-GCM before storing.
+
+    ```typescript
+    const encryptedAccessToken = encrypt(tokenResponse.access_token, logger);
+    const encryptedRefreshToken = tokenResponse.refresh_token
+      ? encrypt(tokenResponse.refresh_token, logger)
+      : null;
+
+    await db.insert(mcpOauthTokens).values({
+      id: nanoid(),
+      installation_id: installationId,
+      user_id: flow.created_by,
+      team_id: flow.team_id,
+      access_token: encryptedAccessToken,
+      refresh_token: encryptedRefreshToken,
+      token_type: tokenResponse.token_type || 'Bearer',
+      expires_at: new Date(Date.now() + tokenResponse.expires_in * 1000),
+      scope: tokenResponse.scope || null
+    });
+    ```
+  </Step>
+
+  <Step title="Delete Pending Flow">
+    Remove temporary flow record to prevent reuse.
+
+    ```typescript
+    await db.delete(oauthPendingFlows).where(eq(oauthPendingFlows.id, flow.id));
+    ```
+  </Step>
+
+  <Step title="Notify Satellites">
+    Create satellite commands for immediate configuration update.
+
+    ```typescript
+    const satelliteCommandService = new SatelliteCommandService(db, logger);
+    await satelliteCommandService.notifyMcpInstallation(
+      installationId,
+      flow.team_id,
+      flow.created_by
+    );
+    ```
+  </Step>
+
+  <Step title="Return Success Page">
+    Render HTML page that posts message to opener window and closes popup.
+
+    ```html
+    <script>
+      if (window.opener) {
+        window.opener.postMessage({
+          type: 'oauth_success',
+          installation_id: 'abc123'
+        }, 'https://cloud.deploystack.io');
+      }
+      setTimeout(() => window.close(), 500);
+    </script>
+    ```
+  </Step>
+</Steps>
+
+### OAuthTokenService
+
+**File**: [services/backend/src/services/OAuthTokenService.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/services/OAuthTokenService.ts)
+
+**Purpose**: Handles token exchange and refresh operations with OAuth servers.
+
+#### Token Exchange with PKCE
+
+Exchanges authorization code for access/refresh tokens using PKCE verification:
+
+```typescript
+async exchangeCodeForToken(params: TokenExchangeParams): Promise<TokenResponse> {
+  const requestBody = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code: params.code,
+    redirect_uri: params.redirectUri,
+    code_verifier: params.codeVerifier // PKCE verification
+  });
+
+  // Handle different authentication methods
+  switch (params.tokenEndpointAuthMethod) {
+    case 'client_secret_basic':
+      // HTTP Basic Auth header
+      const credentials = Buffer.from(`${params.clientId}:${params.clientSecret}`).toString('base64');
+      headers['Authorization'] = `Basic ${credentials}`;
+      break;
+
+    case 'client_secret_post':
+      // Client secret in body (GitHub, most providers)
+      requestBody.set('client_id', params.clientId);
+      requestBody.set('client_secret', params.clientSecret);
+      break;
+
+    case 'none':
+    default:
+      // Public client - PKCE only
+      requestBody.set('client_id', params.clientId);
+      break;
+  }
+
+  const response = await fetch(params.tokenEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: requestBody.toString()
+  });
+
+  return await response.json();
+}
+```
+
+**Token endpoint authentication methods**:
+- `none` - Public client (PKCE only, no client secret)
+- `client_secret_post` - Client secret in request body (GitHub, most OAuth providers)
+- `client_secret_basic` - HTTP Basic Auth header (enterprise providers)
+
+#### Token Refresh
+
+Refreshes expired access tokens using refresh token:
+
+```typescript
+async refreshToken(params: TokenRefreshParams): Promise<TokenResponse> {
+  const requestBody = new URLSearchParams({
+    grant_type: 'refresh_token',
+    refresh_token: params.refreshToken
+  });
+
+  // Same authentication method handling as token exchange
+  // ...
+
+  const response = await fetch(params.tokenEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: requestBody.toString()
+  });
+
+  return await response.json();
+}
+```
+
+#### Update Refreshed Tokens
+
+Updates database with newly refreshed encrypted tokens:
+
+```typescript
+async updateRefreshedTokens(tokenId: string, newTokens: TokenResponse, db: AnyDatabase) {
+  const encryptedAccessToken = encrypt(newTokens.access_token, this.logger);
+  const encryptedRefreshToken = newTokens.refresh_token
+    ? encrypt(newTokens.refresh_token, this.logger)
+    : undefined; // Keep existing if not rotated
+
+  const expiresAt = newTokens.expires_in
+    ? new Date(Date.now() + newTokens.expires_in * 1000)
+    : null;
+
+  await db
+    .update(mcpOauthTokens)
+    .set({
+      access_token: encryptedAccessToken,
+      ...(encryptedRefreshToken !== undefined && { refresh_token: encryptedRefreshToken }),
+      expires_at: expiresAt,
+      scope: newTokens.scope || undefined,
+      updated_at: new Date()
+    })
+    .where(eq(mcpOauthTokens.id, tokenId));
+}
+```
+
+**Note**: Some OAuth providers rotate refresh tokens (issue new refresh token with each refresh). The service handles this by conditionally updating the refresh token field.
+
+### OAuthClientRegistrationService
+
+**File**: [services/backend/src/services/OAuthClientRegistrationService.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/services/OAuthClientRegistrationService.ts)
+
+**Purpose**: Implements RFC 7591 (OAuth 2.0 Dynamic Client Registration Protocol).
+
+#### Dynamic Client Registration
+
+Registers a new OAuth client with MCP server's registration endpoint:
+
+```typescript
+async registerClient(
+  registrationEndpoint: string,
+  request: ClientRegistrationRequest
+): Promise<ClientRegistrationResponse> {
+  const registrationBody = {
+    client_name: 'DeployStack',
+    redirect_uris: [redirectUri],
+    grant_types: ['authorization_code', 'refresh_token'],
+    response_types: ['code'],
+    token_endpoint_auth_method: 'none' // Public client (PKCE)
+  };
+
+  const response = await fetch(registrationEndpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify(registrationBody)
+  });
+
+  const registration = await response.json();
+  // Returns: { client_id, client_secret?, redirect_uris, ... }
+
+  return registration;
+}
+```
+
+**Registration response**:
+```typescript
+{
+  client_id: "dynamically-generated-client-id",
+  client_secret: "optional-client-secret", // Only for confidential clients
+  redirect_uris: ["https://api.deploystack.io/oauth/callback"],
+  grant_types: ["authorization_code", "refresh_token"],
+  token_endpoint_auth_method: "none"
+}
+```
+
+**When DCR is used**:
+- MCP server supports `registration_endpoint` in OAuth metadata
+- Client ID is generated dynamically per installation
+- No pre-registration required with OAuth provider
+
+**When Pre-registered Provider is used**:
+- MCP server does NOT support `registration_endpoint`
+- Pre-registered provider configured in `mcpOauthProviders` table
+- Uses fixed client ID and client secret
+- Example: GitHub OAuth Apps for GitHub MCP server
+
+## Database Schema
+
+### mcpOauthProviders Table
+
+Pre-registered OAuth providers for MCP servers that don't support Dynamic Client Registration.
+
+```sql
+CREATE TABLE mcpOauthProviders (
+  id TEXT PRIMARY KEY,
+
+  -- Provider identity
+  name TEXT NOT NULL, -- "GitHub", "Google"
+  slug TEXT NOT NULL UNIQUE, -- "github", "google"
+  icon_url TEXT,
+
+  -- Authorization server matching
+  auth_server_patterns TEXT NOT NULL, -- JSON array of regex patterns
+
+  -- OAuth credentials (pre-registered with provider)
+  client_id TEXT NOT NULL,
+  client_secret TEXT, -- Encrypted (NULL for public clients)
+
+  -- OAuth endpoints
+  authorization_endpoint TEXT NOT NULL,
+  token_endpoint TEXT NOT NULL,
+
+  -- OAuth configuration
+  default_scopes TEXT, -- JSON array
+  pkce_required BOOLEAN NOT NULL DEFAULT true,
+  token_endpoint_auth_method TEXT NOT NULL DEFAULT 'client_secret_post',
+
+  -- Status
+  enabled BOOLEAN NOT NULL DEFAULT true,
+
+  -- Timestamps
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+**Example provider record**:
+```json
+{
+  "id": "github_oauth_provider",
+  "name": "GitHub",
+  "slug": "github",
+  "auth_server_patterns": "[\"^https://github\\\\.com/login/oauth\"]",
+  "client_id": "Ov23liABCDEF12345",
+  "client_secret": "encrypted:abc123...", // Encrypted
+  "authorization_endpoint": "https://github.com/login/oauth/authorize",
+  "token_endpoint": "https://github.com/login/oauth/access_token",
+  "default_scopes": "[\"repo\", \"read:user\"]",
+  "pkce_required": true,
+  "token_endpoint_auth_method": "client_secret_post",
+  "enabled": true
+}
+```
+
+### oauthPendingFlows Table
+
+Temporary storage for OAuth flows during authorization (expires in 10 minutes).
+
+```sql
+CREATE TABLE oauthPendingFlows (
+  id TEXT PRIMARY KEY, -- flow_id (nanoid)
+
+  -- Foreign Keys
+  team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  server_id TEXT NOT NULL REFERENCES mcpServers(id) ON DELETE CASCADE,
+  created_by TEXT NOT NULL REFERENCES authUser(id) ON DELETE CASCADE,
+
+  -- OAuth Flow State
+  oauth_state TEXT NOT NULL, -- CSRF protection
+  oauth_code_verifier TEXT NOT NULL, -- PKCE verifier
+
+  -- OAuth Client (Dynamic or Pre-registered)
+  oauth_client_id TEXT NOT NULL,
+  oauth_client_secret TEXT, -- Encrypted (if provided)
+  oauth_provider_id TEXT REFERENCES mcpOauthProviders(id) ON DELETE SET NULL,
+  oauth_token_endpoint TEXT NOT NULL,
+  oauth_token_endpoint_auth_method TEXT NOT NULL,
+
+  -- Installation Data (stored temporarily)
+  installation_name TEXT NOT NULL,
+  installation_type TEXT NOT NULL DEFAULT 'global',
+  team_config TEXT, -- JSON: team_args, team_env, team_headers, etc.
+
+  -- Expiration
+  expires_at TIMESTAMP NOT NULL, -- 10 minutes from creation
+
+  -- Timestamps
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+**Important**: This table is cleaned up automatically after OAuth flow completes or expires. Records should never exist for more than 10 minutes.
+
+### mcpOauthTokens Table
+
+Encrypted OAuth tokens for MCP server installations.
+
+```sql
+CREATE TABLE mcpOauthTokens (
+  id TEXT PRIMARY KEY,
+
+  -- Foreign Keys
+  installation_id TEXT NOT NULL REFERENCES mcpServerInstallations(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES authUser(id) ON DELETE CASCADE,
+  team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+
+  -- Token Data (AES-256-GCM encrypted)
+  access_token TEXT NOT NULL,
+  refresh_token TEXT,
+
+  -- Token Metadata
+  token_type TEXT NOT NULL DEFAULT 'Bearer',
+  expires_at TIMESTAMP,
+  scope TEXT,
+
+  -- Timestamps
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+**Encryption format**: `iv:authTag:encryptedData` (all hex-encoded)
+- IV: 16 bytes (128 bits)
+- Auth Tag: 16 bytes (128 bits)
+- Encrypted Data: Variable length
+
+**Index**: `(installation_id, user_id, team_id)` for fast token lookups by satellite.
+
+## Token Lifecycle
+
+### Token Issuance
+
+1. User authorizes application at OAuth provider
+2. OAuth provider redirects to callback with authorization code
+3. Backend exchanges code for access/refresh tokens using PKCE
+4. Tokens encrypted using AES-256-GCM
+5. Encrypted tokens stored in `mcpOauthTokens` table
+6. Installation status set to `connecting`
+
+### Automatic Token Refresh
+
+**File**: [services/backend/src/jobs/refresh-oauth-tokens.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/jobs/refresh-oauth-tokens.ts)
+
+**Cron Schedule**: Every 5 minutes
+
+**Refresh Criteria**:
+- Token has `refresh_token` (NOT NULL)
+- Token has `expires_at` timestamp (NOT NULL)
+- Token expires within next 10 minutes
+- Token not already expired
+
+**Refresh Process**:
+
+<Steps>
+  <Step title="Find Expiring Tokens">
+    Query tokens expiring in the next 10 minutes.
+
+    ```sql
+    SELECT t.*, i.*, s.*
+    FROM mcpOauthTokens t
+    INNER JOIN mcpServerInstallations i ON t.installation_id = i.id
+    INNER JOIN mcpServers s ON i.server_id = s.id
+    WHERE t.refresh_token IS NOT NULL
+      AND t.expires_at IS NOT NULL
+      AND t.expires_at < NOW() + INTERVAL '10 minutes'
+      AND t.expires_at > NOW()
+    ```
+  </Step>
+
+  <Step title="Discover OAuth Endpoints">
+    Re-discover OAuth endpoints for each MCP server (ensures current endpoints).
+  </Step>
+
+  <Step title="Decrypt Refresh Token">
+    Decrypt stored refresh token using AES-256-GCM.
+  </Step>
+
+  <Step title="Call Token Endpoint">
+    Exchange refresh token for new access token.
+
+    ```typescript
+    const newTokens = await tokenService.refreshToken({
+      refreshToken: decryptedRefreshToken,
+      clientId: installation.oauth_client_id || 'deploystack',
+      tokenEndpoint: discovery.metadata.token_endpoint,
+      clientSecret: clientSecret, // If using pre-registered provider
+      tokenEndpointAuthMethod: 'none' // Or from provider config
+    });
+    ```
+  </Step>
+
+  <Step title="Encrypt and Update">
+    Encrypt new tokens and update database.
+
+    ```typescript
+    await tokenService.updateRefreshedTokens(token.id, newTokens, db);
+    ```
+  </Step>
+
+  <Step title="Handle Failures">
+    If refresh fails, set installation status to `requires_reauth`.
+
+    ```typescript
+    await db
+      .update(mcpServerInstallations)
+      .set({
+        status: 'requires_reauth',
+        status_message: `OAuth token refresh failed: ${error.message}. Please re-authenticate.`,
+        status_updated_at: new Date()
+      })
+      .where(eq(mcpServerInstallations.id, installation.id));
+    ```
+  </Step>
+</Steps>
+
+**Logging**:
+```
+INFO: Found 3 tokens that need refreshing
+INFO: Refreshing token (tokenId: abc123, serverId: notion_mcp)
+INFO: Token refreshed successfully (tokenId: abc123, newExpiresIn: 3600)
+INFO: OAuth token refresh job completed (totalTokens: 3, successCount: 3, failureCount: 0)
+```
+
+### Token Expiration Handling
+
+**During token refresh cron job**:
+- Installation status → `requires_reauth`
+- User sees "Reconnect" button in frontend
+- User must re-authorize to get new tokens
+
+**During satellite token retrieval**:
+- Satellite checks `expires_at` timestamp
+- If expired and no refresh possible → Return error to MCP client
+- MCP client receives authentication error
+- User must re-authenticate
+
+### Token Revocation
+
+When user deletes an MCP server installation:
+
+1. Installation deleted from `mcpServerInstallations` (CASCADE)
+2. Tokens automatically deleted from `mcpOauthTokens` (CASCADE foreign key)
+3. **Future enhancement**: Call OAuth provider's revocation endpoint
+4. Satellite receives configuration update removing the installation
+
+## Security Implementation
+
+### PKCE (Proof Key for Code Exchange)
+
+**Required for all OAuth flows** to prevent authorization code interception attacks.
+
+**PKCE Generation**:
+```typescript
+function generatePKCEPair() {
+  // 1. Generate code verifier (128 random bytes)
+  const codeVerifier = crypto.randomBytes(128).toString('base64url');
+
+  // 2. Generate code challenge (SHA256 hash)
+  const codeChallenge = crypto
+    .createHash('sha256')
+    .update(codeVerifier)
+    .digest('base64url');
+
+  return {
+    code_verifier: codeVerifier,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256'
+  };
+}
+```
+
+**Authorization request**:
+```
+GET /oauth/authorize?
+  response_type=code
+  &client_id=abc123
+  &redirect_uri=https://api.deploystack.io/oauth/callback
+  &code_challenge=ABCD1234...
+  &code_challenge_method=S256
+  &state=xyz789
+```
+
+**Token exchange**:
+```
+POST /oauth/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code
+&code=authorization_code_here
+&redirect_uri=https://api.deploystack.io/oauth/callback
+&code_verifier=original_verifier_here
+&client_id=abc123
+```
+
+**Security**: OAuth server verifies `SHA256(code_verifier) == code_challenge` before issuing tokens.
+
+### State Parameter
+
+**Purpose**: CSRF protection during OAuth flow.
+
+**Generation**:
+```typescript
+function generateState(): string {
+  return crypto.randomBytes(32).toString('base64url');
+}
+```
+
+**Flow**:
+1. Backend generates random state before redirecting to OAuth provider
+2. State stored in `oauthPendingFlows` table
+3. OAuth provider includes state in callback URL
+4. Backend verifies state matches stored value
+5. If mismatch → Reject callback (potential CSRF attack)
+
+### Resource Parameter
+
+**Purpose**: Token audience binding (RFC 8707) to prevent token misuse.
+
+**Generation**:
+```typescript
+function generateResourceParameter(serverId: string, teamId: string): string {
+  return `deploystack:mcp:${serverId}:${teamId}`;
+}
+```
+
+**Benefits**:
+- Tokens bound to specific MCP server and team
+- Prevents token reuse across different installations
+- OAuth provider includes resource in issued token
+
+### Token Encryption
+
+**Algorithm**: AES-256-GCM (Authenticated Encryption with Associated Data)
+
+**Encryption**:
+```typescript
+function encrypt(text: string, logger?: FastifyBaseLogger): string {
+  const key = getEncryptionKey(); // From DEPLOYSTACK_ENCRYPTION_SECRET
+  const iv = crypto.randomBytes(16); // 128-bit IV
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+
+  // Set AAD for extra security
+  const aad = Buffer.from('deploystack-global-settings', 'utf8');
+  cipher.setAAD(aad);
+
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+
+  const authTag = cipher.getAuthTag();
+
+  // Format: iv:authTag:encryptedData
+  return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+}
+```
+
+**Decryption**:
+```typescript
+function decrypt(encryptedData: string, logger?: FastifyBaseLogger): string {
+  const [ivHex, authTagHex, encrypted] = encryptedData.split(':');
+
+  const key = getEncryptionKey();
+  const iv = Buffer.from(ivHex, 'hex');
+  const authTag = Buffer.from(authTagHex, 'hex');
+
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAAD(Buffer.from('deploystack-global-settings', 'utf8'));
+  decipher.setAuthTag(authTag);
+
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+
+  return decrypted;
+}
+```
+
+**Key Derivation**:
+```typescript
+function getEncryptionKey(): Buffer {
+  const secret = process.env.DEPLOYSTACK_ENCRYPTION_SECRET || 'fallback';
+  const salt = 'deploystack-global-settings-salt';
+  return crypto.scryptSync(secret, salt, 32); // 256-bit key
+}
+```
+
+**Security Features**:
+- **AES-256**: Industry-standard symmetric encryption
+- **GCM mode**: Authenticated encryption prevents tampering
+- **Random IV**: Each encryption uses unique initialization vector
+- **AAD**: Additional authenticated data binds encryption context
+- **Scrypt**: Key derivation function resistant to brute-force attacks
+
+**Environment Variable**:
+```bash
+DEPLOYSTACK_ENCRYPTION_SECRET="your-32-character-secret-key-here"
+```
+
+**Production requirement**: Must be at least 32 characters for security.
+
+### HTTPS Requirements
+
+**All OAuth endpoints require HTTPS**:
+- Authorization endpoint
+- Token endpoint
+- Callback endpoint (redirect URI)
+
+**Why**: OAuth flows transmit sensitive data (authorization codes, tokens) that must be protected from interception.
+
+**Local development exception**: `http://localhost` allowed for testing.
+
+## OAuth Discovery Process
+
+### Step-by-Step Discovery Flow
+
+<Steps>
+  <Step title="Make Test Request">
+    Send HTTP request to MCP server URL to detect OAuth requirement.
+
+    ```typescript
+    const response = await fetch(mcpServerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ method: 'tools/list' })
+    });
+    ```
+  </Step>
+
+  <Step title="Check for OAuth Requirement">
+    Look for 401 status and WWW-Authenticate header.
+
+    ```typescript
+    if (response.status === 401) {
+      const wwwAuth = response.headers.get('www-authenticate');
+      if (wwwAuth?.toLowerCase().includes('bearer')) {
+        requiresOauth = true;
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Try Protected Resource Metadata (RFC 9728)">
+    Fetch OAuth server information from MCP server.
+
+    ```typescript
+    const metadataUrl = `${mcpServerUrl}/.well-known/oauth-protected-resource`;
+    const metadata = await fetch(metadataUrl).then(r => r.json());
+    // { "resource": "...", "authorization_servers": ["https://auth.example.com"] }
+    ```
+  </Step>
+
+  <Step title="Fetch Authorization Server Metadata (RFC 8414)">
+    Get OAuth endpoints from authorization server.
+
+    ```typescript
+    const authServerUrl = metadata.authorization_servers[0];
+    const serverMetadataUrl = `${authServerUrl}/.well-known/oauth-authorization-server`;
+    const serverMetadata = await fetch(serverMetadataUrl).then(r => r.json());
+    ```
+  </Step>
+
+  <Step title="Fallback to OpenID Connect Discovery">
+    If RFC 8414 fails, try OpenID Connect.
+
+    ```typescript
+    const oidcUrl = `${authServerUrl}/.well-known/openid-configuration`;
+    const serverMetadata = await fetch(oidcUrl).then(r => r.json());
+    ```
+  </Step>
+
+  <Step title="Validate Metadata">
+    Ensure required endpoints are present.
+
+    ```typescript
+    if (!serverMetadata.authorization_endpoint || !serverMetadata.token_endpoint) {
+      throw new Error('Missing required OAuth endpoints');
+    }
+    ```
+  </Step>
+
+  <Step title="Check PKCE Support">
+    Verify server supports S256 code challenge method.
+
+    ```typescript
+    const pkceSupported = serverMetadata.code_challenge_methods_supported?.includes('S256');
+    if (!pkceSupported) {
+      logger.warn('OAuth server may not support PKCE S256');
+    }
+    ```
+  </Step>
+
+  <Step title="Match Pre-registered Provider (Optional)">
+    Check if authorization server matches known provider.
+
+    ```typescript
+    const provider = await this.matchOAuthProvider(serverMetadata.issuer);
+    if (provider) {
+      // Use pre-registered credentials
+      return { requiresOauth: true, metadata: serverMetadata, provider };
+    }
+    ```
+  </Step>
+
+  <Step title="Return Discovery Result">
+    Complete discovery with metadata and optional provider.
+
+    ```typescript
+    return {
+      requiresOauth: true,
+      metadata: {
+        authorization_endpoint: "https://auth.example.com/oauth/authorize",
+        token_endpoint: "https://auth.example.com/oauth/token",
+        registration_endpoint: "https://auth.example.com/oauth/register",
+        scopes_supported: ["read", "write"],
+        code_challenge_methods_supported: ["S256"]
+      },
+      provider: null // Or pre-registered provider object
+    };
+    ```
+  </Step>
+</Steps>
+
+### Error Handling
+
+**Discovery failures**:
+- **Protected resource metadata not found**: Try authorization server metadata directly (if MCP server provides hint)
+- **Authorization server metadata not found**: Try OpenID Connect discovery
+- **All discovery methods fail**: Return error to user - OAuth configuration cannot be determined
+- **Network timeout**: Retry with exponential backoff (3 attempts)
+- **Invalid JSON**: Log error and return OAuth not supported
+
+**Fallback chain**:
+1. RFC 9728 Protected Resource Metadata
+2. RFC 8414 Authorization Server Metadata
+3. OpenID Connect Discovery
+4. Give up and return error
+
+## Integration Points
+
+### Frontend → Backend
+
+**Installation initiation**:
+```typescript
+// Frontend calls authorization endpoint
+const response = await fetch('/api/teams/:teamId/mcp/installations/authorize', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    server_id: 'notion_mcp_server',
+    installation_name: 'My Notion Workspace',
+    installation_type: 'global',
+    team_config: {
+      team_args: [],
+      team_env: {},
+      team_headers: {},
+      team_url_query_params: {}
+    }
+  })
+});
+
+const { authorization_url, flow_id } = await response.json();
+
+// Frontend opens popup window
+const popup = window.open(authorization_url, 'oauth', 'width=600,height=700');
+
+// Frontend listens for completion message
+window.addEventListener('message', (event) => {
+  if (event.data.type === 'oauth_success') {
+    console.log('Installation ID:', event.data.installation_id);
+    // Refresh installations list
+  } else if (event.data.type === 'oauth_error') {
+    console.error('OAuth error:', event.data.error);
+  }
+});
+```
+
+### Backend → Satellite
+
+**Satellite retrieves OAuth tokens during configuration fetch**:
+
+The satellite calls `/api/satellites/config` which includes OAuth tokens for installations:
+
+```typescript
+// Backend response includes decrypted tokens
+{
+  "installations": [
+    {
+      "id": "installation_123",
+      "server_id": "notion_mcp",
+      "installation_name": "My Notion Workspace",
+      "requires_oauth": true,
+      "oauth_token": {
+        "access_token": "decrypted-access-token-here", // Decrypted by backend
+        "token_type": "Bearer",
+        "expires_at": "2025-12-22T12:00:00Z",
+        "scope": "read write"
+      },
+      "team_headers": {
+        "X-Custom-Header": "value"
+      }
+    }
+  ]
+}
+```
+
+**Important**: Backend decrypts tokens before sending to satellite over HTTPS. Satellite never stores encrypted tokens.
+
+**Satellite implementation**: See [OAuth Token Injection](/development/satellite/mcp-server-token-injection) documentation.
+
+### Satellite → MCP Server
+
+**Token injection in HTTP/SSE requests**:
+
+Satellite adds `Authorization` header when connecting to OAuth-enabled MCP servers:
+
+```typescript
+// Satellite constructs headers for HTTP MCP server
+const headers = {
+  'Content-Type': 'application/json',
+  'MCP-Protocol-Version': '1.0',
+  ...config.team_headers, // Custom headers from team configuration
+  'Authorization': `Bearer ${oauthToken.access_token}` // OAuth token
+};
+
+// Send request to MCP server
+const response = await fetch(mcpServerUrl, {
+  method: 'POST',
+  headers,
+  body: JSON.stringify({ method: 'tools/list' })
+});
+```
+
+**Header priority**: OAuth Authorization header added last to prevent override by team headers.
+
+## Testing and Debugging
+
+### Manual Testing with Real MCP Servers
+
+**Notion MCP Server**:
+1. Add Notion to catalog: `https://mcp.notion.com/`
+2. Backend detects OAuth requirement automatically
+3. Install as user → Opens Notion OAuth page
+4. Authorize → Callback completes installation
+5. Check `mcpOauthTokens` table for encrypted tokens
+6. Verify satellite receives decrypted token in config
+
+**Box MCP Server**:
+1. Add Box to catalog: `https://mcp.box.com/`
+2. Follow same flow as Notion
+3. Verify PKCE S256 is used (check logs)
+4. Test token refresh by manually updating `expires_at` to past
+
+### Testing Dynamic Client Registration
+
+**MCP servers with DCR support**:
+- Notion: ✅ Supports RFC 7591 registration endpoint
+- Box: ✅ Supports RFC 7591 registration endpoint
+- Linear: ✅ Supports RFC 7591 registration endpoint
+
+**Testing DCR flow**:
+1. Ensure no pre-registered provider matches
+2. Check logs for "Registering dynamic OAuth client"
+3. Verify `oauth_client_id` is dynamically generated
+4. Check that client can refresh tokens using generated client ID
+
+### Testing Pre-registered Providers
+
+**Setup test provider**:
+```sql
+INSERT INTO mcpOauthProviders (id, name, slug, auth_server_patterns, client_id, client_secret, authorization_endpoint, token_endpoint, default_scopes, token_endpoint_auth_method, enabled)
+VALUES (
+  'test_github_provider',
+  'GitHub (Test)',
+  'github-test',
+  '["^https://github\\.com/login/oauth"]',
+  'Ov23liYourClientId',
+  'encrypted:your-encrypted-secret', -- Use encrypt() function
+  'https://github.com/login/oauth/authorize',
+  'https://github.com/login/oauth/access_token',
+  '["repo", "read:user"]',
+  'client_secret_post',
+  true
+);
+```
+
+**Test flow**:
+1. Add GitHub MCP server requiring OAuth
+2. Install → Should match provider by auth server pattern
+3. Check logs for "Using pre-registered OAuth provider: GitHub (Test)"
+4. Verify client_id from provider is used instead of DCR
+
+### Common Issues
+
+**Issue**: "OAuth provider not configured" error
+- **Cause**: MCP server doesn't support DCR and no pre-registered provider matches
+- **Fix**: Add provider to `mcpOauthProviders` table with matching auth server pattern
+
+**Issue**: Tokens not refreshing automatically
+- **Cause**: Cron job not running or refresh token missing
+- **Fix**: Check `refreshExpiringOAuthTokens` cron job logs, verify `refresh_token` field is not NULL
+
+**Issue**: "Flow expired" error during callback
+- **Cause**: User took more than 10 minutes to authorize
+- **Fix**: Increase expiry in `authorize.ts` or inform user to complete authorization faster
+
+**Issue**: Installation stuck in "connecting" status after OAuth
+- **Cause**: Satellite hasn't polled configuration yet
+- **Fix**: Check satellite logs, verify satellite commands created, wait for next config poll
+
+**Issue**: Token decryption error
+- **Cause**: `DEPLOYSTACK_ENCRYPTION_SECRET` changed between encryption and decryption
+- **Fix**: Ensure encryption secret is consistent across deployments
+
+### Log Analysis
+
+**Successful OAuth flow**:
+```
+INFO: Initiating OAuth authorization flow (serverId: notion_mcp, teamId: team_abc)
+INFO: Registering dynamic OAuth client (registrationEndpoint: https://mcp.notion.com/oauth/register)
+INFO: Dynamic client registration successful (clientId: dyn_12345, hasClientSecret: false)
+INFO: OAuth authorization initiated successfully (flowId: flow_xyz, authUrl: https://notion.com/oauth/...)
+INFO: OAuth callback received (flowId: flow_xyz, code: auth_code_123)
+INFO: Token exchange successful (tokenType: Bearer, expiresIn: 3600, hasRefreshToken: true)
+INFO: OAuth flow completed successfully - installation created (installationId: inst_abc)
+```
+
+**Failed token refresh**:
+```
+ERROR: Token refresh failed (status: 400, error: invalid_grant)
+WARN: OAuth refresh failed, installation status set to requires_reauth (installation_id: inst_abc)
+```
+
+## Related Documentation
+
+- [OAuth Token Injection](/development/satellite/mcp-server-token-injection) - How satellites inject tokens into MCP servers
+- [OAuth2 Server](/development/backend/oauth2-server) - MCP client API authentication (different OAuth system)
+- [OAuth Providers](/development/backend/oauth-providers) - Social login (GitHub, Google)
+- [MCP OAuth User Guide](/general/mcp-oauth) - User-facing documentation

@@ -82,6 +82,55 @@ For detailed information about tool discovery and execution, see [Tool Discovery
 ### Prompts
 - `prompts/list` - List available prompts (returns empty array)
 
+## OAuth Token Injection for HTTP/SSE Transports
+
+When MCP servers require OAuth authentication (Notion, Box, Linear), the satellite automatically injects user OAuth tokens into HTTP requests.
+
+### How It Works
+
+1. **Configuration indicates OAuth**: Server config includes `requires_oauth: true`
+2. **Token retrieval**: Satellite requests user's tokens from backend
+3. **Header injection**: Tokens added to `Authorization` header
+4. **Request forwarding**: Full request sent to MCP server with credentials
+
+For complete implementation details, see [OAuth Token Injection](/development/satellite/mcp-server-token-injection).
+
+### Header Merging Priority
+
+When building HTTP requests to OAuth MCP servers, headers are merged in this order:
+1. Base headers (Content-Type, User-Agent, MCP-Protocol-Version)
+2. Server configuration headers (from `config.headers`)
+3. OAuth Authorization header (from backend token retrieval)
+
+Later headers override earlier ones if keys conflict.
+
+### Example Header Merge
+
+**Team configuration**:
+```json
+{
+  "headers": {
+    "X-API-Key": "team_secret_key"
+  }
+}
+```
+
+**OAuth tokens**:
+```json
+{
+  "access_token": "ya29.a0AfB_byABC123...",
+  "token_type": "Bearer"
+}
+```
+
+**Final headers sent to MCP server**:
+```
+Content-Type: application/json
+MCP-Protocol-Version: 1.0
+X-API-Key: team_secret_key
+Authorization: Bearer ya29.a0AfB_byABC123...
+```
+
 ## Error Handling
 
 ### JSON-RPC Errors
