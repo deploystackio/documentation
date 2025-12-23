@@ -163,7 +163,8 @@
               "/development/backend/roles",
               "/development/backend/auth",
               "/development/backend/oauth-providers",
-              "/development/backend/oauth2-server"
+              "/development/backend/oauth2-server",
+              "/development/backend/mcp-server-oauth"
             ]
           },
           {
@@ -202,7 +203,8 @@
               "/development/satellite/process-management",
               "/development/satellite/team-isolation",
               "/development/satellite/tool-discovery",
-              "/development/satellite/idle-process-management"
+              "/development/satellite/idle-process-management",
+              "/development/satellite/mcp-server-token-injection"
             ]
           },
           {

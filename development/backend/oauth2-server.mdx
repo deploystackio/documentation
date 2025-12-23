@@ -4,8 +4,17 @@ description: Developer guide for the OAuth2 authorization server that enables pr
 sidebarTitle: OAuth2 Server
 ---
 
+<Note>
+**OAuth System Clarification**: DeployStack implements three distinct OAuth systems:
 
-This document describes the OAuth2 authorization server implementation in the DeployStack backend, which enables CLI tools and applications to access APIs using Bearer tokens. For general authentication, see [Backend Authentication System](/development/backend/auth). For OAuth provider integration (social login), see [Providers OAuth Implementation](/development/backend/oauth-providers).
+1. **User → DeployStack OAuth** (Social Login) - See [OAuth Providers](/development/backend/oauth-providers)
+2. **MCP Client → DeployStack OAuth** (API Access) - **This document** - How VS Code, Cursor, Claude.ai authenticate to satellite APIs
+3. **User → MCP Server OAuth** (External Service Access) - See [MCP Server OAuth](/development/backend/mcp-server-oauth) - How users authorize Notion, Box, Linear
+
+This document covers system #2 - the OAuth2 authorization server for MCP client authentication.
+</Note>
+
+This document describes the OAuth2 authorization server implementation in the DeployStack backend, which enables CLI tools and applications to access APIs using Bearer tokens. For general authentication, see [Backend Authentication System](/development/backend/auth).
 
 ## Overview
 

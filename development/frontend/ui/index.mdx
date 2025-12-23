@@ -360,6 +360,70 @@ Use Spinner for:
 | Perceived speed | Feels faster | Can feel slower |
 | Use case | Content loading | Action processing |
 
+## Empty State Patterns
+
+**MANDATORY**: Always use the shadcn-vue `Empty` component for no-data states. Never create custom empty state markup with manual styling.
+
+### Basic Empty State
+
+```vue
+<script setup lang="ts">
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { Package } from 'lucide-vue-next'
+</script>
+
+<template>
+  <Empty v-if="!hasData">
+    <EmptyHeader>
+      <EmptyMedia variant="icon">
+        <Package />
+      </EmptyMedia>
+      <EmptyTitle>No data found</EmptyTitle>
+      <EmptyDescription>
+        There is currently no data to display.
+      </EmptyDescription>
+    </EmptyHeader>
+  </Empty>
+</template>
+```
+
+### Empty State with Actions
+
+```vue
+<script setup lang="ts">
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
+import { Button } from '@/components/ui/button'
+import { Package, Plus } from 'lucide-vue-next'
+</script>
+
+<template>
+  <Empty v-if="!hasData">
+    <EmptyHeader>
+      <EmptyMedia variant="icon">
+        <Package />
+      </EmptyMedia>
+      <EmptyTitle>No items found</EmptyTitle>
+      <EmptyDescription>
+        Get started by creating your first item.
+      </EmptyDescription>
+    </EmptyHeader>
+    <EmptyContent>
+      <Button @click="handleCreate">
+        <Plus class="h-4 w-4 mr-2" />
+        Create Item
+      </Button>
+    </EmptyContent>
+  </Empty>
+</template>
+```
+
+Use Empty component for:
+- No search results
+- Empty data tables
+- No tools/resources discovered
+- Missing configuration items
+- Any state where data is expected but not present
+
 ## Button Patterns
 
 ### Loading States

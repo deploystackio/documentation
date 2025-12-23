@@ -175,6 +175,7 @@ Create a new feature component directory when:
 2. **Props Down, Events Up**: Maintain unidirectional data flow
 3. **Composition Pattern**: Break complex components into smaller parts
 4. **Self-Contained**: Components should work in isolation
+5. **Empty States**: Always use the shadcn-vue Empty component for no-data states. Never create custom empty state markup with manual styling.
 
 #### Exceptions to the Structure
 
@@ -390,6 +391,39 @@ const data = await apiClient.get('/api/servers')
 4. **Type Safety**: Define proper TypeScript interfaces for requests/responses
 5. **Consistent Naming**: Use descriptive method names (e.g., `getAllServers`, `createCategory`)
 6. **Base URL**: Always use environment variables for API endpoints
+
+### Backend API Environment Variables
+
+Always use `VITE_DEPLOYSTACK_BACKEND_URL` for all backend API calls and SSE connections.
+
+```bash
+# .env.local
+VITE_DEPLOYSTACK_BACKEND_URL=http://localhost:3000
+```
+
+**Usage**: DeployStack has a single backend API endpoint. Use `getEnv('VITE_DEPLOYSTACK_BACKEND_URL')` for all API calls, SSE connections, and WebSocket connections to the backend.
+
+```typescript
+import { getEnv } from '@/utils/env'
+
+// Service Layer
+export class McpServerService {
+  private static baseUrl = getEnv('VITE_DEPLOYSTACK_BACKEND_URL')
+
+  static async getAllServers(): Promise<McpServer[]> {
+    const response = await fetch(`${this.baseUrl}/api/mcp-servers`)
+    if (!response.ok) {
+      throw new Error('Failed to fetch MCP servers')
+    }
+    return response.json()
+  }
+}
+
+// SSE Connections in Composables
+const baseUrl = getEnv('VITE_DEPLOYSTACK_BACKEND_URL')
+const url = `${baseUrl}/api/teams/${teamId}/status/stream`
+const eventSource = new EventSource(url, { withCredentials: true })
+```
 
 ### Using Services in Components
 

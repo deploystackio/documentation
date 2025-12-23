@@ -188,6 +188,32 @@ Updates `satelliteProcesses` table when server exits unexpectedly.
 
 **Optional Fields**: None (all fields required for proper crash tracking)
 
+#### mcp.server.status_changed
+Updates `mcpServerInstallations` table when server status changes during installation, discovery, or health checks.
+
+**Business Logic**: Tracks installation lifecycle from provisioning through discovery to online/error states. Enables frontend progress indicators and error visibility.
+
+**Required Fields** (snake_case): `installation_id`, `team_id`, `status`, `timestamp`
+
+**Optional Fields**: `status_message` (string, human-readable context or error details)
+
+**Status Values**:
+- `provisioning` - Installation created, waiting for satellite
+- `command_received` - Satellite acknowledged install command
+- `connecting` - Satellite connecting to MCP server
+- `discovering_tools` - Tool discovery in progress
+- `syncing_tools` - Sending discovered tools to backend
+- `online` - Server healthy and responding
+- `offline` - Server unreachable
+- `error` - Connection failed with specific error
+- `requires_reauth` - OAuth token expired/revoked
+- `permanently_failed` - Process crashed 3+ times in 5 minutes
+
+**Emission Points**:
+- Success path: After successful tool discovery → status='online'
+- Failure path: On connection errors → status='offline', 'error', or 'requires_reauth'
+- Command processor: During installation steps → status='connecting', 'discovering_tools'
+
 ### Tool Execution
 
 #### mcp.tool.executed
@@ -311,6 +337,7 @@ Events route to existing business tables based on their purpose:
 |-----------|----------------|--------|
 | `mcp.server.started` | `satelliteProcesses` | Update status='running', set start time |
 | `mcp.server.crashed` | `satelliteProcesses` | Update status='failed', log error details |
+| `mcp.server.status_changed` | `mcpServerInstallations` | Update status, status_message, status_updated_at |
 | `mcp.tool.executed` | `satelliteUsageLogs` | Insert usage record with metrics |
 
 ### Transaction Strategy
