@@ -3,8 +3,13 @@ title: OAuth Authentication Implementation
 description: Technical implementation of multi-team OAuth 2.1 Resource Server functionality in DeployStack Satellite for MCP client authentication.
 ---
 
+<Note>
+**OAuth System Clarification**: This document covers **MCP Client → Satellite authentication** (how VS Code/Cursor/Claude.ai authenticate to DeployStack).
 
-
+For **User → MCP Server authentication** (how users connect to Notion/Box/Linear), see:
+- Backend Implementation: [MCP Server OAuth](/development/backend/mcp-server-oauth)
+- Satellite Integration: [OAuth Token Injection](/development/satellite/mcp-server-token-injection)
+</Note>
 
 DeployStack Satellite implements OAuth 2.1 Resource Server functionality to authenticate MCP clients with team-aware access control. This document covers the technical implementation, integration patterns, and development setup for the OAuth authentication layer.
 
@@ -896,3 +901,10 @@ The OAuth authentication implementation provides enterprise-grade security with 
 <Info>
 **Implementation Status**: OAuth authentication is fully implemented and operational with database-backed dynamic client registration. The system successfully authenticates MCP clients (including VS Code, Cursor, Claude.ai, and Cline) with team-aware access control, filters tools based on team permissions, and maintains complete team isolation while preserving all existing satellite functionality. Dynamic client registration enables seamless MCP client integration with persistent authentication.
 </Info>
+
+## Related Documentation
+
+- [OAuth2 Server](/development/backend/oauth2-server) - Backend OAuth server implementation
+- [MCP Server Token Injection](/development/satellite/mcp-server-token-injection) - External MCP server OAuth
+- [MCP Server OAuth](/development/backend/mcp-server-oauth) - Backend OAuth for MCP servers
+- [OAuth Providers](/development/backend/oauth-providers) - Social login
