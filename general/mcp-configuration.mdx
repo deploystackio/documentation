@@ -16,7 +16,7 @@ The system separates configuration into three distinct layers:
 
 This architecture enables teams to share common settings like API keys while allowing individual members to use their own private credentials or customize personal settings like local file paths - all within the same team installation, maintaining both team collaboration and individual privacy.
 
-**Note on OAuth-Enabled MCP Servers:** Some MCP servers require OAuth authorization, which happens at the user level—separate from this three-tier configuration system. Each user must authorize individually with their own account. For details, see [OAuth-Enabled MCP Servers](/mcp-oauth).
+**Note on OAuth-Enabled MCP Servers:** Some MCP servers require OAuth authorization, which happens at the user level—separate from this three-tier configuration system. Each user must authorize individually with their own account. For details, see [OAuth-Enabled MCP Servers](/general/mcp-oauth).
 
 ## How It Works
 
@@ -60,7 +60,7 @@ This architecture enables teams to share common settings like API keys while all
 
 The heart of the system is sophisticated lock/unlock controls with precise categorization:
 
-**Secret Type Support:** Configuration values marked as `type: "secret"` in schemas are automatically encrypted for security. For complete details on secret encryption, masking, and security, see [Security and Privacy](/security).
+**Secret Type Support:** Configuration values marked as `type: "secret"` in schemas are automatically encrypted for security. For complete details on secret encryption, masking, and security, see [Security and Privacy](/general/security).
 
 **Global Administrator Controls:**
 - **Sophisticated Categorization** - Categorize every configuration element into Template/Team/User tiers
@@ -89,19 +89,19 @@ The heart of the system is sophisticated lock/unlock controls with precise categ
 Each tier has its own focused workflow:
 
 ### For Global Administrators
-**[Admin Schema Workflow](/mcp-admin-schema-workflow)** - Learn how to transform raw MCP configurations into secure three-tier schemas with sophisticated lock/unlock controls through the Configuration Schema Step.
+**[Admin Schema Workflow](/general/mcp-admin-schema-workflow)** - Learn how to transform raw MCP configurations into secure three-tier schemas with sophisticated lock/unlock controls through the Configuration Schema Step.
 
 Key workflow: Repository → Claude Desktop Config → **Configuration Schema Categorization** → Basic Info → Catalog Entry
 
 ### For Team Administrators (`team_admin` role)
-**[Team Installation](/mcp-team-installation)** - Learn how to install MCP servers from the catalog, configure shared team settings, and control user access.
+**[Team Installation](/general/mcp-team-installation)** - Learn how to install MCP servers from the catalog, configure shared team settings, and control user access.
 
 Key workflow: Browse Catalog → Configure Team Settings → Set Lock Controls → Deploy Installation
 
 **Note:** Only users with `team_admin` role can perform team installations. Users with `team_user` role skip this step and go directly to user configuration.
 
 ### For Individual Users (both `team_admin` and `team_user` roles)
-**[User Configuration](/mcp-user-configuration)** - Learn how to configure personal MCP settings and customize your workflow.
+**[User Configuration](/general/mcp-user-configuration)** - Learn how to configure personal MCP settings and customize your workflow.
 
 Key workflow: Access Team Installation → Configure Personal Settings → Save Configuration
 
@@ -244,9 +244,9 @@ The three-tier system adapts automatically based on the transport type detected 
 
 For complete system understanding:
 
-- [MCP Catalog](/mcp-catalog) - Browse and discover available MCP servers
-- [Teams](/teams) - Team structure and membership management
-- [MCP Installation](/mcp-installation) - Basic MCP server installation concepts
-- [Security and Privacy](/security) - Platform security and data protection
+- [MCP Catalog](/general/mcp-catalog) - Browse and discover available MCP servers
+- [Teams](/general/teams) - Team structure and membership management
+- [MCP Installation](/general/mcp-installation) - Basic MCP server installation concepts
+- [Security and Privacy](/general/security) - Platform security and data protection
 
 The three-tier configuration system provides secure, scalable MCP server management that grows from individual developers to enterprise teams while maintaining simplicity and security at every level. Global administrators have sophisticated control over configuration boundaries through schema categorization, ensuring appropriate access and customization at each tier. The OAuth-based team authentication ensures enterprise-grade security and governance.

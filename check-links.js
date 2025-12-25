@@ -10,7 +10,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const IGNORED_URLS = [
     'https://deploystack.io',
     'https://deploystack.io/*',
-    'https://cloud.deploystack.io'
+    'https://cloud.deploystack.io',
+    'https://docs.deploystack.io',
+    'https://mintlify.com',
+    'https://mintlify.com/*',
+    'https://discord.gg/',
+    'https://discord.gg/*'
 ];
 
 // Check if a URL should be ignored
@@ -55,11 +60,11 @@ const checkLocalFile = (linkPath, filePath) => {
     if (linkPath.startsWith('/') && !linkPath.startsWith('//') && !linkPath.startsWith('http')) {
         // Remove hash fragment before checking file existence
         const [baseUrl] = linkPath.split('#');
-        
+
         // Map the URL to the actual file location
-        // Since our URLs are now root-level but files are in docs/
-        const actualFilePath = path.join(process.cwd(), 'docs', baseUrl.substring(1));
-        
+        // Files are in the root directory structure
+        const actualFilePath = path.join(process.cwd(), baseUrl.substring(1));
+
         // Try both .mdx and .md extensions
         const possiblePaths = [
             actualFilePath + '.mdx',
@@ -67,7 +72,7 @@ const checkLocalFile = (linkPath, filePath) => {
             path.join(actualFilePath, 'index.mdx'),
             path.join(actualFilePath, 'index.md')
         ];
-        
+
         for (const possiblePath of possiblePaths) {
             try {
                 fs.accessSync(possiblePath, fs.constants.F_OK);
@@ -77,7 +82,7 @@ const checkLocalFile = (linkPath, filePath) => {
                 // Continue to next possible path
             }
         }
-        
+
         console.log(`  ❌ ${linkPath} → File not found (checked: ${possiblePaths.map(p => path.relative(process.cwd(), p)).join(', ')})`);
         return false;
     }
@@ -189,9 +194,41 @@ const processDirectory = async (dir) => {
     return allValid;
 };
 
-// Start processing
+// Directories to skip during scanning
+const SKIP_DIRS = ['node_modules', '.git', '.next', 'out', '.github', '.source'];
+
+// Modified processDirectory to skip certain directories
+const shouldSkipDirectory = (dirName) => {
+    return SKIP_DIRS.includes(dirName);
+};
+
+// Start processing from current directory
 console.log('📝 Checking markdown links...\n');
-processDirectory('docs').then(allValid => {
+
+const scanDirectory = async (dir) => {
+    let allValid = true;
+    const files = fs.readdirSync(dir);
+
+    for (const file of files) {
+        const filePath = path.join(dir, file);
+        const stat = fs.statSync(filePath);
+
+        if (stat.isDirectory()) {
+            // Skip certain directories
+            if (!shouldSkipDirectory(file)) {
+                const isValid = await processDirectory(filePath);
+                if (!isValid) allValid = false;
+            }
+        } else if (file.endsWith('.md') || file.endsWith('.mdx')) {
+            const isValid = await processFile(filePath);
+            if (!isValid) allValid = false;
+        }
+    }
+
+    return allValid;
+};
+
+scanDirectory(process.cwd()).then(allValid => {
     if (!allValid) {
         console.log('❌ Some links are invalid!');
         process.exit(1);

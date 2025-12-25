@@ -77,16 +77,16 @@ DeployStack introduces a **Control Plane / Satellite architecture** that brings 
 The cloud-based control plane provides centralized management for all MCP infrastructure:
 
 #### Team & Access Management
-- **Role-Based Access Control**: [Define teams](/teams), [roles, and permissions](/roles) for MCP server access
+- **Role-Based Access Control**: [Define teams](/general/teams), [roles, and permissions](/general/roles) for MCP server access
 - **Centralized User Management**: Single source of truth for team membership and access rights
 - **Policy Enforcement**: Granular control over which teams can access which MCP servers
 
 #### Secure Credential Vault
-- **Encrypted Storage**: All API keys and tokens stored with [enterprise-grade encryption](/security)
+- **Encrypted Storage**: All API keys and tokens stored with [enterprise-grade encryption](/general/security)
 - **Zero-Exposure Model**: Developers never directly handle credentials
 
 #### MCP Server Catalog
-- **Configuration Management**: [Store and manage all MCP server configurations](/mcp-catalog) including commands, arguments, and environment variables
+- **Configuration Management**: [Store and manage all MCP server configurations](/general/mcp-catalog) including commands, arguments, and environment variables
 - **Version Control**: Track changes to MCP server configurations over time (coming soon)
 
 #### Analytics & Governance (Coming soon)
@@ -153,7 +153,7 @@ Client Request → OAuth Validation → Team Authorization → Satellite MCP Pro
 
 ## Security Architecture
 
-DeployStack implements enterprise-grade security across all components of the platform. For comprehensive security details including credential management, access control, and compliance features, see our [Security Documentation](/security).
+DeployStack implements enterprise-grade security across all components of the platform. For comprehensive security details including credential management, access control, and compliance features, see our [Security Documentation](/general/security).
 
 Key security principles:
 - **OAuth Bearer Token Authentication**: Standard OAuth flow with secure credential management
@@ -289,4 +289,4 @@ DeployStack supports multiple team memberships with instant context switching:
 
 ---
 
-**Next Steps**: Explore our [Quick Start Guide](/quick-start) to experience the architecture in action, or dive into the [Development Documentation](/development) to understand implementation details.
+**Next Steps**: Explore our [Quick Start Guide](/general/quick-start) to experience the architecture in action, or dive into the [Development Documentation](/development) to understand implementation details.
