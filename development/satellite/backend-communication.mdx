@@ -286,7 +286,7 @@ See `services/backend/src/db/schema.ts` for complete schema definitions.
 
 ### Authentication Flow
 
-**Registration Phase:**
+**Registration:**
 1. Admin generates JWT registration token via backend API
 2. Satellite includes token in Authorization header during registration
 3. Backend validates token signature, scope, and expiration
@@ -295,7 +295,7 @@ See `services/backend/src/db/schema.ts` for complete schema definitions.
 
 For detailed token validation process, see [Registration Security](/development/backend/satellite-communication#satellite-pairing-process).
 
-**Operational Phase:**
+**Ongoing Operations:**
 1. All requests include `Authorization: Bearer {api_key}`
 2. Backend validates API key and satellite scope
 3. Team context extracted from satellite registration

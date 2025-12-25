@@ -341,7 +341,7 @@ private isCacheValid(cachedAt: number, expiresAt: string | null): boolean {
 async handleHttpToolCall(serverName: string, originalToolName: string, args: unknown) {
   const config = this.serverConfigs.get(serverName);
 
-  // Phase 10: OAuth token injection for HTTP/SSE MCP servers
+  // OAuth token injection for HTTP/SSE MCP servers
   let headers: Record<string, string> = {};
 
   // Add regular headers from config (API keys, custom headers, etc.)
@@ -447,7 +447,7 @@ async handleHttpToolCall(serverName: string, originalToolName: string, args: unk
 ```typescript
 // From remote-tool-discovery-manager.ts:376-440
 async discoverServerTools(serverName: string, config: ServerConfig) {
-  // Phase 10: OAuth token injection for tool discovery
+  // OAuth token injection for tool discovery
   let headers: Record<string, string> = {};
 
   // Add regular headers from config (API keys, custom headers, etc.)

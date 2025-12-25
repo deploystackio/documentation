@@ -163,7 +163,7 @@ Request logs capture tool execution with full request parameters and server resp
 For each tool execution:
 - Tool name (e.g., `github:list-repos`)
 - Input parameters sent to tool
-- **Full response from MCP server** (captured in Phase 14)
+- **Full response from MCP server** (when request logging is enabled)
 - Response time in milliseconds
 - Success/failure status
 - Error message (if failed)
@@ -436,12 +436,13 @@ cleanup() {
 }
 ```
 
-## Implementation References
+## Implementation Components
 
-**Phase 7:** Server and request log batching implementation
-**Phase 14:** Request logging toggle and tool response capture
-**Phase 5:** Backend log tables and event handlers
-**Phase 6:** 100-line cleanup job
+The log capture system consists of several integrated components:
+- Server and request log batching implementation
+- Request logging toggle and tool response capture
+- Backend log tables and event handlers
+- 100-line cleanup job
 
 ## Related Documentation
 

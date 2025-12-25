@@ -106,20 +106,20 @@ The system uses three distinct communication patterns:
 
 ### Security Architecture
 
-The satellite pairing process implements a secure **two-phase JWT-based authentication system** that prevents unauthorized satellite connections. For complete implementation details, see [API Security - Registration Token Authentication](/development/backend/api/security#registration-token-authentication).
+The satellite pairing process implements a secure **two-step JWT-based authentication system** that prevents unauthorized satellite connections. For complete implementation details, see [API Security - Registration Token Authentication](/development/backend/api/security#registration-token-authentication).
 
-**Phase 1: Token Generation**
+**Step 1: Token Generation**
 - Administrators generate temporary registration tokens through admin APIs
 - Scope-specific tokens (global vs team) with cryptographic signatures
 - Token management endpoints for generation, listing, and revocation
 
-**Phase 2: Satellite Registration**
+**Step 2: Satellite Registration**
 - Satellites authenticate using `Authorization: Bearer deploystack_satellite_*` headers
 - Backend validates JWT tokens with single-use consumption
 - Permanent API keys issued after successful token validation
 - Token consumed to prevent replay attacks
 
-**Breaking Change**: As of Phase 3 implementation, all new satellite registrations require valid registration tokens. The open registration system has been secured.
+**Note**: All new satellite registrations require valid registration tokens. The open registration system has been secured.
 
 ### Registration Middleware
 
@@ -261,6 +261,153 @@ Configuration respects team boundaries and isolation:
 - Team-defined security policies
 - Internal resource access settings
 
+## Frontend API Endpoints
+
+The backend provides REST and SSE endpoints for frontend access to installation status, logs, and requests.
+
+### Status & Monitoring Endpoints
+
+**GET `/api/teams/{teamId}/mcp/installations/{installationId}/status`**
+- Returns current installation status, status message, and last update timestamp
+- Used by frontend for real-time status badges and progress indicators
+
+**GET `/api/teams/{teamId}/mcp/installations/{installationId}/logs`**
+- Returns paginated server logs (stderr output, connection errors)
+- Query params: `limit`, `offset` for pagination
+- Limited to 100 lines per installation (enforced by cleanup cron job)
+
+**GET `/api/teams/{teamId}/mcp/installations/{installationId}/requests`**
+- Returns paginated request logs (tool execution history)
+- Includes request params, duration, success status
+- Response data included if `request_logging_enabled=true`
+
+**GET `/api/teams/{teamId}/mcp/installations/{installationId}/requests/{requestId}`**
+- Returns detailed request log for specific execution
+- Includes full request/response payloads when available
+
+### Settings Management
+
+**PATCH `/api/teams/{teamId}/mcp/installations/{installationId}/settings`**
+- Updates installation settings (stored in `mcpServerInstallations.settings` jsonb column)
+- Settings distributed to satellites via config endpoint
+- Current settings:
+  - `request_logging_enabled` (boolean) - Controls capture of tool responses
+
+### Real-Time Streaming (SSE)
+
+**GET `/api/teams/{teamId}/mcp/installations/{installationId}/logs/stream`**
+- Server-Sent Events endpoint for real-time log streaming
+- Frontend subscribes for live stderr output
+- Auto-reconnects on connection loss
+
+**GET `/api/teams/{teamId}/mcp/installations/{installationId}/requests/stream`**
+- Server-Sent Events endpoint for real-time request log streaming
+- Frontend subscribes for live tool execution updates
+- Includes duration, status, and optionally response data
+
+**SSE vs REST Comparison**:
+| Feature | REST Endpoints | SSE Endpoints |
+|---------|---------------|---------------|
+| Use Case | Historical data, pagination | Real-time updates |
+| Connection | Request/response | Persistent connection |
+| Data Flow | Pull (client requests) | Push (server sends) |
+| Frontend Usage | Initial load, manual refresh | Live monitoring |
+
+**SSE Controller Implementation**: `services/backend/src/controllers/mcp/sse.controller.ts`
+
+**Routes Implementation**: `services/backend/src/routes/api/teams/mcp/installations.routes.ts`
+
+---
+
+## Health Check & Recovery Systems
+
+### Cumulative Health Check System
+
+**Purpose**: Template-level health aggregation across all installations of an MCP server.
+
+**McpHealthCheckService** (`services/backend/src/services/mcp-health-check.service.ts`):
+- Aggregates health status from all installations of each MCP server template
+- Updates `mcpServers.health_status` based on installation health
+- Provides template-level health visibility in admin dashboard
+
+**Cron Job**: `mcp-health-check` runs every 3 minutes
+- Implementation: `services/backend/src/jobs/mcp-health-check.job.ts`
+- Checks all MCP server templates
+- Updates template health status for admin visibility
+
+### Credential Validation System
+
+**Purpose**: Per-installation OAuth token validation to detect expired/revoked credentials.
+
+**McpCredentialValidationWorker** (`services/backend/src/workers/mcp-credential-validation.worker.ts`):
+- Validates OAuth tokens for each installation
+- Sends `health_check` command to satellite with `check_type: 'credential_validation'`
+- Satellite performs OAuth validation and reports status
+
+**Cron Job**: `mcp-credential-validation` runs every 1 minute
+- Implementation: `services/backend/src/jobs/mcp-credential-validation.job.ts`
+- Validates installations on 15-minute rotation
+- Triggers `requires_reauth` status on validation failure
+
+**Health Check Command Payload**:
+```json
+{
+  "commandType": "health_check",
+  "priority": "immediate",
+  "payload": {
+    "check_type": "credential_validation",
+    "installation_id": "inst_123",
+    "team_id": "team_xyz"
+  }
+}
+```
+
+Satellite validates credentials and emits `mcp.server.status_changed` with status:
+- `online` - Credentials valid
+- `requires_reauth` - OAuth token expired/revoked
+- `error` - Validation failed with error
+
+### Auto-Recovery System
+
+**Recovery Trigger**:
+- Health check system detects offline installations
+- Backend calls `notifyMcpRecovery(installation_id, team_id)`
+- Sends command to satellite: Set status=`connecting`, rediscover tools
+- Status progression: offline → connecting → discovering_tools → online
+
+**Tool Execution Recovery**:
+- Satellite detects recovery during tool execution (offline server responds)
+- Emits immediate status change event (doesn't wait for health check)
+- Triggers asynchronous re-discovery
+
+For satellite-side recovery implementation, see [Satellite Recovery System](/development/satellite/recovery-system).
+
+---
+
+## Background Cron Jobs
+
+The backend runs three MCP-related cron jobs for maintenance and monitoring:
+
+**cleanup-mcp-server-logs**:
+- **Schedule**: Every 10 minutes
+- **Purpose**: Enforce 100-line limit per installation in `mcpServerLogs` table
+- **Action**: Deletes oldest logs beyond 100-line limit
+- **Implementation**: `services/backend/src/jobs/cleanup-mcp-server-logs.job.ts`
+
+**mcp-health-check**:
+- **Schedule**: Every 3 minutes
+- **Purpose**: Template-level health aggregation
+- **Action**: Updates `mcpServers.health_status` column
+- **Implementation**: `services/backend/src/jobs/mcp-health-check.job.ts`
+
+**mcp-credential-validation**:
+- **Schedule**: Every 1 minute
+- **Purpose**: Detect expired/revoked OAuth tokens
+- **Action**: Sends `health_check` commands to satellites
+- **Implementation**: `services/backend/src/jobs/mcp-credential-validation.job.ts`
+
+---
+
 ## Database Schema Integration
 
 ### Core Table Structure
@@ -297,6 +444,37 @@ The satellite system integrates with existing DeployStack schema through 5 speci
 - Process health aggregation
 - Alert generation and notification triggers
 - Historical health trend analysis
+
+### New Columns Added (Status & Health Tracking System)
+
+**mcpServerInstallations** table:
+- `status` (text) - Current installation status (11 possible values)
+- `status_message` (text, nullable) - Human-readable status context or error details
+- `status_updated_at` (timestamp) - Last status change timestamp
+- `last_health_check_at` (timestamp, nullable) - Last health check execution time
+- `last_credential_check_at` (timestamp, nullable) - Last credential validation time
+- `settings` (jsonb, nullable) - Generic settings object (e.g., `request_logging_enabled`)
+
+**mcpServers** table:
+- `health_status` (text, nullable) - Template-level aggregated health status
+- `last_health_check_at` (timestamp, nullable) - Last template health check time
+- `health_check_error` (text, nullable) - Last health check error message
+
+**mcpServerLogs** table:
+- Stores batched stderr logs from satellites
+- 100-line limit per installation (enforced by cleanup cron job)
+- Fields: `installation_id`, `team_id`, `log_level`, `message`, `timestamp`
+
+**mcpRequestLogs** table:
+- Stores batched tool execution logs
+- `tool_response` (jsonb, nullable) - MCP server response data
+- Privacy control: Only captured when `request_logging_enabled=true`
+- Fields: `installation_id`, `team_id`, `tool_name`, `request_params`, `tool_response`, `duration_ms`, `success`, `error_message`, `timestamp`
+
+**mcpToolMetadata** table:
+- Stores discovered tools with token counts
+- Used for hierarchical router token savings calculations
+- Fields: `installation_id`, `server_slug`, `tool_name`, `description`, `input_schema`, `token_count`, `discovered_at`
 
 ### Team Isolation in Data Model
 

@@ -356,11 +356,12 @@ Some failures cannot auto-recover:
 
 See [Process Management - Auto-Restart System](/development/satellite/process-management#auto-restart-system) for complete stdio restart policy details (3 crashes in 5-minute window, backoff delays).
 
-## Implementation References
+## Implementation Components
 
-**Phase 13:** Stdio auto-recovery and permanently_failed status
-**Phase 18:** Tool execution retry logic and recovery detection
-**Phase 8:** Health check recovery via backend
+The recovery system consists of several integrated components:
+- Stdio auto-recovery and permanently_failed status
+- Tool execution retry logic and recovery detection
+- Health check recovery via backend
 
 ## Related Documentation
 

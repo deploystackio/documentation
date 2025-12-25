@@ -147,17 +147,17 @@ All communication uses newline-delimited JSON following JSON-RPC 2.0 specificati
 
 ### Graceful Termination
 
-Process termination follows a two-phase graceful shutdown approach to ensure clean process exit and proper resource cleanup.
+Process termination follows a two-step graceful shutdown approach to ensure clean process exit and proper resource cleanup.
 
-#### Termination Phases
+#### Termination Steps
 
-**Phase 1: SIGTERM (Graceful Shutdown)**
+**Step 1: SIGTERM (Graceful Shutdown)**
 - Send SIGTERM signal to the process
 - Process has 10 seconds (default timeout) to shut down gracefully
 - Process can complete in-flight operations and cleanup resources
 - Wait for process to exit voluntarily
 
-**Phase 2: SIGKILL (Force Termination)**
+**Step 2: SIGKILL (Force Termination)**
 - If process doesn't exit within timeout period
 - Send SIGKILL signal to force immediate termination
 - Guaranteed process termination (cannot be caught or ignored)

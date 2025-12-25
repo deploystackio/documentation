@@ -267,14 +267,15 @@ Unavailable server: ${serverSlug}`
 | Server recovery detected | `connecting` | Previously offline server responds |
 | Stdio crashes 3 times | `permanently_failed` | 3 crashes within 5 minutes |
 
-## Implementation References
+## Implementation Components
 
-**Phase 1:** Database schema for status field
-**Phase 3:** Backend event handler for status updates
-**Phase 4:** Satellite status event emission
-**Phase 10:** Tool availability filtering by status
-**Phase 17:** Configuration update status transitions
-**Phase 18:** Tool execution status updates + auto-recovery
+The status tracking system consists of several integrated components:
+- Database schema for status field
+- Backend event handler for status updates
+- Satellite status event emission
+- Tool availability filtering by status
+- Configuration update status transitions
+- Tool execution status updates with auto-recovery
 
 ## Related Documentation
 

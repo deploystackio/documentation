@@ -409,14 +409,15 @@ Each event type has a dedicated backend handler:
 - Emits `mcp.tools.discovered` after successful discovery
 - Coordinates status callbacks from discovery managers
 
-## Implementation References
+## Implementation Components
 
-**Phase 3:** Backend event handler system
-**Phase 4:** Satellite status event emission
-**Phase 7:** Server and request log batching
-**Phase 10:** Tool metadata event emission
-**Phase 13:** Stdio permanently_failed event
-**Phase 18:** Tool execution failure status events
+The event emission system consists of several integrated components:
+- Backend event handler system
+- Satellite status event emission
+- Server and request log batching
+- Tool metadata event emission
+- Stdio permanently_failed event
+- Tool execution failure status events
 
 ## Related Documentation
 

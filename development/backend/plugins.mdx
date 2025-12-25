@@ -313,8 +313,8 @@ The `databaseExtension` property allows your plugin to:
 #### How Plugin Database Tables Work
 
 **Security Architecture:**
-- **Phase 1 (Trusted)**: Core migrations run first (static, secure)
-- **Phase 2 (Untrusted)**: Plugin tables created dynamically (sandboxed)
+- **Stage 1 (Trusted)**: Core migrations run first (static, secure)
+- **Stage 2 (Untrusted)**: Plugin tables created dynamically (sandboxed)
 - **Clear Separation**: Plugin tables cannot interfere with core database structure
 
 **Dynamic Table Creation:**
@@ -421,7 +421,7 @@ The database initialization follows a strict security-first approach:
 
 ```
 ┌─────────────────────────────────────────┐
-│ Phase 1: Core System (Trusted)         │
+│ Stage 1: Core System (Trusted)         │
 ├─────────────────────────────────────────┤
 │ 1. Apply core migrations               │
 │ 2. Create core tables                  │
@@ -430,7 +430,7 @@ The database initialization follows a strict security-first approach:
                     │
                     ▼ Security Boundary
 ┌─────────────────────────────────────────┐
-│ Phase 2: Plugin System (Sandboxed)     │
+│ Stage 2: Plugin System (Sandboxed)     │
 ├─────────────────────────────────────────┤
 │ 1. Generate CREATE TABLE SQL           │
 │ 2. Drop existing plugin tables         │
