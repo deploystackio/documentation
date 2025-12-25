@@ -9,13 +9,11 @@ on:
       - main
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: read
 
 jobs:
-  lint_build:
-    name: Run ESLint
+  lint_and_validate:
+    name: Lint and Validate Documentation
     runs-on: ubuntu-latest
 
     steps:
@@ -30,28 +28,8 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Run Markdown ESLint
+      - name: Run Markdown Linting
         run: npm run lint:md
 
-      - name: Run Lint Links
-        run: npm run lint:links     
-
-  release:
-    name: Run Release
-    runs-on: ubuntu-latest
-    needs: lint_build
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm ci
-      - run: npm audit signatures
-      - name: Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run semantic-release
+      - name: Validate Links
+        run: npm run lint:links

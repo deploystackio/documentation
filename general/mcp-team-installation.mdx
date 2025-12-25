@@ -25,7 +25,7 @@ As a team administrator (`team_admin`), you:
 - Cannot change lock/unlock settings
 - Can only configure their own personal user-level settings (if unlocked)
 
-For an overview of the three-tier system, see [MCP Configuration System](/mcp-configuration). For details on how global administrators create the schemas that define your configuration options, see [Admin Schema Workflow](/mcp-admin-schema-workflow).
+For an overview of the three-tier system, see [MCP Configuration System](/general/mcp-configuration). For details on how global administrators create the schemas that define your configuration options, see [Admin Schema Workflow](/general/mcp-admin-schema-workflow).
 
 ## Installation Process
 
@@ -41,7 +41,7 @@ Each installation gets a meaningful name like "DevOps Team Filesystem" or "Custo
 
 **Server Sources**: When browsing the catalog, you'll see servers from multiple sources - official registry servers (automatically synced and marked with badges) and manually created custom integrations. Both types work identically with DeployStack's three-tier configuration system.
 
-**OAuth-Enabled MCP Servers:** Some MCP servers require OAuth authorization (Box, Google Drive, Slack, etc.). When you install an OAuth server, you'll authorize with your own account first, but each team member must then authorize individually with their own account. For complete details, see [OAuth-Enabled MCP Servers](/mcp-oauth).
+**OAuth-Enabled MCP Servers:** Some MCP servers require OAuth authorization (Box, Google Drive, Slack, etc.). When you install an OAuth server, you'll authorize with your own account first, but each team member must then authorize individually with their own account. For complete details, see [OAuth-Enabled MCP Servers](/general/mcp-oauth).
 
 The configuration options available to you are determined by how the global administrator categorized elements during schema creation. You can only configure elements that were designated as "Team Configurable" in the original schema definition.
 
@@ -148,7 +148,7 @@ User Controls:
 - **User Isolation** - Each user's private credentials are encrypted separately
 - **Role-Based Access** - Only `team_admin` can manage team-level credentials; `team_user` cannot access them
 
-For complete details on how secret fields are encrypted and protected, see [Security and Privacy](/security).
+For complete details on how secret fields are encrypted and protected, see [Security and Privacy](/general/security).
 
 **Updates:**
 - Update shared team credentials without affecting user configurations
@@ -183,16 +183,16 @@ Based on your lock/unlock decisions and the schema boundaries set by global admi
 - **Get consistent baseline** - Inherit locked team settings while customizing unlocked ones
 - **Benefit from satellite execution** - Remote MCP server execution with proper credential isolation
 
-For details on the user experience, see [MCP User Configuration](/mcp-user-configuration).
+For details on the user experience, see [MCP User Configuration](/general/mcp-user-configuration).
 
 ## Related Documentation
 
 For complete understanding of team installations in context:
 
-- [MCP Configuration System](/mcp-configuration) - Overview of the three-tier system
-- [Admin Schema Workflow](/mcp-admin-schema-workflow) - How global administrators create the schemas that define your configuration options
-- [MCP User Configuration](/mcp-user-configuration) - How users interact with team installations
-- [Teams](/teams) - Team structure and management
-- [MCP Catalog](/mcp-catalog) - Browsing and selecting MCP servers
+- [MCP Configuration System](/general/mcp-configuration) - Overview of the three-tier system
+- [Admin Schema Workflow](/general/mcp-admin-schema-workflow) - How global administrators create the schemas that define your configuration options
+- [MCP User Configuration](/general/mcp-user-configuration) - How users interact with team installations
+- [Teams](/general/teams) - Team structure and management
+- [MCP Catalog](/general/mcp-catalog) - Browsing and selecting MCP servers
 
 Team installation is the critical bridge in DeployStack's three-tier configuration system, enabling secure shared resources while supporting individual team member productivity.
