@@ -61,6 +61,7 @@ mintlify dev
 ```
 
 The local server provides:
+
 - Hot reloading for instant content updates
 - Navigation preview
 - Component rendering
@@ -96,6 +97,7 @@ More content here...
 Mintlify provides built-in components for enhanced documentation:
 
 **Callouts:**
+
 ```mdx
 <Note>General information</Note>
 <Info>Important information</Info>
@@ -106,6 +108,7 @@ Mintlify provides built-in components for enhanced documentation:
 ```
 
 **Code Groups:**
+
 ```mdx
 <CodeGroup>
 `\`\`bash macOS/Linux
@@ -118,8 +121,8 @@ npm install
 </CodeGroup>
 ```
 
-
 **Cards:**
+
 ```mdx
 <CardGroup cols={2}>
   <Card title="Getting Started" icon="rocket" href="/general/quick-start">
@@ -132,6 +135,7 @@ npm install
 ```
 
 **Steps:**
+
 ```mdx
 <Steps>
   <Step title="Install Dependencies">
@@ -155,6 +159,7 @@ Navigation is controlled via `docs.json`:
 - **Pages**: Individual documentation pages
 
 To add a new page:
+
 1. Create the `.mdx` file in the appropriate directory
 2. Add the page path to `docs.json` under the relevant group
 3. Test locally with `mintlify dev`
@@ -162,19 +167,23 @@ To add a new page:
 ### Content Guidelines
 
 **File Naming:**
+
 - Use kebab-case: `my-new-page.mdx`
 - Index files represent the directory: `index.mdx`
 
 **Links:**
+
 - Use absolute paths from documentation root: `/development/backend/api/index`
 - Mintlify automatically handles `.mdx` extensions
 
 **Images:**
+
 - Store in `assets/images/` with logical subdirectories
 - Reference with absolute paths: `/assets/images/logo/dark.webp`
 - Optimize images before committing (compress file sizes)
 
 **Frontmatter:**
+
 ```yaml
 ---
 title: Page Title (required)
@@ -214,6 +223,7 @@ description: Page description for SEO (required)
 ### Documentation Standards
 
 **Writing Style:**
+
 - Write in clear, concise language
 - Use active voice
 - Address the reader directly ("you")
@@ -221,12 +231,14 @@ description: Page description for SEO (required)
 - Include code examples where helpful
 
 **Code Examples:**
+
 - Include complete, working examples
 - Add comments for clarity
 - Show expected output when relevant
 - Test all code before committing
 
 **Structure:**
+
 - Start with overview/introduction
 - Progress from basic to advanced
 - Use descriptive section headers
