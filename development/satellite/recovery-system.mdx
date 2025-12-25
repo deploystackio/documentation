@@ -1,0 +1,371 @@
+---
+title: Recovery System
+description: Automatic recovery and failure handling for MCP servers
+---
+
+# Recovery System
+
+The satellite automatically detects and recovers from MCP server failures without manual intervention. Recovery works for HTTP/SSE servers (network failures) and stdio servers (process crashes).
+
+## Overview
+
+The recovery system handles **HTTP/SSE Servers** (network failures, server downtime, connection timeouts) and **Stdio Servers** (process crashes up to 3 times in 5 minutes)
+
+Recovery is fully automatic for recoverable failures. Permanent failures (3+ crashes, OAuth token expired) require manual action.
+
+## Recovery Detection
+
+### Tool Execution Recovery
+
+When a tool is executed on a server that was previously offline/error, recovery is detected automatically:
+
+```typescript
+// services/satellite/src/core/mcp-server-wrapper.ts
+
+async handleExecuteTool(toolPath: string, toolArguments: unknown) {
+  const serverSlug = toolPath.split(':')[0];
+  const statusEntry = this.toolDiscoveryManager?.getServerStatus(serverSlug);
+  const wasOfflineOrError = statusEntry && ['offline', 'error'].includes(statusEntry.status);
+
+  // Execute tool with retry logic
+  const result = await this.executeHttpToolCallWithRetry(...);
+
+  // If execution succeeded but server was offline/error → RECOVERY DETECTED
+  if (wasOfflineOrError) {
+    this.handleServerRecovery(serverSlug, config);
+  }
+
+  return result;
+}
+```
+
+### Health Check Recovery
+
+Backend health checks periodically test offline servers. When they respond again:
+
+```
+Backend health check runs (every 3 minutes)
+    ↓
+Offline template now responds
+    ↓
+Backend sets installations to 'connecting'
+    ↓
+Backend sends 'configure' command with event='mcp_recovery'
+    ↓
+Satellite receives command and triggers re-discovery
+    ↓
+Status progresses: connecting → discovering_tools → online
+```
+
+## Retry Logic (HTTP/SSE)
+
+Before marking a server as offline, the satellite retries tool execution with exponential backoff:
+
+```typescript
+// services/satellite/src/core/mcp-server-wrapper.ts
+
+interface RetryConfig {
+  maxRetries: 3;
+  backoffMs: [500, 1000, 2000]; // Exponential: 500ms, 1s, 2s
+}
+
+async executeHttpToolCallWithRetry(
+  serverConfig: McpServerConfig,
+  toolName: string,
+  args: unknown
+): Promise<unknown> {
+  let lastError: Error;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await this.executeHttpToolCall(serverConfig, toolName, args);
+      return response; // Success - no retry needed
+    } catch (error) {
+      lastError = error;
+
+      // Non-retryable errors (auth failures) → fail immediately
+      if (this.isNonRetryableError(error)) {
+        throw error;
+      }
+
+      // Retryable errors (connection refused) → backoff and retry
+      if (attempt < 3) {
+        const backoffMs = [500, 1000, 2000][attempt - 1];
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+      }
+    }
+  }
+
+  // All retries exhausted → throw last error
+  throw lastError;
+}
+
+private isNonRetryableError(error: Error): boolean {
+  const msg = error.message.toLowerCase();
+  return msg.includes('401') || msg.includes('403') ||
+         msg.includes('unauthorized') || msg.includes('forbidden') ||
+         msg.includes('oauth') || msg.includes('authorization required');
+}
+```
+
+### Retryable vs Non-Retryable Errors
+
+| Error Type | Action | Reason |
+|------------|--------|--------|
+| ECONNREFUSED | **Retry** | Server may be restarting |
+| ETIMEDOUT | **Retry** | Network hiccup, may recover |
+| ENOTFOUND | **Retry** | DNS issue, may be temporary |
+| fetch failed | **Retry** | Network error, transient |
+| 401 Unauthorized | **No retry** | Token expired, retrying won't help |
+| 403 Forbidden | **No retry** | Access denied, retrying won't help |
+| OAuth errors | **No retry** | Auth issue, needs user action |
+
+## Recovery Flow
+
+When servers recover from failure, the satellite updates status and triggers re-discovery asynchronously without blocking tool execution responses.
+
+See [Status Tracking - Status Lifecycle](/development/satellite/status-tracking#status-lifecycle) for complete recovery flow diagrams including successful recovery, failed recovery, and status transitions.
+
+## Automatic Re-Discovery
+
+When recovery is detected, tools are refreshed from the server without blocking the user:
+
+```typescript
+// services/satellite/src/core/mcp-server-wrapper.ts
+
+private async handleServerRecovery(
+  serverSlug: string,
+  config: McpServerConfig
+): Promise<void> {
+  // Prevent duplicate recovery attempts
+  if (this.recoveryInProgress.has(serverSlug)) {
+    return; // Already recovering
+  }
+
+  this.recoveryInProgress.add(serverSlug);
+
+  try {
+    this.logger.info({ serverSlug }, 'Server recovered - triggering re-discovery');
+
+    // Emit status change to backend
+    this.eventBus?.emit('mcp.server.status_changed', {
+      installation_id: config.installation_id,
+      team_id: config.team_id,
+      status: 'connecting',
+      status_message: 'Server recovered, re-discovering tools',
+      timestamp: new Date().toISOString()
+    });
+
+    // Trigger re-discovery asynchronously (doesn't block tool response)
+    await this.toolDiscoveryManager?.remoteToolManager?.discoverServerTools(serverSlug);
+
+    this.logger.info({ serverSlug }, 'Tool re-discovery successful after recovery');
+  } catch (error) {
+    // Re-discovery failed (non-fatal, tool response still returned)
+    this.logger.error({ serverSlug, error }, 'Tool re-discovery failed after recovery');
+  } finally {
+    this.recoveryInProgress.delete(serverSlug);
+  }
+}
+```
+
+### Why Asynchronous Re-Discovery?
+
+**User Experience:**
+- Tool execution result returned immediately
+- User doesn't wait for tool discovery (can take 1-5 seconds)
+- If re-discovery fails, user already got their result
+
+**Reliability:**
+- Tool response isn't blocked by discovery errors
+- Discovery failure doesn't affect user's current request
+- Recovery can be retried later
+
+## Tool Preservation
+
+When re-discovery fails, tools are NOT removed from cache:
+
+```typescript
+// services/satellite/src/services/remote-tool-discovery-manager.ts
+
+async rediscoverServerTools(serverSlug: string): Promise<void> {
+  try {
+    // Attempt discovery
+    const newTools = await this.fetchToolsFromServer(serverSlug);
+
+    // Discovery succeeded → remove old tools and add new ones
+    this.removeToolsForServer(serverSlug);
+    this.addTools(newTools);
+
+    this.statusCallback?.(serverSlug, 'online');
+  } catch (error) {
+    // Discovery failed → keep old tools in cache
+    // Tools remain available for future attempts
+    this.statusCallback?.(serverSlug, 'error', error.message);
+  }
+}
+```
+
+**Why preserve tools on failure?**
+- User can still see what tools are available
+- Tools may work if server recovers later
+- Better UX than empty tool list
+- Discovery can be retried without losing tool metadata
+
+## Stdio Process Recovery
+
+Stdio servers auto-restart after crashes (up to 3 times in 5 minutes):
+
+```typescript
+// services/satellite/src/process/manager.ts
+
+async handleProcessExit(processInfo: ProcessInfo, exitCode: number) {
+  const now = Date.now();
+  const fiveMinutesAgo = now - 5 * 60 * 1000;
+
+  // Track crashes in 5-minute window
+  processInfo.crashHistory = processInfo.crashHistory.filter(t => t > fiveMinutesAgo);
+  processInfo.crashHistory.push(now);
+
+  const crashCount = processInfo.crashHistory.length;
+
+  if (crashCount >= 3) {
+    // Permanent failure - emit status event
+    this.eventBus?.emit('mcp.server.permanently_failed', {
+      installation_id: processInfo.config.installation_id,
+      team_id: processInfo.config.team_id,
+      process_id: processInfo.processId,
+      crash_count: crashCount,
+      message: `Process crashed ${crashCount} times in 5 minutes`,
+      timestamp: new Date().toISOString()
+    });
+
+    // Also emit status_changed for database update
+    this.eventBus?.emit('mcp.server.status_changed', {
+      installation_id: processInfo.config.installation_id,
+      team_id: processInfo.config.team_id,
+      status: 'permanently_failed',
+      status_message: `Process crashed ${crashCount} times in 5 minutes. Manual restart required.`,
+      timestamp: new Date().toISOString()
+    });
+
+    return; // No auto-restart
+  }
+
+  // Auto-restart (crash count < 3)
+  this.logger.info({ processId: processInfo.processId, crashCount }, 'Auto-restarting crashed process');
+  await this.startProcess(processInfo.config);
+}
+```
+
+### Stdio Recovery Timeline
+
+```
+Process crashes (crash #1)
+    ↓
+Auto-restart immediately
+    ↓
+Process crashes again (crash #2, within 5 min)
+    ↓
+Auto-restart immediately
+    ↓
+Process crashes again (crash #3, within 5 min)
+    ↓
+Status → 'permanently_failed'
+    ↓
+No auto-restart (manual action required)
+```
+
+## Failure Status Mapping
+
+When tool execution fails after all retries, error messages are mapped to appropriate status values:
+
+```typescript
+// services/satellite/src/services/remote-tool-discovery-manager.ts
+
+static getStatusFromError(error: Error): { status: string; message: string } {
+  const msg = error.message.toLowerCase();
+
+  // Auth errors → requires_reauth
+  if (msg.includes('401') || msg.includes('unauthorized')) {
+    return { status: 'requires_reauth', message: 'Authentication failed (HTTP 401)' };
+  }
+  if (msg.includes('403') || msg.includes('forbidden')) {
+    return { status: 'requires_reauth', message: 'Access forbidden (HTTP 403)' };
+  }
+
+  // Connection errors → offline
+  if (msg.includes('econnrefused') || msg.includes('etimedout') ||
+      msg.includes('enotfound') || msg.includes('fetch failed')) {
+    return { status: 'offline', message: 'Server unreachable' };
+  }
+
+  // Other errors → error
+  return { status: 'error', message: error.message };
+}
+```
+
+## Debouncing Concurrent Recovery
+
+Multiple tool executions may detect recovery simultaneously. Debouncing prevents duplicate re-discoveries:
+
+```typescript
+class McpServerWrapper {
+  private recoveryInProgress: Set<string> = new Set();
+
+  private async handleServerRecovery(serverSlug: string, config: McpServerConfig) {
+    // Check if already recovering
+    if (this.recoveryInProgress.has(serverSlug)) {
+      return; // Skip duplicate recovery
+    }
+
+    this.recoveryInProgress.add(serverSlug);
+
+    try {
+      await this.performRecovery(serverSlug, config);
+    } finally {
+      this.recoveryInProgress.delete(serverSlug);
+    }
+  }
+}
+```
+
+**Scenario:**
+- LLM executes 3 tools from same server concurrently
+- All 3 detect recovery (server was offline)
+- Only first execution triggers re-discovery
+- Other 2 skip (already in progress)
+
+## Recovery Timing
+
+| Recovery Type | Detection Time | Re-Discovery Time | Total |
+|---------------|----------------|-------------------|-------|
+| **Tool Execution** | Immediate (on next tool call) | 1-5 seconds | ~1-5s |
+| **Health Check** | Up to 3 minutes (polling interval) | 1-5 seconds | ~3-8 min |
+
+**Recommendation:** Tool execution recovery is faster and more responsive than health check recovery.
+
+## Manual Recovery (Requires User Action)
+
+Some failures cannot auto-recover:
+
+| Status | Reason | User Action |
+|--------|--------|-------------|
+| `requires_reauth` | OAuth token expired/revoked | Re-authenticate in dashboard |
+| `permanently_failed` | 3+ crashes in 5 minutes (stdio) | Check logs, fix issue, manual restart |
+
+See [Process Management - Auto-Restart System](/development/satellite/process-management#auto-restart-system) for complete stdio restart policy details (3 crashes in 5-minute window, backoff delays).
+
+## Implementation Components
+
+The recovery system consists of several integrated components:
+- Stdio auto-recovery and permanently_failed status
+- Tool execution retry logic and recovery detection
+- Health check recovery via backend
+
+## Related Documentation
+
+- [Status Tracking](/development/satellite/status-tracking) - Status values and transitions
+- [Event Emission](/development/satellite/event-emission) - Recovery status events
+- [Tool Discovery](/development/satellite/tool-discovery) - Re-discovery after recovery
+- [Process Management](/development/satellite/process-management) - Stdio crash recovery

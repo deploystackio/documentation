@@ -1,0 +1,451 @@
+---
+title: Log Capture
+description: Server and request logging system in the satellite
+---
+
+# Log Capture
+
+The satellite captures and batches two types of logs for each MCP server installation: **server logs** (stderr output, connection errors, startup messages) and **request logs** (tool execution with full request/response data).
+
+## Overview
+
+Log capture serves three purposes: **Debugging** lets developers see stderr output and tool execution details, **Monitoring** tracks server health and tool usage in real-time, and **Audit Trail** provides a complete record of tool calls with parameters and responses
+
+Both log types use the same batching strategy (3-second interval, max 20 per batch) to optimize backend API calls and database writes.
+
+## Server Logs
+
+Server logs capture stderr output and connection events from MCP servers, particularly useful for debugging stdio-based servers.
+
+### What Gets Logged
+
+**Stdio Servers:**
+- stderr output from the MCP server process
+- Connection errors (handshake failures)
+- Process spawn errors
+- Crash information
+
+**HTTP/SSE Servers:**
+- Connection errors (ECONNREFUSED, ETIMEDOUT)
+- HTTP error responses (4xx, 5xx)
+- OAuth authentication failures
+- Network timeouts
+
+### Log Levels
+
+| Level | Usage |
+|-------|-------|
+| `info` | Normal operations (connection established, tool discovery started) |
+| `warn` | Non-critical issues (retry attempts, temporary failures) |
+| `error` | Critical errors (connection refused, auth failures, crashes) |
+| `debug` | Detailed diagnostic information (handshake details, raw responses) |
+
+### Buffering Implementation
+
+```typescript
+// services/satellite/src/process/manager.ts
+
+interface BufferedLogEntry {
+  installation_id: string;
+  team_id: string;
+  level: 'info' | 'warn' | 'error' | 'debug';
+  message: string;
+  metadata?: Record<string, unknown>;
+  timestamp: string;
+}
+
+class ProcessManager {
+  private logBuffer: BufferedLogEntry[] = [];
+  private logFlushTimeout: NodeJS.Timeout | null = null;
+  private readonly LOG_BATCH_INTERVAL_MS = 3000;
+  private readonly LOG_BATCH_MAX_SIZE = 20;
+
+  // Called when stderr receives data
+  private handleStderrData(processInfo: ProcessInfo, data: Buffer) {
+    const message = data.toString().trim();
+
+    this.bufferLogEntry({
+      installation_id: processInfo.config.installation_id,
+      team_id: processInfo.config.team_id,
+      level: this.inferLogLevel(message), // 'error' if contains "error", etc.
+      message,
+      metadata: { process_id: processInfo.processId },
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  private bufferLogEntry(entry: BufferedLogEntry) {
+    this.logBuffer.push(entry);
+
+    // Force immediate flush if buffer full
+    if (this.logBuffer.length >= this.LOG_BATCH_MAX_SIZE) {
+      this.flushLogBuffer();
+    } else {
+      this.scheduleLogFlush(); // Flush after 3 seconds
+    }
+  }
+
+  private scheduleLogFlush() {
+    if (this.logFlushTimeout) return; // Already scheduled
+
+    this.logFlushTimeout = setTimeout(() => {
+      this.flushLogBuffer();
+    }, this.LOG_BATCH_INTERVAL_MS);
+  }
+
+  private flushLogBuffer() {
+    if (this.logBuffer.length === 0) return;
+
+    // Group by installation
+    const groupedLogs = new Map<string, BufferedLogEntry[]>();
+    for (const entry of this.logBuffer) {
+      const key = `${entry.installation_id}:${entry.team_id}`;
+      if (!groupedLogs.has(key)) {
+        groupedLogs.set(key, []);
+      }
+      groupedLogs.get(key)!.push(entry);
+    }
+
+    // Emit one event per installation
+    for (const [key, logs] of groupedLogs.entries()) {
+      this.eventBus?.emit('mcp.server.logs', {
+        installation_id: logs[0].installation_id,
+        team_id: logs[0].team_id,
+        logs: logs.map(log => ({
+          level: log.level,
+          message: log.message,
+          metadata: log.metadata,
+          timestamp: log.timestamp
+        }))
+      });
+    }
+
+    // Clear buffer
+    this.logBuffer = [];
+    this.logFlushTimeout = null;
+  }
+}
+```
+
+### Example Server Logs
+
+```json
+{
+  "installation_id": "inst_abc123",
+  "team_id": "team_xyz",
+  "logs": [
+    {
+      "level": "info",
+      "message": "MCP server starting on port 3568",
+      "timestamp": "2025-01-15T10:30:00.000Z"
+    },
+    {
+      "level": "error",
+      "message": "Connection refused: ECONNREFUSED",
+      "metadata": { "error_code": "ECONNREFUSED" },
+      "timestamp": "2025-01-15T10:30:05.000Z"
+    },
+    {
+      "level": "warn",
+      "message": "Retrying connection in 2 seconds...",
+      "timestamp": "2025-01-15T10:30:07.000Z"
+    }
+  ]
+}
+```
+
+## Request Logs
+
+Request logs capture tool execution with full request parameters and server responses, providing complete visibility into MCP tool usage.
+
+### What Gets Logged
+
+For each tool execution:
+- Tool name (e.g., `github:list-repos`)
+- Input parameters sent to tool
+- **Full response from MCP server** (when request logging is enabled)
+- Response time in milliseconds
+- Success/failure status
+- Error message (if failed)
+- User ID (who called the tool)
+- Timestamp
+
+### Privacy Control
+
+Request logging can be disabled per-installation via settings:
+
+```typescript
+// Installation settings
+{
+  "request_logging_enabled": false
+}
+```
+
+When disabled:
+- No request logs are buffered or emitted
+- Tool execution still works normally
+- Server logs (stderr) still captured
+- Used for privacy-sensitive tools (internal APIs, credentials, PII)
+
+### Buffering Implementation
+
+```typescript
+// services/satellite/src/core/mcp-server-wrapper.ts
+
+interface BufferedRequestEntry {
+  installation_id: string;
+  team_id: string;
+  user_id?: string;
+  tool_name: string;
+  tool_params: Record<string, unknown>;
+  tool_response?: unknown; // Full MCP server response
+  response_time_ms: number;
+  success: boolean;
+  error_message?: string;
+  timestamp: string;
+}
+
+class McpServerWrapper {
+  private requestLogBuffer: BufferedRequestEntry[] = [];
+  private requestLogFlushTimeout: NodeJS.Timeout | null = null;
+  private readonly REQUEST_LOG_BATCH_INTERVAL_MS = 3000;
+  private readonly REQUEST_LOG_BATCH_MAX_SIZE = 20;
+
+  async handleExecuteTool(toolPath: string, toolArguments: unknown) {
+    const startTime = Date.now();
+    let result: unknown;
+    let success = false;
+    let errorMessage: string | undefined;
+
+    try {
+      result = await this.executeToolCall(toolPath, toolArguments);
+      success = true;
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    } finally {
+      const responseTimeMs = Date.now() - startTime;
+
+      // Check if logging is enabled (default: true)
+      const loggingEnabled = config?.settings?.request_logging_enabled !== false;
+
+      // Buffer request log if installation context exists and logging enabled
+      if ((config?.installation_id && config?.team_id) && loggingEnabled) {
+        this.bufferRequestLogEntry({
+          installation_id: config.installation_id,
+          team_id: config.team_id,
+          user_id: config.user_id,
+          tool_name: toolPath,
+          tool_params: toolArguments as Record<string, unknown>,
+          tool_response: result, // Captured response
+          response_time_ms: responseTimeMs,
+          success,
+          error_message: errorMessage,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+
+    return result;
+  }
+
+  private bufferRequestLogEntry(entry: BufferedRequestEntry) {
+    this.requestLogBuffer.push(entry);
+
+    // Force flush if buffer full
+    if (this.requestLogBuffer.length >= this.REQUEST_LOG_BATCH_MAX_SIZE) {
+      this.flushRequestLogBuffer();
+    } else {
+      this.scheduleRequestLogFlush();
+    }
+  }
+
+  private flushRequestLogBuffer() {
+    if (this.requestLogBuffer.length === 0) return;
+
+    // Group by installation
+    const grouped = this.groupRequestsByInstallation(this.requestLogBuffer);
+
+    // Emit one event per installation
+    for (const [key, requests] of grouped.entries()) {
+      this.eventBus?.emit('mcp.request.logs', {
+        installation_id: requests[0].installation_id,
+        team_id: requests[0].team_id,
+        requests: requests.map(req => ({
+          user_id: req.user_id,
+          tool_name: req.tool_name,
+          tool_params: req.tool_params,
+          tool_response: req.tool_response, // Include response
+          response_time_ms: req.response_time_ms,
+          success: req.success,
+          error_message: req.error_message,
+          timestamp: req.timestamp
+        }))
+      });
+    }
+
+    // Clear buffer
+    this.requestLogBuffer = [];
+    this.requestLogFlushTimeout = null;
+  }
+}
+```
+
+### Example Request Logs
+
+```json
+{
+  "installation_id": "inst_abc123",
+  "team_id": "team_xyz",
+  "requests": [
+    {
+      "user_id": "user_xyz",
+      "tool_name": "github:list-repos",
+      "tool_params": {
+        "owner": "deploystackio"
+      },
+      "tool_response": {
+        "repos": ["deploystack", "mcp-server"],
+        "total": 2
+      },
+      "response_time_ms": 234,
+      "success": true,
+      "timestamp": "2025-01-15T10:30:00.000Z"
+    },
+    {
+      "user_id": "user_xyz",
+      "tool_name": "slack:send-message",
+      "tool_params": {
+        "channel": "#general",
+        "text": "Deploy complete"
+      },
+      "response_time_ms": 456,
+      "success": false,
+      "error_message": "Channel not found",
+      "timestamp": "2025-01-15T10:30:05.000Z"
+    }
+  ]
+}
+```
+
+## Batching Configuration
+
+Both server logs and request logs use the same batching strategy. See [Event Emission - Batching Configuration](/development/satellite/event-emission#batching-configuration) for configuration parameters and rationale.
+
+### Batching Flow
+
+```
+Log/Request occurs
+    ↓
+Buffer entry in memory
+    ↓
+    ├─ Buffer size < 20?
+    │   ↓
+    │   Schedule flush after 3 seconds
+    │
+    └─ Buffer size >= 20?
+        ↓
+        Flush immediately (force)
+    ↓
+Group entries by installation
+    ↓
+Emit one event per installation
+    ↓
+Backend receives batched logs
+    ↓
+Bulk insert into database
+```
+
+## Backend Storage
+
+### Server Logs Table
+
+```sql
+CREATE TABLE mcpServerLogs (
+  id TEXT PRIMARY KEY,
+  installation_id TEXT NOT NULL,
+  level TEXT NOT NULL, -- 'info'|'warn'|'error'|'debug'
+  message TEXT NOT NULL,
+  metadata JSONB,
+  created_at TIMESTAMP NOT NULL,
+  FOREIGN KEY (installation_id) REFERENCES mcpServerInstallations(id)
+);
+```
+
+### Request Logs Table
+
+```sql
+CREATE TABLE mcpRequestLogs (
+  id TEXT PRIMARY KEY,
+  installation_id TEXT NOT NULL,
+  user_id TEXT,
+  tool_name TEXT NOT NULL,
+  tool_params JSONB NOT NULL,
+  tool_response JSONB, -- Full response from MCP server
+  response_time_ms INTEGER NOT NULL,
+  success BOOLEAN NOT NULL,
+  error_message TEXT,
+  created_at TIMESTAMP NOT NULL,
+  FOREIGN KEY (installation_id) REFERENCES mcpServerInstallations(id),
+  FOREIGN KEY (user_id) REFERENCES authUser(id)
+);
+```
+
+### Cleanup Job
+
+A backend cron job enforces a 100-line limit per installation for both tables:
+
+```typescript
+// Runs every 10 minutes
+// For each installation with > 100 logs:
+//   1. Find oldest logs to delete (keep most recent 100)
+//   2. DELETE FROM table WHERE id NOT IN (recent 100)
+```
+
+This prevents unbounded table growth while maintaining recent debugging history.
+
+## Buffer Management
+
+### Memory Usage
+
+**Server Logs:**
+- Maximum ~20 entries in buffer before flush
+- Each entry: ~200 bytes average (message + metadata)
+- Max buffer size: ~4 KB per ProcessManager instance
+
+**Request Logs:**
+- Maximum ~20 entries in buffer before flush
+- Each entry: Variable (depends on params/response size)
+- Typically: 500 bytes - 5 KB per entry
+- Max buffer size: ~10-100 KB per McpServerWrapper instance
+
+### Cleanup on Shutdown
+
+Both buffer managers flush remaining logs on cleanup:
+
+```typescript
+// ProcessManager cleanup
+cleanup() {
+  this.flushLogBuffer(); // Flush any buffered logs
+  clearTimeout(this.logFlushTimeout);
+}
+
+// McpServerWrapper cleanup
+cleanup() {
+  this.flushRequestLogBuffer(); // Flush any buffered requests
+  clearTimeout(this.requestLogFlushTimeout);
+}
+```
+
+## Implementation Components
+
+The log capture system consists of several integrated components:
+- Server and request log batching implementation
+- Request logging toggle and tool response capture
+- Backend log tables and event handlers
+- 100-line cleanup job
+
+## Related Documentation
+
+- [Event Emission](/development/satellite/event-emission) - Log event types and payloads
+- [Process Management](/development/satellite/process-management) - Server log buffering
+- [Status Tracking](/development/satellite/status-tracking) - How logs relate to status

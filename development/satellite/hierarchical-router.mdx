@@ -384,66 +384,9 @@ Satellite → Client
 
 ## Format Conversion
 
-### External vs Internal Formats
+The satellite converts between user-facing format (`serverName:toolName`) and internal routing format (`serverName-toolName`) transparently during tool discovery and execution.
 
-The satellite uses different tool path formats for different purposes:
-
-**External Format (User-Facing): `serverName:toolName`**
-
-Used in:
-- `discover_mcp_tools` responses
-- `execute_mcp_tool` requests
-- Any client-facing communication
-
-Examples:
-- `github:create_issue`
-- `figma:get_file`
-- `postgres:query`
-
-Why colon?
-- Standard separator in URIs and paths
-- Clean, readable format
-- Industry convention (npm packages, docker images)
-
-**Internal Format (Routing): `serverName-toolName`**
-
-Used in:
-- Unified tool cache keys
-- Tool discovery manager
-- Process routing
-- Internal lookups
-
-Examples:
-- `github-create_issue`
-- `figma-get_file`
-- `postgres-query`
-
-Why dash?
-- Existing codebase convention
-- Backward compatibility
-- All existing code uses dash format
-
-### Conversion Logic
-
-```typescript
-// In handleExecuteTool()
-const toolPath = "github:create_issue";  // From client
-
-// Parse external format
-const [serverSlug, toolName] = toolPath.split(':');
-
-// Convert to internal format
-const namespacedToolName = `${serverSlug}-${toolName}`;
-// Result: "github-create_issue"
-
-// Look up in cache
-const cachedTool = toolDiscoveryManager.getTool(namespacedToolName);
-
-// Route to actual MCP server
-await executeToolCall(namespacedToolName, toolArguments);
-```
-
-The conversion is transparent to both clients and actual MCP servers - it's purely a satellite internal concern.
+See [Tool Discovery - Namespacing Strategy](/development/satellite/tool-discovery#namespacing-strategy) for complete details on naming conventions and format conversion logic.
 
 ## Search Implementation
 
@@ -586,9 +529,17 @@ Both meta-tools are implemented and production-ready:
 - Fast search performance
 - Easy to monitor and debug
 
+## Status-Based Tool Filtering
+
+The hierarchical router integrates with status tracking to hide tools from unavailable servers and provide clear error messages when unavailable tools are executed.
+
+See [Status Tracking - Tool Filtering](/development/satellite/status-tracking#tool-filtering-by-status) for complete filtering logic, execution blocking rules, and status values.
+
 ## Related Documentation
 
 - [Tool Discovery Implementation](/development/satellite/tool-discovery) - Internal tool caching and discovery
+- [Status Tracking](/development/satellite/status-tracking) - Tool filtering by server status
+- [Recovery System](/development/satellite/recovery-system) - How offline servers auto-recover
 - [MCP Transport Protocols](/development/satellite/mcp-transport) - How clients connect
 - [Process Management](/development/satellite/process-management) - stdio server lifecycle
 - [Architecture Overview](/development/satellite/architecture) - Complete satellite design

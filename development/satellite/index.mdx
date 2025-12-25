@@ -214,7 +214,7 @@ npm run release  # Release management
 
 ## Implemented Features
 
-### Phase 2: MCP Server Process Management
+### MCP Server Process Management
 - **Process Lifecycle**: Spawn, monitor, auto-restart (max 3), and terminate MCP servers
 - **stdio Communication**: Full JSON-RPC 2.0 protocol over stdin/stdout
 - **HTTP Proxy**: Reverse proxy for external MCP server endpoints working
@@ -223,20 +223,20 @@ npm run release  # Release management
 - **Tool Discovery**: Automatic tool caching from both HTTP and stdio servers
 - **Team-Grouped Heartbeat**: processes_by_team reporting every 30 seconds
 
-### Phase 3: Team Isolation
+### Team Isolation
 - **nsjail Sandboxing**: Complete process isolation with built-in resource limits
 - **Namespace Isolation**: PID, mount, UTS, IPC namespaces per team
 - **Filesystem Isolation**: Team-specific read-only and writable directories
 - **Credential Management**: Secure environment injection via nsjail
 
-### Phase 4: Backend Integration
+### Backend Integration
 - **HTTP Polling**: Outbound communication with DeployStack Backend
 - **Configuration Sync**: Dynamic configuration updates from Backend
 - **Status Reporting**: Real-time satellite health and usage metrics
 - **Command Processing**: Execute Backend commands with acknowledgment
 - **Event System**: Real-time event emission with automatic batching (10 event types)
 
-### Phase 5: Enterprise Features
+### Enterprise Features
 - **OAuth 2.1 Authentication**: Resource server with token introspection
 - **Audit Logging**: Complete audit trails for compliance
 - **Multi-Region Support**: Global satellite deployment

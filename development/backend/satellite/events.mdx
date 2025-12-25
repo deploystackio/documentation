@@ -197,17 +197,22 @@ Updates `mcpServerInstallations` table when server status changes during install
 
 **Optional Fields**: `status_message` (string, human-readable context or error details)
 
-**Status Values**:
+**Status Values** (11 total):
 - `provisioning` - Installation created, waiting for satellite
 - `command_received` - Satellite acknowledged install command
 - `connecting` - Satellite connecting to MCP server
 - `discovering_tools` - Tool discovery in progress
 - `syncing_tools` - Sending discovered tools to backend
 - `online` - Server healthy and responding
+- `restarting` - Configuration changed, server restarting
 - `offline` - Server unreachable
 - `error` - Connection failed with specific error
 - `requires_reauth` - OAuth token expired/revoked
 - `permanently_failed` - Process crashed 3+ times in 5 minutes
+
+**Handler Implementation**: `services/backend/src/events/handlers/mcp/status-changed.handler.ts`
+
+For satellite-side status detection logic and lifecycle flows, see [Satellite Status Tracking](/development/satellite/status-tracking).
 
 **Emission Points**:
 - Success path: After successful tool discovery → status='online'
@@ -224,6 +229,48 @@ Inserts record into `satelliteUsageLogs` for analytics and audit trails.
 **Required Fields** (snake_case): `tool_name`, `server_id`, `team_id`, `duration_ms`, `success`
 
 **Optional Fields**: `error_message` (string, only present when success=false)
+
+### Logging Events
+
+#### mcp.server.logs
+
+Inserts batched stderr output from MCP servers into `mcpServerLogs` table for debugging and monitoring.
+
+**Business Logic**: Captures stderr output, connection errors, and process lifecycle events. Limited to 100 lines per installation via cleanup cron job.
+
+**Required Fields** (snake_case): `installation_id`, `team_id`, `logs` (array of log entries)
+
+**Handler Implementation**: `services/backend/src/events/handlers/mcp/server-logs.handler.ts`
+
+Event batching strategy (3-second interval, max 20 per batch) is documented in [Satellite Event Emission](/development/satellite/event-emission).
+
+#### mcp.request.logs
+
+Inserts batched tool execution logs into `mcpRequestLogs` table with full request/response data for audit trails.
+
+**Business Logic**: Captures tool execution with request parameters, response data, duration, and success status. Privacy controlled via `mcpServerInstallations.settings.request_logging_enabled`.
+
+**Required Fields** (snake_case): `installation_id`, `team_id`, `tool_name`, `request_params`, `duration_ms`, `success`
+
+**Optional Fields**: `tool_response` (jsonb), `error_message` (string)
+
+**Handler Implementation**: `services/backend/src/events/handlers/mcp/request-logs.handler.ts`
+
+**Database Storage**: `mcpRequestLogs.tool_response` column stores MCP server responses when request logging is enabled.
+
+### Tool Discovery Events
+
+#### mcp.tools.discovered
+
+Updates `mcpToolMetadata` table with discovered tools, token counts, and tool schemas from MCP servers.
+
+**Business Logic**: Stores tool metadata for team visibility, hierarchical router token savings calculations, and frontend tool catalog display.
+
+**Required Fields** (snake_case): `installation_id`, `team_id`, `server_slug`, `tool_count`, `total_tokens`, `tools` (array)
+
+**Handler Implementation**: `services/backend/src/events/handlers/mcp/tools-discovered.handler.ts`
+
+For satellite-side tool discovery implementation, see [Satellite Tool Discovery](/development/satellite/tool-discovery).
 
 ## Creating New Event Handlers
 
@@ -339,6 +386,9 @@ Events route to existing business tables based on their purpose:
 | `mcp.server.crashed` | `satelliteProcesses` | Update status='failed', log error details |
 | `mcp.server.status_changed` | `mcpServerInstallations` | Update status, status_message, status_updated_at |
 | `mcp.tool.executed` | `satelliteUsageLogs` | Insert usage record with metrics |
+| `mcp.server.logs` | `mcpServerLogs` | Insert batched stderr logs (100-line limit) |
+| `mcp.request.logs` | `mcpRequestLogs` | Insert tool execution logs with request/response |
+| `mcp.tools.discovered` | `mcpToolMetadata` | Update tool metadata with token counts |
 
 ### Transaction Strategy
 

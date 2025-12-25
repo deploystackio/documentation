@@ -281,7 +281,7 @@ The satellite uses `estimateMcpServerTokens()` from `token-counter.ts` to calcul
 - Enable frontend tool catalog display with token consumption metrics
 - Provide analytics on MCP server complexity and context window usage
 
-See [Event System](/development/satellite/event-system) for event batching and delivery details.
+For event payload structure and event batching details, see [Event Emission - mcp.tools.discovered](/development/satellite/event-emission#mcp-tools-discovered).
 
 ## Development Considerations
 
@@ -348,5 +348,67 @@ curl http://localhost:3001/api/status/debug
 - Circuit breakers for automatic failure recovery
 - Detailed usage and performance analytics
 - Cache persistence for faster startup (HTTP only)
+
+## Status Integration
+
+Tool discovery integrates with the status tracking system to filter tools and enable automatic recovery. Discovery managers call status callbacks on success/failure to update installation status in real-time.
+
+See [Status Tracking - Tool Filtering](/development/satellite/status-tracking#tool-filtering-by-status) for complete details on status-based tool filtering and execution blocking.
+
+## Recovery System
+
+When offline servers recover, tool discovery is automatically triggered. The satellite preserves existing tools during re-discovery attempts to prevent tool loss on failure.
+
+See [Recovery System - Recovery Detection](/development/satellite/recovery-system#recovery-detection) for complete recovery logic, retry strategy, and tool preservation implementation.
+
+## Tool Metadata Events
+
+Discovered tools are emitted to backend with token count estimates.
+
+**Event Structure:**
+```typescript
+eventBus.emit('mcp.tools.discovered', {
+  installation_id: string,
+  team_id: string,
+  tools: [{
+    tool_path: string,
+    name: string,
+    description?: string,
+    inputSchema: unknown,
+    token_count: number  // Estimated token usage
+  }]
+});
+```
+
+**Token Calculation:**
+- Name + description + input schema serialized
+- Estimated using character count / 4 (approximate tokens)
+- Used for analytics and optimization
+
+See [Event Emission](/development/satellite/event-emission) for complete event types.
+
+## Request Logging
+
+Tool execution is logged with full request/response data for debugging.
+
+**Logged Information:**
+- Tool name and input parameters
+- Full MCP server response (captured)
+- Response time in milliseconds
+- Success/failure status and error messages
+- User attribution (who called the tool)
+
+**Privacy Control:**
+Request logging can be disabled per-installation via `settings.request_logging_enabled = false`.
+
+See [Log Capture](/development/satellite/log-capture) for buffering and storage details.
+
+## Related Documentation
+
+- [Status Tracking](/development/satellite/status-tracking) - Tool filtering by server status
+- [Recovery System](/development/satellite/recovery-system) - Automatic re-discovery on recovery
+- [Event Emission](/development/satellite/event-emission) - Tool metadata events
+- [Log Capture](/development/satellite/log-capture) - Request logging system
+- [Hierarchical Router](/development/satellite/hierarchical-router) - How tools are exposed to MCP clients
 
 The unified tool discovery implementation provides a solid foundation for multi-transport MCP server integration while maintaining simplicity and reliability for development and production use.

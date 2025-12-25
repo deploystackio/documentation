@@ -115,6 +115,44 @@ Each satellite command contains:
 4. Restart affected components
 5. Verify system integrity post-update
 
+### health_check
+
+**Purpose**: Validates MCP server credentials and connectivity
+
+**Priority**: `immediate`
+
+**Triggered By**:
+- Backend credential validation cron (every 1 minute)
+- Manual credential testing
+- OAuth token expiration detection
+
+**Payload Structure**:
+```json
+{
+  "check_type": "credential_validation",
+  "installation_id": "installation-uuid",
+  "team_id": "team-uuid"
+}
+```
+
+**Satellite Actions**:
+1. Find MCP server configuration by installation_id
+2. Skip stdio servers (no HTTP credentials to validate)
+3. Build HTTP request with configured credentials (headers, query params)
+4. Call `tools/list` with 15-second timeout
+5. Detect authentication errors:
+   - HTTP 401/403 responses
+   - Error messages containing "auth", "unauthorized", "forbidden"
+6. Emit status event:
+   - On auth failure → `requires_reauth` status
+   - On success → credentials valid (no status change)
+
+**Error Detection Patterns**:
+- HTTP status codes: 401, 403
+- Response body keywords: "auth", "unauthorized", "forbidden", "token", "credentials"
+
+See [Status Tracking](/development/satellite/status-tracking) for credential validation status flow.
+
 ## Command Lifecycle
 
 ### Creation

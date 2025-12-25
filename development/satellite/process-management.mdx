@@ -147,17 +147,17 @@ All communication uses newline-delimited JSON following JSON-RPC 2.0 specificati
 
 ### Graceful Termination
 
-Process termination follows a two-phase graceful shutdown approach to ensure clean process exit and proper resource cleanup.
+Process termination follows a two-step graceful shutdown approach to ensure clean process exit and proper resource cleanup.
 
-#### Termination Phases
+#### Termination Steps
 
-**Phase 1: SIGTERM (Graceful Shutdown)**
+**Step 1: SIGTERM (Graceful Shutdown)**
 - Send SIGTERM signal to the process
 - Process has 10 seconds (default timeout) to shut down gracefully
 - Process can complete in-flight operations and cleanup resources
 - Wait for process to exit voluntarily
 
-**Phase 2: SIGKILL (Force Termination)**
+**Step 2: SIGKILL (Force Termination)**
 - If process doesn't exit within timeout period
 - Send SIGKILL signal to force immediate termination
 - Guaranteed process termination (cannot be caught or ignored)
@@ -408,36 +408,11 @@ The ProcessManager emits events for monitoring and integration:
 
 ## Event Emission
 
-The ProcessManager emits real-time events to the Backend for operational visibility and audit trails. These events are batched every 3 seconds and sent via the Event System.
+The ProcessManager emits real-time lifecycle events (started, crashed, restarted, permanently_failed) to the Backend for operational visibility and audit trails.
 
-### Lifecycle Events
+ProcessManager internal events (processSpawned, processTerminated) are for satellite-internal coordination. Event System events (mcp.server.started, etc.) are sent to Backend for external visibility.
 
-**mcp.server.started**
-- Emitted after successful spawn and handshake completion
-- Includes: server_id, process_id, spawn_duration_ms, tool_count
-- Provides immediate visibility into new MCP server availability
-
-**mcp.server.crashed**
-- Emitted on unexpected process exit with non-zero code
-- Includes: exit_code, signal, uptime_seconds, crash_count, will_restart
-- Enables real-time alerting for process failures
-
-**mcp.server.restarted**
-- Emitted after successful automatic restart
-- Includes: old_process_id, new_process_id, restart_reason, attempt_number
-- Tracks restart attempts for reliability monitoring
-
-**mcp.server.permanently_failed**
-- Emitted when restart limit (3 attempts) is exceeded
-- Includes: total_crashes, last_error, failed_at timestamp
-- Critical alert requiring manual intervention
-
-**Event vs Internal Events:**
-- ProcessManager internal events (processSpawned, processTerminated, etc.) are for satellite-internal coordination
-- Event System events (mcp.server.started, etc.) are sent to Backend for external visibility
-- Both work together: Internal events trigger state changes, Event System events provide audit trail
-
-For complete event system documentation and all event types, see [Event System](/development/satellite/event-system).
+See [Event Emission - Process Lifecycle Events](/development/satellite/event-emission#event-types-reference) for complete event types, payloads, and batching configuration.
 
 ## Team Isolation
 
@@ -531,10 +506,51 @@ LOG_LEVEL=debug npm run dev
 - Enabled by default (MCP servers need external connectivity)
 - Can be disabled for higher security requirements
 
+## Status Events
+
+Process lifecycle emits status events to backend for real-time monitoring:
+
+**Status Event Emission:**
+- `connecting` - When process spawn starts
+- `online` - After successful handshake and tool discovery
+- `permanently_failed` - When process crashes 3 times in 5 minutes
+
+See [Event Emission](/development/satellite/event-emission) for complete event types and payloads.
+
+## Log Buffering
+
+Process stderr output is buffered and batched before emission:
+
+**Buffering Strategy:**
+- Batch interval: 3 seconds after first log
+- Max batch size: 20 logs (forces immediate flush)
+- Grouping: By installation_id + team_id
+
+**Log Levels:**
+- Inferred from message content (`error` if contains "error", etc.)
+- Metadata includes process_id for debugging
+
+See [Log Capture](/development/satellite/log-capture) for buffer management details.
+
+## Configuration Restart Flow
+
+When configuration is updated (env vars, args, headers, query params):
+
+1. Backend sets installation status to `restarting`
+2. Backend sends `configure` command to satellite
+3. Satellite receives command and stops old process
+4. Satellite clears tool cache for installation
+5. Satellite spawns new process with updated configuration
+6. Status progresses: `restarting` → `connecting` → `discovering_tools` → `online`
+
+See [Status Tracking](/development/satellite/status-tracking) for configuration update status transitions.
+
 ## Related Documentation
 
 - [Satellite Architecture Design](/development/satellite/architecture) - Overall system architecture
 - [Idle Process Management](/development/satellite/idle-process-management) - Automatic termination and respawning of idle processes
 - [Tool Discovery Implementation](/development/satellite/tool-discovery) - How tools are discovered from processes
-- [Team Isolation Implementation](/development/satellite/team-isolation) - Team-based access control
+- [Event Emission](/development/satellite/event-emission) - Process lifecycle events
+- [Log Capture](/development/satellite/log-capture) - stderr log buffering
+- [Status Tracking](/development/satellite/status-tracking) - Process status management
 - [Backend Communication](/development/satellite/backend-communication) - Integration with Backend commands

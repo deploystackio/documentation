@@ -32,7 +32,7 @@ The system supports 5 command types defined in the `command_type` enum:
 | `spawn` | Start MCP server process | Launch HTTP proxy or stdio process |
 | `kill` | Stop MCP server process | Terminate process gracefully |
 | `restart` | Restart MCP server | Stop and start process |
-| `health_check` | Verify server health | Call tools/list to check connectivity |
+| `health_check` | Verify server health and validate credentials | Check connectivity or validate OAuth tokens |
 
 ### Configure Commands
 
@@ -73,6 +73,30 @@ interface CommandPayload {
   // Additional command-specific fields
 }
 ```
+
+## Status Changes Triggered by Commands
+
+Commands trigger installation status changes through satellite event emission:
+
+| Command | Status Before | Status After | When |
+|---------|--------------|--------------|------|
+| `configure` (install) | N/A | `provisioning` → `command_received` → `connecting` | Installation creation flow |
+| `configure` (update) | `online` | `restarting` → `online` | Configuration change applied |
+| `configure` (delete) | Any | Process terminated | Installation removal |
+| `health_check` (credential) | `online` | `requires_reauth` | OAuth token invalid |
+| `restart` | `online` | `restarting` → `online` | Manual restart requested |
+
+**Status Lifecycle on Installation**:
+1. Backend creates installation → status=`provisioning`
+2. Backend sends `configure` command → status=`command_received`
+3. Satellite connects to server → status=`connecting`
+4. Satellite discovers tools → status=`discovering_tools`
+5. Satellite syncs tools to backend → status=`syncing_tools`
+6. Process complete → status=`online`
+
+For complete status transition documentation, see [Backend Events - Status Values](/development/backend/satellite/events#mcp-server-status_changed).
+
+---
 
 ## Command Event Types
 
@@ -168,6 +192,14 @@ await satelliteCommandService.notifyMcpRecovery(
 
 **Payload**: `event: 'mcp_recovery'`
 
+**Status Flow**:
+- Triggered by health check detecting offline installation
+- Sets status to `connecting`
+- Satellite rediscovers tools
+- Status progresses: offline → connecting → discovering_tools → online
+
+For complete recovery system documentation, see [Backend Communication - Auto-Recovery](/development/backend/satellite/communication#auto-recovery-system).
+
 ## Critical Pattern
 
 **ALWAYS use the correct convenience method**:
@@ -247,9 +279,22 @@ When satellites receive commands:
 3. Execute spawn sequence
 
 **For `health_check` commands**:
-1. Call tools/list on target server
-2. Verify response
-3. Report health status
+1. Check `payload.check_type` field:
+   - `connectivity` (default): Call tools/list to verify server responds
+   - `credential_validation`: Validate OAuth tokens for installation
+2. Execute appropriate validation
+3. Report health status via `mcp.server.status_changed` event:
+   - `online` - Health check passed
+   - `requires_reauth` - OAuth token expired/revoked
+   - `error` - Validation failed with error
+
+**Credential Validation Flow**:
+- Backend cron job sends `health_check` command with `check_type: 'credential_validation'`
+- Satellite validates OAuth token (performs token refresh test)
+- Emits status event based on validation result
+- Backend updates `mcpServerInstallations.status` and `last_credential_check_at`
+
+For satellite-side credential validation implementation, see [Satellite OAuth Authentication](/development/satellite/oauth-authentication).
 
 ## Example Usage
 
