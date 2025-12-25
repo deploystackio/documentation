@@ -208,6 +208,15 @@
             ]
           },
           {
+            "group": "Status & Health Tracking",
+            "pages": [
+              "/development/satellite/status-tracking",
+              "/development/satellite/event-emission",
+              "/development/satellite/log-capture",
+              "/development/satellite/recovery-system"
+            ]
+          },
+          {
             "group": "Backend Communication",
             "pages": [
               "/development/satellite/backend-communication",

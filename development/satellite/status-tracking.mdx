@@ -1,0 +1,284 @@
+---
+title: Status Tracking
+description: MCP server installation status tracking system in the satellite
+---
+
+# Status Tracking
+
+The satellite tracks the health and availability of each MCP server installation through an 11-state status system. This enables real-time monitoring, automatic recovery, and tool availability filtering.
+
+## Overview
+
+Status tracking serves three primary purposes:
+
+1. **User Visibility**: Users see current server state in real-time via the frontend
+2. **Tool Availability**: Tools from unavailable servers are filtered from discovery
+3. **Automatic Recovery**: System detects and recovers from failures automatically
+
+The status system is managed by `UnifiedToolDiscoveryManager` and updated through:
+- Installation lifecycle events (provisioning → online)
+- Health check results (online → offline)
+- Tool execution failures (online → offline/error/requires_reauth)
+- Configuration changes (online → restarting)
+- Recovery detection (offline → connecting → online)
+
+## Status Values
+
+| Status | Description | Tools Available? | User Action Required |
+|--------|-------------|------------------|---------------------|
+| `provisioning` | Initial state after installation created | No | Wait |
+| `command_received` | Satellite received configuration command | No | Wait |
+| `connecting` | Connecting to MCP server | No | Wait |
+| `discovering_tools` | Running tool discovery | No | Wait |
+| `syncing_tools` | Syncing tools to backend | No | Wait |
+| `online` | Server healthy and responding | **Yes** | None |
+| `restarting` | Configuration updated, server restarting | No | Wait |
+| `offline` | Server unreachable (auto-recovers) | No | Wait or check server |
+| `error` | General error state (auto-recovers) | No | Check logs |
+| `requires_reauth` | OAuth token expired/revoked | No | Re-authenticate |
+| `permanently_failed` | 3+ crashes in 5 minutes (stdio only) | No | Manual restart required |
+
+## Status Lifecycle
+
+### Initial Installation Flow
+
+```
+provisioning
+    ↓
+command_received (satellite received configure command)
+    ↓
+connecting (spawning MCP server process or connecting to HTTP/SSE)
+    ↓
+discovering_tools (calling tools/list)
+    ↓
+syncing_tools (sending tools to backend)
+    ↓
+online (ready for use)
+```
+
+### Configuration Update Flow
+
+```
+online
+    ↓
+restarting (user updated config, backend sets status immediately)
+    ↓
+connecting (satellite receives command, restarts server)
+    ↓
+discovering_tools
+    ↓
+online
+```
+
+### Failure and Recovery Flow
+
+```
+online
+    ↓
+offline/error (server unreachable or error response)
+    ↓
+[automatic recovery when server comes back]
+    ↓
+connecting
+    ↓
+discovering_tools
+    ↓
+online
+```
+
+### OAuth Failure Flow
+
+```
+online
+    ↓
+requires_reauth (401/403 response or token refresh failed)
+    ↓
+[user re-authenticates via dashboard]
+    ↓
+connecting
+    ↓
+discovering_tools
+    ↓
+online
+```
+
+### Stdio Crash Flow (Permanent Failure)
+
+```
+online
+    ↓
+(stdio process crashes)
+    ↓
+connecting (auto-restart attempt 1)
+    ↓
+(crashes again within 5 minutes)
+    ↓
+connecting (auto-restart attempt 2)
+    ↓
+(crashes again within 5 minutes)
+    ↓
+permanently_failed (manual intervention required)
+```
+
+## Status Tracking Implementation
+
+### UnifiedToolDiscoveryManager
+
+The status system is implemented in `UnifiedToolDiscoveryManager`:
+
+```typescript
+// services/satellite/src/services/unified-tool-discovery-manager.ts
+
+export type ServerAvailabilityStatus =
+  | 'online'
+  | 'offline'
+  | 'error'
+  | 'requires_reauth'
+  | 'permanently_failed'
+  | 'connecting'
+  | 'discovering_tools';
+
+export interface ServerStatusEntry {
+  status: ServerAvailabilityStatus;
+  lastUpdated: Date;
+  message?: string;
+}
+
+class UnifiedToolDiscoveryManager {
+  private serverStatus: Map<string, ServerStatusEntry> = new Map();
+
+  // Set server status (called by discovery managers and MCP wrapper)
+  setServerStatus(serverSlug: string, status: ServerAvailabilityStatus, message?: string): void {
+    this.serverStatus.set(serverSlug, {
+      status,
+      lastUpdated: new Date(),
+      message
+    });
+  }
+
+  // Check if server is available for tool execution
+  isServerAvailable(serverSlug: string): boolean {
+    const statusEntry = this.serverStatus.get(serverSlug);
+    if (!statusEntry) return true; // Unknown = available (safe default)
+    return statusEntry.status === 'online';
+  }
+
+  // Get all tools, filtered by server status
+  getAllTools(): ToolMetadata[] {
+    const allTools = this.getAllToolsUnfiltered();
+    return allTools.filter(tool => {
+      const serverSlug = tool.tool_path.split(':')[0];
+      return this.isServerAvailable(serverSlug);
+    });
+  }
+}
+```
+
+### Status Callbacks
+
+Discovery managers call status callbacks when discovery succeeds or fails:
+
+**HTTP/SSE Discovery:**
+```typescript
+// services/satellite/src/services/remote-tool-discovery-manager.ts
+
+// On successful discovery
+this.statusCallback?.(serverSlug, 'online');
+
+// On connection error
+const { status, message } = RemoteToolDiscoveryManager.getStatusFromError(error);
+this.statusCallback?.(serverSlug, status, message);
+```
+
+**Stdio Discovery:**
+```typescript
+// services/satellite/src/services/stdio-tool-discovery-manager.ts
+
+// On successful discovery
+this.statusCallback?.(processId, 'online');
+
+// On discovery error
+this.statusCallback?.(processId, 'error', errorMessage);
+```
+
+## Tool Filtering by Status
+
+### Discovery Filtering
+
+When LLMs call `discover_mcp_tools`, only tools from available servers are returned:
+
+```typescript
+// UnifiedToolDiscoveryManager.getAllTools() filters by status
+const tools = toolDiscoveryManager.getAllTools(); // Only 'online' servers
+
+// Tools from offline/error/requires_reauth servers are hidden
+```
+
+### Execution Blocking
+
+When LLMs attempt to execute tools from unavailable servers:
+
+```typescript
+// services/satellite/src/core/mcp-server-wrapper.ts
+
+const serverSlug = toolPath.split(':')[0];
+const statusEntry = this.toolDiscoveryManager?.getServerStatus(serverSlug);
+
+// Block execution for non-recoverable states
+if (statusEntry?.status === 'requires_reauth') {
+  return {
+    error: `Tool cannot be executed - server requires re-authentication.
+
+Status: ${statusEntry.status}
+The server requires re-authentication. Please re-authorize in the dashboard.
+
+Unavailable server: ${serverSlug}`
+  };
+}
+
+// Allow execution for offline/error (enables recovery detection)
+```
+
+## Status Transition Triggers
+
+### Backend-Triggered (Database Updates)
+
+**Source:** Backend API routes
+
+| Trigger | New Status | When |
+|---------|-----------|------|
+| Installation created | `provisioning` | User installs MCP server |
+| Config updated | `restarting` | User modifies environment vars/args/headers |
+| OAuth callback success | `connecting` | User re-authenticates |
+| Health check fails | `offline` | Server unreachable (3-min interval) |
+| Credential validation fails | `requires_reauth` | OAuth token invalid |
+
+### Satellite-Triggered (Event Emission)
+
+**Source:** Satellite emits `mcp.server.status_changed` events to backend
+
+| Trigger | New Status | When |
+|---------|-----------|------|
+| Configure command received | `command_received` | Satellite polls backend |
+| Server connection starts | `connecting` | Spawning process or HTTP connect |
+| Tool discovery starts | `discovering_tools` | Calling tools/list |
+| Tool discovery succeeds | `online` | Discovery completed successfully |
+| Tool execution fails (3 retries) | `offline`/`error`/`requires_reauth` | Tool call failed after retries |
+| Server recovery detected | `connecting` | Previously offline server responds |
+| Stdio crashes 3 times | `permanently_failed` | 3 crashes within 5 minutes |
+
+## Implementation References
+
+**Phase 1:** Database schema for status field
+**Phase 3:** Backend event handler for status updates
+**Phase 4:** Satellite status event emission
+**Phase 10:** Tool availability filtering by status
+**Phase 17:** Configuration update status transitions
+**Phase 18:** Tool execution status updates + auto-recovery
+
+## Related Documentation
+
+- [Event Emission](/development/satellite/event-emission) - Status change event details
+- [Recovery System](/development/satellite/recovery-system) - Automatic recovery logic
+- [Tool Discovery](/development/satellite/tool-discovery) - How status affects tool discovery
+- [Hierarchical Router](/development/satellite/hierarchical-router) - Status-based tool filtering

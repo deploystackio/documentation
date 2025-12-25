@@ -157,10 +157,10 @@ For detailed event system documentation, see [Event System](/development/satelli
 - Performance metrics collection
 
 **Terminate Process:**
-- Graceful shutdown with SIGTERM
-- Force kill with SIGKILL after timeout
 - Resource cleanup and deallocation
 - Final status report to Backend
+
+See [Process Management - Graceful Termination](/development/satellite/process-management#graceful-termination) for SIGTERM/SIGKILL shutdown details.
 
 ## Internal Architecture
 
@@ -374,6 +374,70 @@ server.log.info({
 3. Implement team isolation and resource limits
 4. Add comprehensive monitoring and alerting
 5. End-to-end testing and performance validation
+
+## Events vs Heartbeat
+
+The satellite communicates status and metrics through two distinct channels:
+
+**Events (Immediate):**
+- Emitted when actions occur (not delayed by heartbeat interval)
+- Point-in-time status updates with precise timestamps
+- Batched automatically (3-second interval, max 20 per batch)
+- Types: Status changes, logs, tool metadata, lifecycle events
+
+**Heartbeat (Periodic, every 30s):**
+- Aggregate metrics and system health
+- Resource usage statistics
+- Overall satellite status
+
+See [Event Emission](/development/satellite/event-emission) for complete event types and batching strategy.
+
+## Health Check Command
+
+The backend sends `health_check` commands for credential validation:
+
+**Command Structure:**
+```typescript
+{
+  commandType: 'health_check',
+  priority: 'immediate',
+  payload: {
+    check_type: 'credential_validation',
+    installation_id: string,
+    team_id: string
+  }
+}
+```
+
+**Satellite Action:**
+- Calls `tools/list` on MCP server with credentials
+- Detects auth errors (401, 403)
+- Emits `requires_reauth` status if validation fails
+
+See [Commands](/development/satellite/commands) for complete command reference.
+
+## Recovery Commands
+
+When offline servers recover, backend sends recovery commands:
+
+**Command Structure:**
+```typescript
+{
+  commandType: 'configure',
+  priority: 'high',
+  payload: {
+    event: 'mcp_recovery',
+    installation_id: string,
+    team_id: string
+  }
+}
+```
+
+**Satellite Action:**
+- Triggers re-discovery for the recovered server
+- Status progresses: `offline` → `connecting` → `discovering_tools` → `online`
+
+See [Recovery System](/development/satellite/recovery-system) for automatic recovery logic.
 
 <Info>
 The satellite communication system is designed for enterprise deployment with complete team isolation, resource management, and audit logging while maintaining the developer experience that defines the DeployStack platform.
