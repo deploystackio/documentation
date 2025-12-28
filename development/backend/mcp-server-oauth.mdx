@@ -42,6 +42,7 @@ The OAuth implementation includes:
 - **OAuth Discovery Service** - Detects OAuth requirement and discovers endpoints using RFC 8414/9728
 - **Authorization Endpoint** - Initiates OAuth flow with PKCE, state parameter, and resource parameter
 - **Callback Endpoint** - Exchanges authorization code for tokens
+- **Re-Authentication Endpoint** - User-initiated token refresh when automatic refresh fails
 - **Token Service** - Handles token exchange and refresh operations
 - **Client Registration Service** - Implements RFC 7591 Dynamic Client Registration (DCR)
 - **Encryption Service** - AES-256-GCM encryption for tokens at rest
@@ -837,16 +838,43 @@ INFO: OAuth token refresh job completed (totalTokens: 3, successCount: 3, failur
 
 ### Token Expiration Handling
 
-**During token refresh cron job**:
-- Installation status → `requires_reauth`
-- User sees "Reconnect" button in frontend
-- User must re-authorize to get new tokens
+When automatic token refresh fails (server offline, invalid refresh token, token revoked), the installation enters `requires_reauth` status. Users can recover through self-service re-authentication.
 
-**During satellite token retrieval**:
-- Satellite checks `expires_at` timestamp
-- If expired and no refresh possible → Return error to MCP client
-- MCP client receives authentication error
-- User must re-authenticate
+**Automatic Refresh Failure**:
+- Token refresh job attempts refresh
+- Refresh fails (network error, invalid_grant, server offline)
+- Installation status → `requires_reauth`
+- Status message explains why re-auth is needed
+
+**User-Initiated Re-Authentication**:
+
+Users can re-authenticate existing installations without reinstalling:
+
+**Endpoint**: `POST /api/teams/:teamId/mcp/installations/:installationId/reauth`
+
+**Permission**: `mcp.installations.view` (both team_admin and team_user)
+
+**Why Both Roles**: OAuth tokens are per-user credentials, not team-level configuration. Each user authenticates with their own account.
+
+**Flow**:
+1. Frontend detects `requires_reauth` status and shows "Re-authenticate" button
+2. User clicks button → Backend starts OAuth flow (same as initial authorization)
+3. OAuth provider redirects to authorization page
+4. User authorizes → Callback exchanges code for new tokens
+5. Backend **updates** existing token record (doesn't create new installation)
+6. Installation status → `connecting` → `online`
+7. Satellite receives updated tokens via configuration sync
+
+**Key Difference from Initial Authorization**:
+- Initial: Creates new installation + new token record
+- Re-auth: Updates existing installation + existing token record
+
+**Database Impact**:
+- Pending flow created with `installation_id` reference (links to existing installation)
+- Callback detects `installation_id` and performs UPDATE instead of INSERT
+- Preserves team configuration (env vars, args, headers)
+
+**Security**: Same PKCE flow, state validation, and token encryption as initial authorization
 
 ### Token Revocation
 
