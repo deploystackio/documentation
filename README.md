@@ -1,6 +1,6 @@
 # DeployStack Documentation
 
-This repository contains the official documentation for [DeployStack](https://docs.deploystack.io/) - The First MCP-as-a-Service Platform. Built with [Mintlify](https://mintlify.com), our documentation provides a modern, searchable experience for developers building with DeployStack's satellite infrastructure.
+This repository contains the official documentation for [DeployStack](https://docs.deploystack.io/) - MCP Management Platform with centralized credential vault, governance, and token optimization. Built with [Mintlify](https://mintlify.com), our documentation provides comprehensive guides for developers and enterprises.
 
 Visit [docs.deploystack.io](https://docs.deploystack.io) to explore the live documentation.
 
