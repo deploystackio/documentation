@@ -10,13 +10,17 @@ The satellite communicates with the backend through a centralized EventBus that 
 ## Overview
 
 The satellite emits events for:
-- **Status Changes**: Real-time installation status updates
+- **Status Changes**: Real-time instance status updates (per-user)
 - **Server Logs**: Batched stderr output from MCP servers
 - **Request Logs**: Batched tool execution logs with request/response data
 - **Tool Metadata**: Tool discovery results with token counts
 - **Process Lifecycle**: Server start, crash, restart, permanent failure events
 
 All events are processed by the backend's event handler system and trigger database updates, SSE broadcasts to frontend, and health monitoring actions.
+
+<Info>
+**Per-User Instance Events:** Status change events now include `user_id` field to target the correct user's instance. Each user has independent status tracking in the `mcpServerInstances` table.
+</Info>
 
 ## Event System Architecture
 
@@ -36,7 +40,7 @@ Frontend SSE Streams (real-time updates to users)
 
 ### mcp.server.status_changed
 
-**Purpose:** Update installation status in real-time
+**Purpose:** Update instance status in real-time (per-user)
 
 **Emitted by:**
 - ProcessManager (connecting, online, crashed, permanently_failed)
@@ -50,9 +54,10 @@ For complete status transition triggers and lifecycle flows, see [Status Trackin
 {
   installation_id: string;
   team_id: string;
-  status: 'provisioning' | 'command_received' | 'connecting' | 'discovering_tools'
-    | 'syncing_tools' | 'online' | 'restarting' | 'offline' | 'error'
-    | 'requires_reauth' | 'permanently_failed';
+  user_id: string;  // NEW: Identifies which user's instance
+  status: 'awaiting_user_config' | 'provisioning' | 'command_received' | 'connecting'
+    | 'discovering_tools' | 'syncing_tools' | 'online' | 'restarting' | 'offline'
+    | 'error' | 'requires_reauth' | 'permanently_failed';
   status_message?: string;
   timestamp: string; // ISO 8601
 }
@@ -63,13 +68,18 @@ For complete status transition triggers and lifecycle flows, see [Status Trackin
 eventBus.emit('mcp.server.status_changed', {
   installation_id: 'inst_abc123',
   team_id: 'team_xyz',
+  user_id: 'user_alice',  // Alice's instance
   status: 'online',
   status_message: 'Server connected successfully',
   timestamp: '2025-01-15T10:30:00.000Z'
 });
 ```
 
-**Backend Action:** Updates `mcpServerInstallations.status` and broadcasts via SSE
+**Backend Action:** Updates `mcpServerInstances.status` for the specific user's instance and broadcasts via SSE
+
+<Info>
+**Per-User Status:** The `user_id` field ensures status updates are applied to the correct user's instance. Status exists ONLY in `mcpServerInstances` table (removed from `mcpServerInstallations`).
+</Info>
 
 ---
 
@@ -83,13 +93,14 @@ eventBus.emit('mcp.server.status_changed', {
 **Batching Strategy:**
 - **Interval**: 3 seconds after first log entry
 - **Max Size**: 20 logs per batch (forces immediate flush)
-- **Grouping**: By `installation_id + team_id`
+- **Grouping**: By `installation_id + team_id + user_id` (per-user instance)
 
 **Payload:**
 ```typescript
 {
   installation_id: string;
   team_id: string;
+  user_id: string;  // Per-user instance logs
   logs: Array<{
     level: 'info' | 'warn' | 'error' | 'debug';
     message: string;
@@ -104,6 +115,7 @@ eventBus.emit('mcp.server.status_changed', {
 eventBus.emit('mcp.server.logs', {
   installation_id: 'inst_abc123',
   team_id: 'team_xyz',
+  user_id: 'user_alice',  // Alice's instance logs
   logs: [
     {
       level: 'error',
@@ -120,7 +132,7 @@ eventBus.emit('mcp.server.logs', {
 });
 ```
 
-**Backend Action:** Inserts logs into `mcpServerLogs` table, enforces 100-line limit per installation
+**Backend Action:** Inserts logs into `mcpServerLogs` table, enforces 100-line limit per user instance
 
 ---
 
@@ -134,7 +146,7 @@ eventBus.emit('mcp.server.logs', {
 **Batching Strategy:**
 - **Interval**: 3 seconds after first request
 - **Max Size**: 20 requests per batch
-- **Grouping**: By `installation_id + team_id`
+- **Grouping**: By `installation_id + team_id + user_id` (per-user instance)
 
 **Payload:**
 ```typescript
@@ -173,7 +185,7 @@ eventBus.emit('mcp.request.logs', {
 });
 ```
 
-**Backend Action:** Inserts requests into `mcpRequestLogs` table, enforces 100-line limit
+**Backend Action:** Inserts requests into `mcpRequestLogs` table, enforces 100-line limit per user instance
 
 **Privacy Note:** Only emitted if `settings.request_logging_enabled !== false`
 
@@ -227,6 +239,12 @@ eventBus.emit('mcp.tools.discovered', {
 ### Process Lifecycle Events
 
 These events track stdio MCP server process state:
+
+<Info>
+**Per-User Process Context:** The `process_id` field uniquely identifies each user's process instance using the format `{server_slug}-{team_slug}-{user_slug}-{installation_id}`. This ensures process lifecycle events target the correct user's instance.
+
+Example: `filesystem-acme-alice-abc123`
+</Info>
 
 #### mcp.server.started
 
@@ -290,7 +308,7 @@ These events track stdio MCP server process state:
 }
 ```
 
-**Backend Action:** Sets installation status to `permanently_failed`, requires manual restart
+**Backend Action:** Sets instance status to `permanently_failed` for the user's specific instance, requires manual restart
 
 ---
 
@@ -310,7 +328,7 @@ Batching reduces:
 |-----------|-------|--------|
 | Batch Interval | 3 seconds | Balance between real-time feel and efficiency |
 | Max Batch Size | 20 entries | Prevent large payloads, force timely emission |
-| Grouping Key | `installation_id + team_id` | Separate batches per installation |
+| Grouping Key | `installation_id + team_id + user_id` | Separate batches per user instance |
 
 ### Batching Implementation
 
@@ -330,6 +348,7 @@ const eventBus = EventBus.getInstance();
 eventBus.emit('mcp.server.status_changed', {
   installation_id: 'inst_123',
   team_id: 'team_456',
+  user_id: 'user_alice',  // Per-user instance
   status: 'online',
   timestamp: new Date().toISOString()
 });
@@ -421,7 +440,8 @@ The event emission system consists of several integrated components:
 
 ## Related Documentation
 
-- [Status Tracking](/development/satellite/status-tracking) - Status values and lifecycle
+- [Status Tracking](/development/satellite/status-tracking) - Per-user instance status values and lifecycle
+- [Instance Lifecycle](/development/satellite/instance-lifecycle) - Four lifecycle processes for instance management
 - [Log Capture](/development/satellite/log-capture) - Logging system details
-- [Process Management](/development/satellite/process-management) - Lifecycle events
+- [Process Management](/development/satellite/process-management) - Per-user process lifecycle events
 - [Tool Discovery](/development/satellite/tool-discovery) - Tool metadata events

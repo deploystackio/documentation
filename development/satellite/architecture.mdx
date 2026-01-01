@@ -1,10 +1,10 @@
 ---
 title: Satellite Architecture Design
-description: Complete architectural overview of DeployStack Satellite - from current MCP transport implementation to full enterprise MCP management platform.
+description: Complete architectural overview of DeployStack Satellite - per-user MCP instance management with dual deployment support.
 ---
 
 
-DeployStack Satellite is an edge worker service that manages MCP servers with dual deployment support: HTTP proxy for external endpoints and stdio subprocess for local MCP servers. This document covers both the current MCP transport implementation and the planned full architecture.
+DeployStack Satellite is an edge worker service that manages **per-user MCP server instances** with dual deployment support: HTTP proxy for external endpoints and stdio subprocess for local MCP servers. Each team member gets their own isolated instance with merged configuration (Template + Team + User).
 
 ## Technical Overview
 
@@ -13,12 +13,13 @@ DeployStack Satellite is an edge worker service that manages MCP servers with du
 Satellites operate as edge workers similar to GitHub Actions runners, providing:
 
 - **MCP Transport Protocols**: SSE, Streamable HTTP, Direct HTTP communication
-- **Dual MCP Server Management**: HTTP proxy + stdio subprocess support (ready for implementation)
-- **Team Isolation**: nsjail sandboxing with built-in resource limits (ready for implementation)
-- **OAuth 2.1 Resource Server**: Token introspection with Backend
+- **Per-User Instance Management**: Each team member has their own MCP server instance (implemented)
+- **Dual MCP Server Management**: HTTP proxy + stdio subprocess support (implemented)
+- **Team and User Isolation**: Per-user process isolation with independent status tracking (implemented)
+- **OAuth 2.1 Resource Server**: Token introspection with Backend for team and user context (implemented)
 - **Backend Polling Communication**: Outbound-only, firewall-friendly
 - **Real-Time Event System**: Immediate satellite → backend event emission with automatic batching
-- **Process Lifecycle Management**: Spawn, monitor, terminate MCP servers (ready for implementation)
+- **Process Lifecycle Management**: Per-user spawn, monitor, terminate with independent lifecycles (implemented)
 - **Background Jobs System**: Cron-like recurring tasks with automatic error handling
 
 ## Current Implementation Architecture
@@ -294,20 +295,29 @@ See [Event Emission](/development/satellite/event-emission) for complete event t
 
 ### Status Tracking System
 
-The satellite tracks MCP server installation health through an 11-state status system that drives tool availability and automatic recovery.
+The satellite tracks per-user MCP server **instance** health through a 12-state status system that drives tool availability and automatic recovery.
+
+**Per-User Status Tracking:**
+- **Status Location**: `mcpServerInstances` table (per user)
+- **No Installation Status**: Status fields completely removed from `mcpServerInstallations`
+- **Independent Tracking**: Each team member has independent status for each MCP server
+- **User-Specific Filtering**: Users see only tools from their OWN instances that are online
 
 **Status Values:**
-- Installation lifecycle: `provisioning`, `command_received`, `connecting`, `discovering_tools`, `syncing_tools`
+- User configuration: `awaiting_user_config` (new - user hasn't configured required user-level fields)
+- Instance lifecycle: `provisioning`, `command_received`, `connecting`, `discovering_tools`, `syncing_tools`
 - Healthy state: `online` (tools available)
 - Configuration changes: `restarting`
 - Failure states: `offline`, `error`, `requires_reauth`, `permanently_failed`
 
 **Status Integration:**
-- **Tool Filtering**: Tools from non-online servers hidden from discovery
-- **Auto-Recovery**: Offline servers auto-recover when responsive
-- **Event Emission**: Status changes emitted immediately to backend
+- **Tool Filtering**: Tools from user's non-online instances hidden from discovery
+- **Auto-Recovery**: Offline instances auto-recover when responsive
+- **Event Emission**: Status changes emitted immediately to backend with `user_id` field
+- **Backend Filtering**: Instances with `awaiting_user_config` NOT sent to satellite (prevents spawn crashes)
 
 See [Status Tracking](/development/satellite/status-tracking) for complete status lifecycle and transitions.
+See [Instance Lifecycle](/development/satellite/instance-lifecycle) for per-user instance creation and management.
 
 ### Log Capture System
 
@@ -325,34 +335,44 @@ See [Log Capture](/development/satellite/log-capture) for buffering implementati
 - **Activity Tracking**: Prevents session hijacking
 - **Error Handling**: Secure error responses
 
-### Planned Security Features
+### Security Features (Implemented)
 
-**Team Isolation:**
-- **Linux Namespaces**: PID, network, filesystem isolation
-- **Process Groups**: Separate process trees per team
-- **User Isolation**: Dedicated system users per team
+**Per-User Instance Isolation:**
+- **Process Isolation**: Each user's instance runs in isolated process
+- **Independent Lifecycle**: Terminating one user's process doesn't affect teammates
+- **User-Specific Config**: Merged Template + Team + User configuration per instance
+- **Status Isolation**: Each user's instance has independent status tracking
 
-**Resource Management:**
-- **cgroups v2**: CPU and memory limits
-- **Resource Quotas**: 0.1 CPU cores, 100MB RAM per process
-- **Automatic Cleanup**: 5-minute idle timeout
+**Team and User Separation:**
+- **OAuth Token Context**: Team ID AND User ID extracted from tokens
+- **Instance Resolution**: Tools route to user's specific instance (not teammates)
+- **Database Separation**: `mcpServerInstances` table tracks per-user instances
+
+**Resource Management (stdio processes):**
+- **nsjail Isolation**: PID, network, filesystem isolation in production
+- **Resource Quotas**: 100MB RAM, 60s CPU time per process
+- **Development Mode**: Direct spawn() without isolation for cross-platform development
 
 **Authentication & Authorization:**
-- **OAuth 2.1 Resource Server**: Backend token validation
-- **Scope-Based Access**: Fine-grained permissions
-- **Team Context**: Automatic team resolution from tokens
+- **OAuth 2.1 Resource Server**: Backend token validation with 5-minute caching
+- **User Context**: Automatic user and team resolution from tokens
+- **Per-User Access Control**: Users only access their OWN instances
+
+See [Team Isolation](/development/satellite/team-isolation) for complete implementation details.
 
 ## MCP Server Management
 
 ### Dual MCP Server Support
 
 **stdio Subprocess Servers:**
+- **Per-User Instances**: Each team member has their own process for each MCP server
 - **Local Execution**: MCP servers as Node.js child processes
 - **JSON-RPC Communication**: Full MCP protocol 2025-11-05 over stdin/stdout
-- **Process Lifecycle**: Spawn, monitor, auto-restart (max 3 attempts), terminate
-- **Team Isolation**: Processes tracked by team_id with environment-based security
-- **Tool Discovery**: Automatic tool caching with namespacing
-- **Resource Limits**: nsjail in production (100MB RAM, 60s CPU, 50 processes)
+- **Process Lifecycle**: Per-user spawn, monitor, auto-restart (max 3 attempts), terminate
+- **Instance Isolation**: Processes tracked by `team_id` AND `user_id` with independent lifecycles
+- **ProcessId Format**: `{server_slug}-{team_slug}-{user_slug}-{installation_id}`
+- **Tool Discovery**: Automatic tool caching with per-user namespacing
+- **Resource Limits**: nsjail in production (100MB RAM, 60s CPU, 50 processes per user)
 - **Development Mode**: Plain spawn() on all platforms for easy debugging
 
 **HTTP Proxy Servers:**
@@ -395,9 +415,10 @@ Configuration → Spawn → Monitor → Health Check → Restart/Terminate
 - **Isolation Method**: Linux namespaces + cgroups v2
 
 ### Technology Stack
-- **HTTP Framework**: Fastify with @fastify/http-proxy (planned)
-- **Process Communication**: stdio JSON-RPC for local MCP servers (planned)
-- **Authentication**: OAuth 2.1 Resource Server with token introspection (planned)
+- **HTTP Framework**: Fastify with @fastify/http-proxy (implemented)
+- **Process Communication**: stdio JSON-RPC for local MCP servers (implemented)
+- **Authentication**: OAuth 2.1 Resource Server with token introspection (implemented)
+- **Per-User Instance Management**: ProcessManager with team and user tracking (implemented)
 - **Logging**: Pino structured logging
 - **Build System**: TypeScript + Webpack
 

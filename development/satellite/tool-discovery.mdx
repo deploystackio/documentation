@@ -351,9 +351,13 @@ curl http://localhost:3001/api/status/debug
 
 ## Status Integration
 
-Tool discovery integrates with the status tracking system to filter tools and enable automatic recovery. Discovery managers call status callbacks on success/failure to update installation status in real-time.
+Tool discovery integrates with the status tracking system to filter tools and enable automatic recovery. Discovery managers call status callbacks on success/failure to update **instance status** in real-time (per-user).
 
-See [Status Tracking - Tool Filtering](/development/satellite/status-tracking#tool-filtering-by-status) for complete details on status-based tool filtering and execution blocking.
+<Info>
+**Per-User Status:** Each user's instance has independent status tracking. Tool filtering is based on the authenticated user's OWN instance status, not other team members' statuses.
+</Info>
+
+See [Status Tracking - Tool Filtering](/development/satellite/status-tracking#tool-filtering-by-status) for complete details on per-user status-based tool filtering and execution blocking.
 
 ## Recovery System
 
@@ -399,13 +403,14 @@ Tool execution is logged with full request/response data for debugging.
 - User attribution (who called the tool)
 
 **Privacy Control:**
-Request logging can be disabled per-installation via `settings.request_logging_enabled = false`.
+Request logging can be disabled per-instance via `settings.request_logging_enabled = false` in the instance configuration.
 
 See [Log Capture](/development/satellite/log-capture) for buffering and storage details.
 
 ## Related Documentation
 
-- [Status Tracking](/development/satellite/status-tracking) - Tool filtering by server status
+- [Status Tracking](/development/satellite/status-tracking) - Tool filtering by per-user instance status
+- [Instance Lifecycle](/development/satellite/instance-lifecycle) - Per-user instance creation and management
 - [Recovery System](/development/satellite/recovery-system) - Automatic re-discovery on recovery
 - [Event Emission](/development/satellite/event-emission) - Tool metadata events
 - [Log Capture](/development/satellite/log-capture) - Request logging system

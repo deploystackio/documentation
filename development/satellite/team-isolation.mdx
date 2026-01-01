@@ -1,84 +1,95 @@
 ---
 title: Team Isolation Implementation
-description: Technical implementation of OAuth-based team separation in DeployStack Satellite for multi-tenant MCP server access control.
+description: Technical implementation of OAuth-based team and user separation in DeployStack Satellite for per-user MCP server instance access control.
 ---
 
 
 
 
-DeployStack Satellite implements OAuth 2.1 Resource Server-based team isolation to provide secure multi-tenant access to MCP servers. This system ensures complete separation of team resources while maintaining a unified MCP client interface.
+DeployStack Satellite implements OAuth 2.1 Resource Server-based team and user isolation to provide secure multi-tenant access to per-user MCP server instances. This system ensures complete separation of team resources AND per-user instances while maintaining a unified MCP client interface.
 
-For OAuth authentication details, see [OAuth Authentication Implementation](/development/satellite/oauth-authentication). For tool discovery mechanics, see [Tool Discovery Implementation](/development/satellite/tool-discovery).
+For OAuth authentication details, see [OAuth Authentication Implementation](/development/satellite/oauth-authentication). For tool discovery mechanics, see [Tool Discovery Implementation](/development/satellite/tool-discovery). For per-user instance lifecycle, see [Instance Lifecycle Management](/development/satellite/instance-lifecycle).
 
 ## Technical Architecture
 
-### Team Context Resolution
+### Team and User Context Resolution
 
-Team isolation operates through OAuth token introspection that extracts team context from validated Bearer tokens:
+Isolation operates through OAuth token introspection that extracts both team AND user context from validated Bearer tokens:
 
 ```
-MCP Client Request → OAuth Token → Token Introspection → Team Context → Resource Filtering
-     │                   │              │                    │              │
-  Bearer Token      Satellite API    Backend Validation   Team ID      Allowed Servers
-  (team-scoped)     Key Required     5-minute Cache       Extraction    Database Query
+MCP Client Request → OAuth Token → Token Introspection → Team + User Context → Resource Filtering
+     │                   │              │                        │                    │
+  Bearer Token      Satellite API    Backend Validation   Team ID + User ID    User's Instances
+  (user-scoped)     Key Required     5-minute Cache           Extraction         Database Query
 ```
 
 **Core Components:**
 - **TokenIntrospectionService**: Validates tokens via Backend introspection endpoint
-- **TeamAwareMcpHandler**: Filters MCP resources based on team permissions
-- **DynamicConfigManager**: Provides team-server mappings from Backend polling
-- **RemoteToolDiscoveryManager**: Caches tools with server association metadata
+- **TeamAwareMcpHandler**: Filters MCP resources based on team AND user permissions
+- **DynamicConfigManager**: Provides per-user instance mappings from Backend polling
+- **RemoteToolDiscoveryManager**: Caches tools with per-user server association metadata
 
-### Team-Server Mapping Architecture
+### Per-User Instance Mapping Architecture
 
-Team isolation relies on database-backed server instance mappings:
+Isolation relies on database-backed per-user instance mappings:
 
 ```
-Team "john" → Server Instance "context7-john-R36no6FGoMFEZO9nWJJLT"
-Team "alice" → Server Instance "context7-alice-S47mp8GHpNGFZP0oWKKMU"
+Team "acme" + User "alice" → Instance "context7-acme-alice-R36no6FGoMFEZO9nWJJLT"
+Team "acme" + User "bob"   → Instance "context7-acme-bob-R36no6FGoMFEZO9nWJJLT"
+Team "beta" + User "charlie" → Instance "context7-beta-charlie-S47mp8GHpNGFZP0oWKKMU"
 ```
 
 **Database Integration:**
-- **mcpServerInstallations Table**: Links teams to specific MCP server instances
-- **Dynamic Configuration**: Backend polling delivers team-server mappings
-- **Server Instance Naming**: Format `{server_slug}-{team_slug}-{installation_id}`
-- **Complete Isolation**: Teams cannot access other teams' server instances
+- **mcpServerInstances Table**: Links users to their specific MCP server instances (per user)
+- **mcpServerInstallations Table**: Links teams to MCP server installations (team-level)
+- **Dynamic Configuration**: Backend polling delivers per-user instance mappings
+- **Instance Naming**: Format `{server_slug}-{team_slug}-{user_slug}-{installation_id}`
+- **Complete Isolation**: Users only access their OWN instances, not teammates' instances
+
+<Info>
+**Per-User Instances:** Each team member has their own independent instance for each MCP server. This enables user-specific configuration (Template + Team + User merged config) and independent status tracking per user.
+</Info>
 
 ## Tool Discovery Integration
 
 ### Friendly Tool Naming
 
-Tool discovery uses `server_slug` for user-friendly tool names while maintaining internal server routing:
+Tool discovery uses `server_slug` for user-friendly tool names while maintaining internal per-user instance routing:
 
 **User-Facing Names:**
 - `context7-resolve-library-id`
 - `context7-get-library-docs`
 
-**Internal Server Resolution:**
-- Team "john": Routes to `context7-john-R36no6FGoMFEZO9nWJJLT`
-- Team "alice": Routes to `context7-alice-S47mp8GHpNGFZP0oWKKMU`
+**Internal Per-User Instance Resolution:**
+- Team "acme" + User "alice": Routes to `context7-acme-alice-R36no6FGoMFEZO9nWJJLT`
+- Team "acme" + User "bob": Routes to `context7-acme-bob-R36no6FGoMFEZO9nWJJLT`
+- Team "beta" + User "charlie": Routes to `context7-beta-charlie-S47mp8GHpNGFZP0oWKKMU`
 
 **Implementation Details:**
 - **RemoteToolDiscoveryManager**: Creates friendly names using `config.server_slug`
 - **CachedTool Interface**: Stores both `namespacedName` and `serverName` for routing
-- **TeamAwareMcpHandler**: Resolves team context to actual server instances
+- **TeamAwareMcpHandler**: Resolves team AND user context to actual per-user instances
 
 ### Tool Filtering Process
 
-Team-aware tool filtering operates at the MCP protocol level:
+Per-user tool filtering operates at the MCP protocol level:
 
 ```
-tools/list Request → OAuth Team Context → Filter by Team Servers → Return Filtered Tools
-     │                      │                     │                      │
-  Bearer Token        Team ID Extraction    Database Lookup        Team-Specific List
-  Validation          from Token Cache      Allowed Servers        JSON-RPC Response
+tools/list Request → OAuth User Context → Filter by User's Instances → Return Filtered Tools
+     │                      │                       │                         │
+  Bearer Token     Team + User ID Extraction   Database Lookup         User-Specific List
+  Validation          from Token Cache         User's Instances        JSON-RPC Response
 ```
 
 **Filtering Logic:**
-1. **Token Validation**: Extract team ID from OAuth token introspection
-2. **Server Resolution**: Query team's allowed MCP server instances
-3. **Tool Filtering**: Include only tools from team's server instances
+1. **Token Validation**: Extract team ID AND user ID from OAuth token introspection
+2. **Instance Resolution**: Query user's allowed MCP server instances (only THEIR instances)
+3. **Tool Filtering**: Include only tools from user's OWN instances that are `online`
 4. **Response Generation**: Return filtered tool list to MCP client
+
+<Info>
+**User-Specific Filtering:** Each user sees only tools from their OWN instances. Other team members' instance status does NOT affect your tool availability. If your instance is `awaiting_user_config`, you see NO tools from that server until you complete configuration.
+</Info>
 
 ## OAuth Integration Points
 
@@ -99,25 +110,32 @@ Team isolation integrates with existing OAuth authentication middleware:
 
 ### Token Introspection Response
 
-Backend token introspection provides team context:
+Backend token introspection provides team AND user context:
 
 ```
 Introspection Response:
 {
   "active": true,
-  "sub": "user_id",
+  "sub": "user_uuid",
+  "user_id": "user_uuid",
   "team_id": "team_uuid",
-  "team_name": "john",
+  "team_name": "acme",
   "team_role": "admin",
   "scope": "mcp:read mcp:tools:execute"
 }
 ```
 
-**Team Context Fields:**
+**Context Fields:**
+- **sub**: User identifier (OAuth standard field)
+- **user_id**: Database UUID for user identification
 - **team_id**: Database UUID for team identification
 - **team_name**: Human-readable team identifier (slug)
 - **team_role**: User's role within the team
 - **scope**: OAuth scopes for permission validation
+
+<Info>
+**User Context Required:** The `user_id` field is critical for per-user instance resolution. It enables the satellite to route tool calls to the correct user's process, ensuring complete isolation between team members.
+</Info>
 
 ## Server Instance Resolution
 
@@ -133,23 +151,23 @@ Team-server mappings are delivered via Backend polling system:
 
 ### Server Resolution Algorithm
 
-Tool execution resolves team context to specific server instances:
+Tool execution resolves team AND user context to specific per-user instances:
 
 ```
-Tool Call "context7-resolve-library-id" + Team "john"
+Tool Call "context7-resolve-library-id" + Team "acme" + User "alice"
     ↓
-Find Server: server_slug="context7" AND team_id="john_uuid"
+Find Instance: server_slug="context7" AND team_id="acme_uuid" AND user_id="alice_uuid"
     ↓
-Resolve to: "context7-john-R36no6FGoMFEZO9nWJJLT"
+Resolve to: "context7-acme-alice-R36no6FGoMFEZO9nWJJLT"
     ↓
-Route Request: HTTP proxy to team's server instance
+Route Request: HTTP proxy OR stdio process to user's specific instance
 ```
 
 **Resolution Process:**
 1. **Parse Tool Name**: Extract `server_slug` from namespaced tool name
-2. **Team Context**: Get team ID from OAuth token validation
-3. **Server Lookup**: Find server instance matching team + server_slug
-4. **Request Routing**: Proxy to resolved server instance
+2. **Team + User Context**: Get team ID AND user ID from OAuth token validation
+3. **Instance Lookup**: Find user's instance: `server_slug` + `team_id` + `user_id`
+4. **Route Execution**: Execute tool on user's specific instance (not teammates' instances)
 
 ## Security Implementation
 

@@ -51,16 +51,9 @@ services/backend/src/events/satellite/
 
 ### Convention-Based Handler Discovery
 
-The dispatcher automatically discovers and registers handlers from the `handlerModules` array in `index.ts`:
+The dispatcher automatically discovers and registers handlers from the `handlerModules` array.
 
-```typescript
-const handlerModules = [
-  () => import('./mcp-server-started'),
-  () => import('./mcp-tool-executed'),
-  () => import('./mcp-server-crashed'),
-  // Add new handlers here - they will be automatically registered
-];
-```
+**Source:** [services/backend/src/events/satellite/index.ts](services/backend/src/events/satellite/index.ts)
 
 Each handler must export three components:
 
@@ -70,20 +63,9 @@ Each handler must export three components:
 
 ### Handler Interface
 
-All event handlers must implement this interface:
+All event handlers must implement the `EventHandler` interface.
 
-```typescript
-export interface EventHandler {
-  EVENT_TYPE: string;
-  SCHEMA: Record<string, unknown>;
-  handle: (
-    satelliteId: string,
-    eventData: Record<string, unknown>,
-    db: PostgresJsDatabase,
-    eventTimestamp: Date
-  ) => Promise<void>;
-}
-```
+**Source:** [services/backend/src/events/satellite/index.ts](services/backend/src/events/satellite/index.ts)
 
 ## Event Processing
 
@@ -101,7 +83,7 @@ export interface EventHandler {
       "type": "mcp.server.started",
       "timestamp": "2025-01-10T10:30:45.123Z",
       "data": {
-        "process_id": "proc-123",
+        "process_id": "filesystem-devteam-alice-U3hCfHenbK5",
         "server_id": "filesystem-team-xyz",
         "server_slug": "filesystem",
         "team_id": "team-xyz",
@@ -189,16 +171,18 @@ Updates `satelliteProcesses` table when server exits unexpectedly.
 **Optional Fields**: None (all fields required for proper crash tracking)
 
 #### mcp.server.status_changed
-Updates `mcpServerInstallations` table when server status changes during installation, discovery, or health checks.
+Updates `mcpServerInstances` table when server status changes for a specific user's instance during installation, discovery, or health checks.
 
-**Business Logic**: Tracks installation lifecycle from provisioning through discovery to online/error states. Enables frontend progress indicators and error visibility.
+**Per-User Instance Status**: Each user has an independent instance with independent status tracking. Status exists ONLY at the instance level in `mcpServerInstances` table, not at the installation level.
 
-**Required Fields** (snake_case): `installation_id`, `team_id`, `status`, `timestamp`
+**Business Logic**: Tracks per-user instance lifecycle from provisioning through discovery to online/error states. Enables frontend progress indicators and error visibility for each user's instance independently.
+
+**Required Fields** (snake_case): `installation_id`, `team_id`, `user_id`, `status`, `timestamp`
 
 **Optional Fields**: `status_message` (string, human-readable context or error details)
 
-**Status Values** (11 total):
-- `provisioning` - Installation created, waiting for satellite
+**Status Values** (12 total):
+- `provisioning` - Instance created, waiting for satellite
 - `command_received` - Satellite acknowledged install command
 - `connecting` - Satellite connecting to MCP server
 - `discovering_tools` - Tool discovery in progress
@@ -209,10 +193,13 @@ Updates `mcpServerInstallations` table when server status changes during install
 - `error` - Connection failed with specific error
 - `requires_reauth` - OAuth token expired/revoked
 - `permanently_failed` - Process crashed 3+ times in 5 minutes
+- `awaiting_user_config` - User hasn't configured required personal credentials yet (backend filters these instances from satellite config)
 
 **Handler Implementation**: `services/backend/src/events/handlers/mcp/status-changed.handler.ts`
 
 For satellite-side status detection logic and lifecycle flows, see [Satellite Status Tracking](/development/satellite/status-tracking).
+
+For complete instance lifecycle and per-user isolation details, see [Instance Lifecycle](/development/satellite/instance-lifecycle).
 
 **Emission Points**:
 - Success path: After successful tool discovery → status='online'
@@ -274,89 +261,31 @@ For satellite-side tool discovery implementation, see [Satellite Tool Discovery]
 
 ## Creating New Event Handlers
 
-### Handler Template
-
 **CRITICAL**: All event data fields MUST use **snake_case** naming convention to match satellite event emission and backend API standards.
 
-Create a new file in `services/backend/src/events/satellite/`:
+### Example Handler Files
 
-```typescript
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-import { yourTable } from '../../db/schema.ts';
-import { eq } from 'drizzle-orm';
+See existing event handlers for implementation patterns:
 
-export const EVENT_TYPE = 'your.event.type';
-
-export const SCHEMA = {
-  type: 'object',
-  properties: {
-    required_field: {
-      type: 'string',
-      minLength: 1,
-      description: 'Description of this field'
-    },
-    optional_field: {
-      type: 'number',
-      description: 'Optional numeric field'
-    }
-  },
-  required: ['required_field'],
-  additionalProperties: true
-} as const;
-
-// TypeScript interface can use camelCase internally
-interface YourEventData {
-  required_field: string;
-  optional_field?: number;
-}
-
-export async function handle(
-  satelliteId: string,
-  eventData: Record<string, unknown>,
-  db: PostgresJsDatabase,
-  eventTimestamp: Date
-): Promise<void> {
-  const data = eventData as unknown as YourEventData;
-  
-  // Update existing business table
-  await db.update(yourTable)
-    .set({ 
-      status: 'updated',
-      updated_at: eventTimestamp
-    })
-    .where(eq(yourTable.id, data.required_field));
-}
-```
+- **Server lifecycle**: [mcp-server-started.ts](services/backend/src/events/satellite/mcp-server-started.ts)
+- **Status updates**: [mcp-server-status-changed.ts](services/backend/src/events/satellite/mcp-server-status-changed.ts)
+- **Tool execution**: [mcp-tool-executed.ts](services/backend/src/events/satellite/mcp-tool-executed.ts)
+- **Tool discovery**: [mcp-tools-discovered.ts](services/backend/src/events/satellite/mcp-tools-discovered.ts)
 
 ### Registration Steps
 
 1. Create handler file in `services/backend/src/events/satellite/`
 2. Export `EVENT_TYPE`, `SCHEMA`, and `handle()` function
-3. Add import to `handlerModules` array in `index.ts`:
-```typescript
-const handlerModules = [
-  () => import('./mcp-server-started'),
-  () => import('./mcp-tool-executed'),
-  () => import('./mcp-server-crashed'),
-  () => import('./your-new-handler'), // Add here
-];
-```
+3. Add import to `handlerModules` array in [index.ts](services/backend/src/events/satellite/index.ts)
 4. Handler is automatically registered and ready to process events
 
 ## Schema Validation
 
 ### AJV Configuration
 
-The dispatcher uses AJV with specific configuration for compatibility:
+The dispatcher uses AJV with specific configuration for compatibility.
 
-```typescript
-const ajv = new Ajv({ 
-  allErrors: true,        // Report all validation errors
-  strict: false,          // Allow unknown keywords
-  strictTypes: false      // Disable strict type checking
-});
-addFormats(ajv);          // Add format validators (email, date-time, etc.)
-```
+**Source:** [services/backend/src/events/satellite/index.ts](services/backend/src/events/satellite/index.ts)
 
 ### Validation Process
 
@@ -384,7 +313,7 @@ Events route to existing business tables based on their purpose:
 |-----------|----------------|--------|
 | `mcp.server.started` | `satelliteProcesses` | Update status='running', set start time |
 | `mcp.server.crashed` | `satelliteProcesses` | Update status='failed', log error details |
-| `mcp.server.status_changed` | `mcpServerInstallations` | Update status, status_message, status_updated_at |
+| `mcp.server.status_changed` | `mcpServerInstances` | Update status, status_message, status_updated_at for specific user's instance |
 | `mcp.tool.executed` | `satelliteUsageLogs` | Insert usage record with metrics |
 | `mcp.server.logs` | `mcpServerLogs` | Insert batched stderr logs (100-line limit) |
 | `mcp.request.logs` | `mcpRequestLogs` | Insert tool execution logs with request/response |
@@ -458,17 +387,9 @@ Each event is processed in a separate database transaction:
 
 ### Unit Testing
 
-Test individual event handlers in isolation:
+Test individual event handlers in isolation.
 
-```typescript
-// Test handler validation
-const validData = { processId: 'proc-123', serverId: 'server-xyz', ... };
-await handler.handle('satellite-id', validData, mockDb, new Date());
-
-// Test schema validation
-const validate = ajv.compile(handler.SCHEMA);
-expect(validate(validData)).toBe(true);
-```
+**Example tests:** See existing handler test files in [services/backend/src/events/satellite/](services/backend/src/events/satellite/) (`.test.ts` files)
 
 ### Integration Testing
 
@@ -527,16 +448,9 @@ All event operations are logged with structured data:
 
 ### Debug Queries
 
-Check registered event types:
+**Check registered event types:** Use `getRegisteredEventTypes()` from [services/backend/src/events/satellite/index.ts](services/backend/src/events/satellite/index.ts)
 
-```typescript
-import { getRegisteredEventTypes } from '../events/satellite';
-
-const types = await getRegisteredEventTypes();
-console.log('Registered event types:', types);
-```
-
-Verify database updates:
+**Verify database updates:**
 
 ```sql
 -- Check process status after mcp.server.started

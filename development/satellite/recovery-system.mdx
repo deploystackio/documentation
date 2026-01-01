@@ -347,12 +347,18 @@ class McpServerWrapper {
 
 ## Manual Recovery (Requires User Action)
 
-Some failures cannot auto-recover:
+Some failures cannot auto-recover and require user intervention:
 
-| Status | Reason | User Action |
-|--------|--------|-------------|
-| `requires_reauth` | OAuth token expired/revoked | Re-authenticate in dashboard |
-| `permanently_failed` | 3+ crashes in 5 minutes (stdio) | Check logs, fix issue, manual restart |
+| Status | Reason | User Action | Recovery Type |
+|--------|--------|-------------|---------------|
+| `requires_reauth` | OAuth token expired/revoked | Click "Re-authenticate" button in installation details | Self-service (all team members) |
+| `permanently_failed` | 3+ crashes in 5 minutes (stdio) | Check logs, fix issue, manual restart | Admin intervention |
+
+**Re-Authentication Details**:
+- Available to all team members (OAuth is per-user)
+- Preserves installation configuration
+- Updates tokens in-place (no reinstall needed)
+- See [MCP Server OAuth - Token Expiration Handling](/development/backend/mcp-server-oauth#token-expiration-handling) for technical details
 
 See [Process Management - Auto-Restart System](/development/satellite/process-management#auto-restart-system) for complete stdio restart policy details (3 crashes in 5-minute window, backoff delays).
 
