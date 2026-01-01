@@ -1,32 +1,55 @@
 ---
 title: Status Tracking
-description: MCP server installation status tracking system in the satellite
+description: Per-user MCP server instance status tracking system in the satellite
 ---
 
 # Status Tracking
 
-The satellite tracks the health and availability of each MCP server installation through an 11-state status system. This enables real-time monitoring, automatic recovery, and tool availability filtering.
+The satellite tracks the health and availability of each MCP server **instance** (per-user) through a 12-state status system. This enables real-time monitoring, automatic recovery, and tool availability filtering on a per-user basis.
 
 ## Overview
 
+### Per-User Instance Status
+
+DeployStack tracks status at the **instance level**, not the installation level:
+
+- **Status Location**: `mcpServerInstances` table (per user)
+- **No Installation Status**: Status fields completely removed from `mcpServerInstallations` table
+- **Independent Tracking**: Each team member has independent status for each MCP server
+- **User-Specific Filtering**: Users see only tools from their OWN instances that are online
+
+**Example:**
+```
+Team "Acme Corp" installs Filesystem MCP with 3 members:
+- Alice's instance: status = 'online' (tools available to Alice)
+- Bob's instance: status = 'awaiting_user_config' (tools NOT available to Bob)
+- Charlie's instance: status = 'offline' (tools NOT available to Charlie)
+
+Each member sees different tool availability based on their instance status.
+```
+
+### Status Tracking Purposes
+
 Status tracking serves three primary purposes:
 
-1. **User Visibility**: Users see current server state in real-time via the frontend
-2. **Tool Availability**: Tools from unavailable servers are filtered from discovery
-3. **Automatic Recovery**: System detects and recovers from failures automatically
+1. **User Visibility**: Users see their OWN instance status in real-time via the frontend
+2. **Tool Availability**: Tools from user's unavailable instances are filtered from discovery
+3. **Automatic Recovery**: System detects and recovers from failures per instance
 
 The status system is managed by `UnifiedToolDiscoveryManager` and updated through:
-- Installation lifecycle events (provisioning → online)
+- Instance lifecycle events (provisioning → online)
 - Health check results (online → offline)
 - Tool execution failures (online → offline/error/requires_reauth)
 - Configuration changes (online → restarting)
 - Recovery detection (offline → connecting → online)
+- User configuration completion (awaiting_user_config → provisioning)
 
 ## Status Values
 
 | Status | Description | Tools Available? | User Action Required |
 |--------|-------------|------------------|---------------------|
-| `provisioning` | Initial state after installation created | No | Wait |
+| `awaiting_user_config` | User hasn't configured required user-level fields | No | **Configure personal settings** |
+| `provisioning` | Initial state after instance created | No | Wait |
 | `command_received` | Satellite received configuration command | No | Wait |
 | `connecting` | Connecting to MCP server | No | Wait |
 | `discovering_tools` | Running tool discovery | No | Wait |
@@ -38,9 +61,17 @@ The status system is managed by `UnifiedToolDiscoveryManager` and updated throug
 | `requires_reauth` | OAuth token expired/revoked | No | Re-authenticate |
 | `permanently_failed` | 3+ crashes in 5 minutes (stdio only) | No | Manual restart required |
 
+<Info>
+**New Status: awaiting_user_config**
+
+This status indicates that an MCP server has required user-level configuration fields (e.g., personal API keys) and the user hasn't configured them yet. The satellite does NOT spawn processes for instances with this status. Once the user completes their configuration via the dashboard, the status automatically transitions to `provisioning` and the instance spawns normally.
+
+See [Instance Lifecycle - Process A](/development/satellite/instance-lifecycle#lifecycle-process-a-mcp-server-installation) for details.
+</Info>
+
 ## Status Lifecycle
 
-### Initial Installation Flow
+### Initial Installation Flow (User Has Complete Config)
 
 ```
 provisioning
@@ -55,6 +86,32 @@ syncing_tools (sending tools to backend)
     ↓
 online (ready for use)
 ```
+
+### Initial Installation Flow (User Missing Required Config)
+
+When an MCP server has required user-level configuration fields and the user hasn't configured them:
+
+```
+awaiting_user_config
+    ↓
+[User configures personal settings via dashboard]
+    ↓
+provisioning (backend updates status, sends satellite command)
+    ↓
+command_received
+    ↓
+connecting
+    ↓
+discovering_tools
+    ↓
+syncing_tools
+    ↓
+online
+```
+
+<Warning>
+**Backend Filtering:** The satellite does NOT receive configurations for instances with `awaiting_user_config` status. Backend filters these instances out in the config endpoint, preventing spawn attempts for incomplete configurations.
+</Warning>
 
 ### Configuration Update Flow
 
@@ -203,20 +260,43 @@ this.statusCallback?.(processId, 'error', errorMessage);
 
 ## Tool Filtering by Status
 
+### Per-User Instance Filtering
+
+Tool availability is filtered based on the authenticated user's OWN instance status:
+
+**Key Principles:**
+- Each user sees only tools from their own instances that are `online`
+- Other team members' instance status does NOT affect your tool availability
+- If your instance is `awaiting_user_config`, you see NO tools from that server
+- If your instance is `online`, you see all tools (even if teammates' instances are offline)
+
+**Example:**
+```
+Team "Acme Corp" - Context7 MCP Server:
+- Alice's instance: status = 'online'
+  → Alice sees Context7 tools in discover_mcp_tools
+
+- Bob's instance: status = 'awaiting_user_config'
+  → Bob sees NO Context7 tools (must configure API key first)
+
+- Charlie's instance: status = 'offline'
+  → Charlie sees NO Context7 tools (server unreachable)
+```
+
 ### Discovery Filtering
 
-When LLMs call `discover_mcp_tools`, only tools from available servers are returned:
+When LLMs call `discover_mcp_tools`, only tools from the user's available instances are returned:
 
 ```typescript
-// UnifiedToolDiscoveryManager.getAllTools() filters by status
-const tools = toolDiscoveryManager.getAllTools(); // Only 'online' servers
+// UnifiedToolDiscoveryManager.getAllTools() filters by user's instance status
+const tools = toolDiscoveryManager.getAllTools(); // Only user's 'online' instances
 
-// Tools from offline/error/requires_reauth servers are hidden
+// Tools from user's offline/error/requires_reauth/awaiting_user_config instances are hidden
 ```
 
 ### Execution Blocking
 
-When LLMs attempt to execute tools from unavailable servers:
+When LLMs attempt to execute tools from the user's unavailable instances:
 
 ```typescript
 // services/satellite/src/core/mcp-server-wrapper.ts
@@ -227,10 +307,10 @@ const statusEntry = this.toolDiscoveryManager?.getServerStatus(serverSlug);
 // Block execution for non-recoverable states
 if (statusEntry?.status === 'requires_reauth') {
   return {
-    error: `Tool cannot be executed - server requires re-authentication.
+    error: `Tool cannot be executed - your instance requires re-authentication.
 
 Status: ${statusEntry.status}
-The server requires re-authentication. Please re-authorize in the dashboard.
+Your instance requires re-authentication. Please re-authorize in the dashboard.
 
 Unavailable server: ${serverSlug}`
   };
@@ -243,19 +323,24 @@ Unavailable server: ${serverSlug}`
 
 ### Backend-Triggered (Database Updates)
 
-**Source:** Backend API routes
+**Source:** Backend API routes update `mcpServerInstances` table (per user)
 
 | Trigger | New Status | When |
 |---------|-----------|------|
-| Installation created | `provisioning` | User installs MCP server |
-| Config updated | `restarting` | User modifies environment vars/args/headers |
+| Instance created | `provisioning` or `awaiting_user_config` | Admin installs MCP server or member added to team |
+| User config updated | `provisioning` (if was `awaiting_user_config`) or `restarting` (if already online) | User modifies their personal config |
+| Config updated | `restarting` | User modifies environment vars/args/headers/query params |
 | OAuth callback success | `connecting` | User re-authenticates |
 | Health check fails | `offline` | Server unreachable (3-min interval) |
 | Credential validation fails | `requires_reauth` | OAuth token invalid |
 
+<Info>
+**Status Target:** All backend status updates target the `mcpServerInstances` table. Status fields have been **completely removed** from `mcpServerInstallations`. Each user's instance has independent status tracking.
+</Info>
+
 ### Satellite-Triggered (Event Emission)
 
-**Source:** Satellite emits `mcp.server.status_changed` events to backend
+**Source:** Satellite emits `mcp.server.status_changed` events to backend (includes `user_id` field)
 
 | Trigger | New Status | When |
 |---------|-----------|------|
@@ -266,6 +351,20 @@ Unavailable server: ${serverSlug}`
 | Tool execution fails (3 retries) | `offline`/`error`/`requires_reauth` | Tool call failed after retries |
 | Server recovery detected | `connecting` | Previously offline server responds |
 | Stdio crashes 3 times | `permanently_failed` | 3 crashes within 5 minutes |
+
+**Event Payload:**
+```json
+{
+  "event": "mcp.server.status_changed",
+  "installation_id": "uuid",
+  "team_id": "uuid",
+  "user_id": "uuid",
+  "status": "online",
+  "status_message": "Server is online and ready"
+}
+```
+
+The `user_id` field ensures status updates are applied to the correct user's instance.
 
 ## Implementation Components
 
@@ -279,7 +378,17 @@ The status tracking system consists of several integrated components:
 
 ## Related Documentation
 
-- [Event Emission](/development/satellite/event-emission) - Status change event details
-- [Recovery System](/development/satellite/recovery-system) - Automatic recovery logic
-- [Tool Discovery](/development/satellite/tool-discovery) - How status affects tool discovery
-- [Hierarchical Router](/development/satellite/hierarchical-router) - Status-based tool filtering
+<CardGroup cols={2}>
+  <Card title="Instance Lifecycle" icon="rotate" href="/development/satellite/instance-lifecycle">
+    Four lifecycle processes for instance creation, deletion, and team membership changes
+  </Card>
+  <Card title="Event Emission" icon="satellite-dish" href="/development/satellite/event-emission">
+    Status change event details with user_id field
+  </Card>
+  <Card title="Recovery System" icon="arrows-rotate" href="/development/satellite/recovery-system">
+    Automatic recovery logic for failed instances
+  </Card>
+  <Card title="Tool Discovery" icon="magnifying-glass" href="/development/satellite/tool-discovery">
+    How status affects per-user tool discovery
+  </Card>
+</CardGroup>

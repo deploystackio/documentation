@@ -25,9 +25,9 @@ The satellite communication system includes:
 
 **Team-Aware Configuration Distribution**:
 - Global satellites receive ALL team MCP server installations
-- Each team installation becomes a separate process with unique identifier
-- Process ID format: `{server_slug}-{team_slug}-{installation_id}`
-- Team-specific configurations (args, environment, headers) merged per installation
+- Each team installation becomes separate per-user processes with unique identifiers
+- Process ID format: `{server_slug}-{team_slug}-{user_slug}-{installation_id}`
+- User-specific configurations (args, environment, headers) merged per user instance
 
 **Configuration Merging Process**:
 1. Template-level configuration (from MCP server definition)
@@ -268,7 +268,9 @@ The backend provides REST and SSE endpoints for frontend access to installation 
 ### Status & Monitoring Endpoints
 
 **GET `/api/teams/{teamId}/mcp/installations/{installationId}/status`**
-- Returns current installation status, status message, and last update timestamp
+- Returns authenticated user's instance status only (not installation-level)
+- Each user sees ONLY their own instance status, not other team members' statuses
+- Response: `{ status, status_message, status_updated_at, last_health_check_at }`
 - Used by frontend for real-time status badges and progress indicators
 
 **GET `/api/teams/{teamId}/mcp/installations/{installationId}/logs`**
@@ -445,36 +447,21 @@ The satellite system integrates with existing DeployStack schema through 5 speci
 - Alert generation and notification triggers
 - Historical health trend analysis
 
-### New Columns Added (Status & Health Tracking System)
+### Database Integration
 
-**mcpServerInstallations** table:
-- `status` (text) - Current installation status (11 possible values)
-- `status_message` (text, nullable) - Human-readable status context or error details
-- `status_updated_at` (timestamp) - Last status change timestamp
-- `last_health_check_at` (timestamp, nullable) - Last health check execution time
-- `last_credential_check_at` (timestamp, nullable) - Last credential validation time
-- `settings` (jsonb, nullable) - Generic settings object (e.g., `request_logging_enabled`)
+**Per-User Instance Model**: Each team member gets their own instance with independent status tracking. Status exists ONLY at the instance level in `mcpServerInstances` table.
 
-**mcpServers** table:
-- `health_status` (text, nullable) - Template-level aggregated health status
-- `last_health_check_at` (timestamp, nullable) - Last template health check time
-- `health_check_error` (text, nullable) - Last health check error message
+**Key Tables**:
+- `mcpServerInstances` - Per-user instance status tracking
+- `satellites` - Satellite registry
+- `satelliteCommands` - Command queue
+- `satelliteProcesses` - Process tracking
+- `satelliteUsageLogs` - Usage analytics
+- `satelliteHeartbeats` - Health monitoring
 
-**mcpServerLogs** table:
-- Stores batched stderr logs from satellites
-- 100-line limit per installation (enforced by cleanup cron job)
-- Fields: `installation_id`, `team_id`, `log_level`, `message`, `timestamp`
+For complete database schema details, see [Database Schema](/development/backend/database/).
 
-**mcpRequestLogs** table:
-- Stores batched tool execution logs
-- `tool_response` (jsonb, nullable) - MCP server response data
-- Privacy control: Only captured when `request_logging_enabled=true`
-- Fields: `installation_id`, `team_id`, `tool_name`, `request_params`, `tool_response`, `duration_ms`, `success`, `error_message`, `timestamp`
-
-**mcpToolMetadata** table:
-- Stores discovered tools with token counts
-- Used for hierarchical router token savings calculations
-- Fields: `installation_id`, `server_slug`, `tool_name`, `description`, `input_schema`, `token_count`, `discovered_at`
+For complete instance lifecycle documentation, see [Instance Lifecycle](/development/satellite/instance-lifecycle).
 
 ### Team Isolation in Data Model
 
@@ -602,15 +589,11 @@ server.get('/satellites/:satelliteId/commands', {
 
 ### Database Integration
 
-The satellite system extends the existing database schema with 5 specialized tables:
+The satellite system uses specialized tables for registry, commands, processes, usage logs, and heartbeats.
 
-**Schema Location**: `services/backend/src/db/schema.ts`
+**Per-User Instance Model**: `mcpServerInstances` table tracks status for each user's instance independently, with CASCADE delete when installation is removed.
 
-**Table Relationships**:
-- `satellites` table links to existing `teams` and `authUser` tables
-- `satelliteProcesses` table references `mcpServerInstallations` for team context
-- `satelliteCommands` table includes team context for command execution
-- All tables use existing foreign key relationships for data integrity
+For complete database schema and relationships, see [Database Schema](/development/backend/database/).
 
 ### Configuration Query Implementation
 

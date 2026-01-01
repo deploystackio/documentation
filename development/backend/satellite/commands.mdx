@@ -76,23 +76,28 @@ interface CommandPayload {
 
 ## Status Changes Triggered by Commands
 
-Commands trigger installation status changes through satellite event emission:
+Commands trigger **per-user instance** status changes through satellite event emission:
 
-| Command | Status Before | Status After | When |
-|---------|--------------|--------------|------|
-| `configure` (install) | N/A | `provisioning` → `command_received` → `connecting` | Installation creation flow |
+| Command | Instance Status Before | Instance Status After | When |
+|---------|----------------------|---------------------|------|
+| `configure` (install) | N/A | `provisioning` or `awaiting_user_config` | New installation - depends on required user config |
 | `configure` (update) | `online` | `restarting` → `online` | Configuration change applied |
-| `configure` (delete) | Any | Process terminated | Installation removal |
-| `health_check` (credential) | `online` | `requires_reauth` | OAuth token invalid |
+| `configure` (delete) | Any | Instance deleted (CASCADE) | Installation removal |
+| `health_check` (credential) | `online` | `requires_reauth` | OAuth token invalid for this user |
 | `restart` | `online` | `restarting` → `online` | Manual restart requested |
 
-**Status Lifecycle on Installation**:
-1. Backend creates installation → status=`provisioning`
-2. Backend sends `configure` command → status=`command_received`
-3. Satellite connects to server → status=`connecting`
-4. Satellite discovers tools → status=`discovering_tools`
-5. Satellite syncs tools to backend → status=`syncing_tools`
-6. Process complete → status=`online`
+**Per-User Status Tracking**: Each team member's instance has independent status. User A's config change only affects User A's instance status.
+
+**Status Lifecycle on Installation** (per user):
+1. Backend creates installation → creates instances for all team members
+2. If user has required config → status=`provisioning`
+3. If user missing required config → status=`awaiting_user_config` (not sent to satellite)
+4. User configures settings → status changes to `provisioning` → satellite spawns
+5. Satellite connects → status=`connecting`
+6. Satellite discovers tools → status=`discovering_tools`
+7. Process complete → status=`online`
+
+For complete instance lifecycle documentation, see [Instance Lifecycle](/development/satellite/instance-lifecycle).
 
 For complete status transition documentation, see [Backend Events - Status Values](/development/backend/satellite/events#mcp-server-status_changed).
 
@@ -117,6 +122,11 @@ All `configure` commands include an `event` field in the payload for tracking an
 2. Compares with current running config
 3. Identifies added/removed/modified servers
 4. Takes appropriate action
+
+**Per-User Instance Impact**: Configure commands trigger per-user instance creation/updates:
+- Installation created → All team members get instances (status depends on required user config)
+- Installation updated → Only affects users with existing configs (others remain `awaiting_user_config`)
+- Installation deleted → CASCADE deletes all user instances
 
 **Purpose of Event Field**:
 - Database record keeping

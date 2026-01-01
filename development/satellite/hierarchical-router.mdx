@@ -361,9 +361,9 @@ MCP Client → POST /mcp
 
 Satellite Internal Process:
 1. Parses tool_path: "github:create_issue" → "github-create_issue"
-2. Looks up in cache: transport=stdio, serverName="github-team123-abc456"
-3. Routes to ProcessManager for stdio execution
-4. Sends JSON-RPC to actual GitHub MCP server process
+2. Looks up in cache: transport=stdio, serverName="github-team123-alice-abc456" (user's instance)
+3. Routes to ProcessManager for stdio execution (user's specific process)
+4. Sends JSON-RPC to user's GitHub MCP server process
 5. Returns result
 
 Satellite → Client
@@ -398,7 +398,7 @@ const fuseOptions = {
   keys: [
     { name: 'toolName', weight: 0.4 },          // 40% weight
     { name: 'description', weight: 0.35 },      // 35% weight
-    { name: 'serverSlug', weight: 0.25 }        // 25% weight
+    { name: 'serverName', weight: 0.25 }        // 25% weight
   ],
   includeScore: true,
   minMatchCharLength: 2,
@@ -531,14 +531,19 @@ Both meta-tools are implemented and production-ready:
 
 ## Status-Based Tool Filtering
 
-The hierarchical router integrates with status tracking to hide tools from unavailable servers and provide clear error messages when unavailable tools are executed.
+The hierarchical router integrates with status tracking to hide tools from the user's unavailable instances and provide clear error messages when unavailable tools are executed.
+
+<Info>
+**Per-User Filtering:** Each user sees only tools from their OWN instances that are online. Other team members' instance status doesn't affect your tool availability.
+</Info>
 
 See [Status Tracking - Tool Filtering](/development/satellite/status-tracking#tool-filtering-by-status) for complete filtering logic, execution blocking rules, and status values.
 
 ## Related Documentation
 
 - [Tool Discovery Implementation](/development/satellite/tool-discovery) - Internal tool caching and discovery
-- [Status Tracking](/development/satellite/status-tracking) - Tool filtering by server status
+- [Status Tracking](/development/satellite/status-tracking) - Tool filtering by per-user instance status
+- [Instance Lifecycle](/development/satellite/instance-lifecycle) - Per-user instance management
 - [Recovery System](/development/satellite/recovery-system) - How offline servers auto-recover
 - [MCP Transport Protocols](/development/satellite/mcp-transport) - How clients connect
 - [Process Management](/development/satellite/process-management) - stdio server lifecycle
