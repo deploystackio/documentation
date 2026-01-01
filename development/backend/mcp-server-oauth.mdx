@@ -376,6 +376,13 @@ if (provider) {
       status_message: 'Authenticated successfully, waiting for satellite to connect'
     });
     ```
+
+**Per-User Instance Creation**: OAuth callback creates the user's instance with status='connecting'. For multi-user teams:
+- Installing user's instance created with their OAuth credentials
+- Other team members' instances created with status='awaiting_user_config' (they must authenticate separately)
+- Each user authenticates independently with their own OAuth account
+
+For instance lifecycle details, see [Instance Lifecycle](/development/satellite/instance-lifecycle).
   </Step>
 
   <Step title="Encrypt and Store Tokens">
@@ -825,6 +832,8 @@ CREATE TABLE mcpOauthTokens (
       })
       .where(eq(mcpServerInstallations.id, installation.id));
     ```
+
+**Per-User Instance Impact**: Token refresh failures only affect the specific user's instance. Other team members' instances remain unaffected even if one user's OAuth token expires.
   </Step>
 </Steps>
 

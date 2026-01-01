@@ -1,19 +1,38 @@
 ---
 title: Process Management
-description: Technical implementation of stdio subprocess management for local MCP servers in DeployStack Satellite.
+description: Technical implementation of per-user stdio subprocess management for local MCP servers in DeployStack Satellite.
 ---
 
 
 
 
-DeployStack Satellite implements stdio subprocess management for local MCP servers through the ProcessManager component. This system handles spawning, monitoring, and lifecycle management of MCP server processes with dual-mode operation for development and production environments.
+DeployStack Satellite implements per-user stdio subprocess management for local MCP servers through the ProcessManager component. Each team member gets their own isolated process for each MCP server installation, with dual-mode operation for development and production environments.
 
 ## Overview
 
+### Per-User Process Architecture
+
+DeployStack manages MCP server processes on a **per-user basis**:
+
+- **1 Installation × N Users = N Processes**: Each team member has their own process for each MCP server
+- **Independent Lifecycle**: Terminating one user's process doesn't affect other users' processes
+- **User-Specific Config**: Each process runs with merged 3-tier config (Template + Team + User)
+- **ProcessId Format**: `{server_slug}-{team_slug}-{user_slug}-{installation_id}`
+
+**Example:**
+```
+Team "Acme Corp" installs Filesystem MCP with 3 members:
+- Process 1: filesystem-acme-alice-abc123 (Alice's instance)
+- Process 2: filesystem-acme-bob-abc123 (Bob's instance)
+- Process 3: filesystem-acme-charlie-abc123 (Charlie's instance)
+
+Each process runs independently with user-specific configuration.
+```
+
 **Core Components:**
-- **ProcessManager**: Handles spawning, communication, and lifecycle of stdio-based MCP servers
-- **RuntimeState**: Maintains in-memory state of all processes with team-grouped tracking
-- **TeamIsolationService**: Validates team-based access control for process operations
+- **ProcessManager**: Handles spawning, communication, and lifecycle of per-user stdio processes
+- **RuntimeState**: Maintains in-memory state of all processes with team AND user tracking
+- **TeamIsolationService**: Validates team and user access control for process operations
 
 **Deployment Modes:**
 - **Development**: Direct spawn without isolation (cross-platform)
@@ -46,12 +65,47 @@ The system automatically selects the appropriate spawning mode based on environm
 ### Process Configuration
 
 Processes are spawned using MCPServerConfig containing:
-- `installation_name`: Unique identifier in format `{server_slug}-{team_slug}-{installation_id}`
+- `installation_name`: Unique per-user identifier in format `{server_slug}-{team_slug}-{user_slug}-{installation_id}`
 - `installation_id`: Database UUID for the installation
 - `team_id`: Team owning the process
+- `user_id`: User owning this specific instance
 - `command`: Executable command (e.g., `npx`, `node`)
-- `args`: Command arguments
-- `env`: Environment variables (credentials, configuration)
+- `args`: Command arguments (merged Template + Team + User args)
+- `env`: Environment variables (merged Template + Team + User env vars, plus credentials)
+
+<Info>
+**ProcessId Includes User:** The `installation_name` (also called `processId`) now includes the `user_slug` to uniquely identify each user's instance. This enables per-user process isolation and independent lifecycle management.
+
+Example: `filesystem-acme-alice-abc123`
+</Info>
+
+### Backend Filtering (awaiting_user_config)
+
+The satellite does NOT receive configurations for instances with `awaiting_user_config` status:
+
+**Why:**
+- MCP servers with required user-level fields (e.g., personal API keys) cannot spawn without complete configuration
+- Backend filters out these instances in the config endpoint
+- Satellite never attempts to spawn incomplete configurations
+- Prevents process crashes from missing required arguments/environment variables
+
+**When it applies:**
+- New team member joins but hasn't configured their personal credentials
+- Admin installs MCP server but doesn't provide required user-level config during installation
+- User's instance remains in `awaiting_user_config` until they complete configuration
+
+**Status transition:**
+```
+awaiting_user_config
+    ↓
+[User configures personal settings via dashboard]
+    ↓
+provisioning (backend updates status, sends satellite command)
+    ↓
+Satellite receives config and spawns process normally
+```
+
+See [Instance Lifecycle](/development/satellite/instance-lifecycle) and [Status Tracking](/development/satellite/status-tracking) for complete details.
 
 ## MCP Handshake Protocol
 

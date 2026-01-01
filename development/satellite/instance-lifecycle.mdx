@@ -1,0 +1,454 @@
+---
+title: Instance Lifecycle Management
+description: Per-user MCP server instance lifecycle covering creation, deletion, and team membership changes in DeployStack Satellite.
+---
+
+DeployStack manages MCP server instances on a per-user basis, ensuring each team member has their own isolated process with merged configuration. This document covers the four key lifecycle processes that create, maintain, and clean up instances across team operations.
+
+## Architecture Overview
+
+### Per-User Instance Model
+
+DeployStack follows a **per-user instance architecture**:
+
+```
+1 Installation × N Users = N Instances
+
+Example:
+- Team "Acme Corp" installs Filesystem MCP
+- Team has 3 members: Alice, Bob, Charlie
+- Result: 3 separate instances (processes), one per user
+```
+
+**Key Concepts:**
+
+- **Installation**: MCP server installed for a team (row in `mcpServerInstallations`)
+- **Instance**: Per-user running process with merged config (row in `mcpServerInstances`)
+- **ProcessId**: Unique identifier for each instance
+
+### ProcessId Format
+
+Each instance has a unique ProcessId that includes the user identifier:
+
+```
+Format: {server_slug}-{team_slug}-{user_slug}-{installation_id}
+
+Example: filesystem-acme-alice-abc123
+```
+
+This format enables:
+- Unique process identification across all users and teams
+- User-specific process routing via OAuth token
+- Independent lifecycle management per user
+
+### Independent Status Tracking
+
+Each user's instance has **independent status tracking**:
+
+- Status exists ONLY in `mcpServerInstances` table
+- No installation-level status aggregation across users
+- Each user sees only their own instance status
+- Other team members' status doesn't affect your tools
+
+## Lifecycle Process A: MCP Server Installation
+
+**Trigger:** Team admin installs MCP server for the team
+
+### Backend Operations
+
+<Steps>
+  <Step title="Create Installation Record">
+    Create `mcpServerInstallations` row (team-level installation record)
+  </Step>
+
+  <Step title="Create Admin Instance">
+    Create FIRST `mcpServerInstances` row for the installing admin:
+    - `installation_id` → installation.id
+    - `user_id` → admin.id
+    - `status` → 'provisioning' (or 'awaiting_user_config' if admin didn't provide required user fields)
+  </Step>
+
+  <Step title="Provision Other Team Members">
+    For EACH existing team member (besides admin), create `mcpServerInstances` row:
+    - `installation_id` → installation.id
+    - `user_id` → member.id
+    - `status` → 'provisioning' (or 'awaiting_user_config' if server requires user-level config)
+  </Step>
+
+  <Step title="Send Satellite Command">
+    Send `configure` command to all global satellites (priority: immediate):
+    ```json
+    {
+      "event": "mcp_installation_created",
+      "installation_id": "uuid",
+      "team_id": "uuid"
+    }
+    ```
+  </Step>
+</Steps>
+
+### Satellite Operations
+
+<Steps>
+  <Step title="Receive Command">
+    Receive configure command via command polling service
+  </Step>
+
+  <Step title="Fetch Configurations">
+    Fetch per-user configs from backend (includes all team members' processIds)
+  </Step>
+
+  <Step title="Spawn Processes">
+    Spawn per-user MCP processes for each team member (excluding those with `awaiting_user_config` status)
+  </Step>
+
+  <Step title="Emit Status Events">
+    Emit status events with `user_id` field:
+    ```json
+    {
+      "event": "mcp.server.status_changed",
+      "installation_id": "uuid",
+      "team_id": "uuid",
+      "user_id": "uuid",
+      "status": "provisioning",
+      "status_message": "Spawning MCP server process..."
+    }
+    ```
+  </Step>
+
+  <Step title="Progress Through States">
+    Status progression: `provisioning` → `connecting` → `discovering_tools` → `syncing_tools` → `online`
+  </Step>
+</Steps>
+
+### Result
+
+- Each team member gets their own instance with independent status
+- Members who provided config can use MCP server immediately
+- Members without required user-level config remain in `awaiting_user_config` status until they configure
+
+<Info>
+**Special Case: awaiting_user_config Status**
+
+If an MCP server has required user-level configuration fields (e.g., personal API keys) and a user hasn't configured them, their instance is created with `status='awaiting_user_config'`. The satellite does NOT spawn processes for these instances until the user completes their configuration. See [Status Tracking](/development/satellite/status-tracking) for details.
+</Info>
+
+---
+
+## Lifecycle Process B: MCP Server Deletion
+
+**Trigger:** Team admin deletes MCP installation
+
+### Backend Operations
+
+<Steps>
+  <Step title="Delete Installation">
+    Delete `mcpServerInstallations` row
+  </Step>
+
+  <Step title="CASCADE Delete Instances">
+    CASCADE automatically deletes ALL `mcpServerInstances` rows:
+    ```sql
+    -- Foreign key constraint ensures automatic cleanup
+    installation_id REFERENCES mcpServerInstallations(id) ON DELETE CASCADE
+    ```
+  </Step>
+
+  <Step title="Send Satellite Command">
+    Send `configure` command to all global satellites:
+    ```json
+    {
+      "event": "mcp_installation_deleted",
+      "installation_id": "uuid",
+      "team_id": "uuid"
+    }
+    ```
+  </Step>
+</Steps>
+
+### Satellite Operations
+
+<Steps>
+  <Step title="Receive Command">
+    Receive configure command via command polling service
+  </Step>
+
+  <Step title="Terminate All Processes">
+    Terminate ALL per-user processes for that installation (across all team members)
+  </Step>
+
+  <Step title="Clean Up State">
+    Clean up process metadata and runtime state
+  </Step>
+
+  <Step title="Remove from Cache">
+    Remove installation from dynamic config cache
+  </Step>
+</Steps>
+
+### Result
+
+- All instances deleted from database
+- All processes terminated on satellites
+- No orphaned processes or database rows
+- Complete cleanup across all team members
+
+---
+
+## Lifecycle Process C: Team Member Added
+
+**Trigger:** Team admin adds new member to team
+
+### Backend Operations
+
+<Steps>
+  <Step title="Create Membership">
+    Create team membership record
+  </Step>
+
+  <Step title="Query Team Installations">
+    Query ALL existing MCP installations for this team:
+    ```sql
+    SELECT * FROM mcpServerInstallations WHERE team_id = :teamId
+    ```
+  </Step>
+
+  <Step title="Create Instances">
+    For EACH installation, create `mcpServerInstances` row:
+    - `installation_id` → installation.id
+    - `user_id` → new_member.id
+    - `status` → 'provisioning' (or 'awaiting_user_config' if server requires user-level config)
+  </Step>
+
+  <Step title="Send Satellite Commands">
+    Send `configure` command to all global satellites (one per installation):
+    ```json
+    {
+      "event": "mcp_installation_created",
+      "installation_id": "uuid",
+      "team_id": "uuid",
+      "user_id": "uuid"
+    }
+    ```
+  </Step>
+</Steps>
+
+### Satellite Operations
+
+<Steps>
+  <Step title="Receive Commands">
+    Receive configure commands (one per team installation)
+  </Step>
+
+  <Step title="Fetch Updated Configs">
+    Fetch updated per-user configs from backend (includes new member's processIds)
+  </Step>
+
+  <Step title="Spawn Processes">
+    Spawn per-user processes for new member (dormant pattern - excluding `awaiting_user_config` instances)
+  </Step>
+
+  <Step title="Emit Status Events">
+    Emit status events with new member's `user_id`
+  </Step>
+
+  <Step title="Await First Connection">
+    Processes remain dormant until first client connection (OAuth token)
+  </Step>
+</Steps>
+
+### Result
+
+- New member has instances for ALL team MCP servers
+- Processes spawn on demand when member makes first request
+- Each instance has independent status (no aggregation)
+- Member must configure required user-level fields before instances become online
+
+---
+
+## Lifecycle Process D: Team Member Removed
+
+**Trigger:** Team admin removes member from team
+
+### Backend Operations
+
+<Steps>
+  <Step title="Delete Member Instances">
+    Delete ALL `mcpServerInstances` rows for that user in this team:
+    ```sql
+    DELETE FROM mcpServerInstances
+    WHERE user_id = :userId
+    AND installation_id IN (
+      SELECT id FROM mcpServerInstallations WHERE team_id = :teamId
+    )
+    ```
+  </Step>
+
+  <Step title="Send Satellite Command">
+    Send `configure` command to all global satellites:
+    ```json
+    {
+      "event": "team_member_removed",
+      "team_id": "uuid",
+      "user_id": "uuid"
+    }
+    ```
+  </Step>
+
+  <Step title="Emit Backend Event">
+    Emit backend event: `TEAM_MEMBER_REMOVED` (audit trail and notifications)
+  </Step>
+</Steps>
+
+### Satellite Operations
+
+<Steps>
+  <Step title="Receive Command">
+    Receive configure command via command polling service
+  </Step>
+
+  <Step title="Terminate Member Processes">
+    Terminate ALL processes owned by that user_id in this team
+  </Step>
+
+  <Step title="Clean Up State">
+    Clean up process metadata and cached OAuth tokens
+  </Step>
+
+  <Step title="Remove from Runtime">
+    Remove user from runtime state
+  </Step>
+</Steps>
+
+### Result
+
+- All member's instances deleted from database
+- All member's processes terminated on satellites
+- No status recalculation needed (status only exists per-instance)
+- Other team members' instances remain unaffected
+
+---
+
+## Status Tracking Design
+
+### Per-User Status Only
+
+Status fields have been **completely removed** from `mcpServerInstallations` table. Status exists ONLY in `mcpServerInstances`:
+
+```sql
+-- Query user's own instance status
+SELECT status, status_message, status_updated_at, last_health_check_at
+FROM mcpServerInstances
+WHERE installation_id = :installationId
+  AND user_id = :authenticatedUserId
+```
+
+### API Behavior
+
+**Status Endpoints:**
+- `GET /teams/:teamId/mcp/installations/:installationId/status` - Returns authenticated user's instance status only
+- `GET /teams/:teamId/mcp/installations/:installationId/status-stream` - SSE stream of user's instance status changes
+- No installation-level status aggregation across users
+
+### Why No Aggregation?
+
+- Each user has independent instance with independent status
+- Admin seeing "online" doesn't mean other users' instances are online
+- User's config changes only affect their own instance status
+- Simpler architecture - single source of truth per user
+
+### Database Schema
+
+**Status Location:**
+- `mcpServerInstances`: Has status fields (per user) ✅
+- `mcpServerInstallations`: NO status fields (removed) ❌
+
+---
+
+## Error Handling and Edge Cases
+
+### Scenario: Satellite sends status for non-existent instance
+
+**Behavior:**
+- Backend logs error: "Instance not found for status update"
+- No auto-creation (strict validation)
+- Requires manual investigation and instance creation
+
+**Why This Happens:**
+- Database instance deleted but satellite still has process running
+- Timing issue between deletion and process termination
+- Network delay in command delivery
+
+### Scenario: Member removed while instance is online
+
+**Behavior:**
+- Backend deletes instance row first
+- Satellite terminates process on next configure command poll
+- Brief window where process runs without database record (acceptable)
+
+**Impact:**
+- Process terminated within polling interval (2-60 seconds depending on priority)
+- No data loss or security issue
+- Graceful shutdown when command received
+
+### Scenario: Installation deleted with online instances
+
+**Behavior:**
+- CASCADE delete removes all instances immediately
+- Satellite terminates all processes on next poll
+- Status events ignored (instances already deleted)
+
+**Impact:**
+- Clean database state (no orphaned instances)
+- Processes cleaned up automatically
+- All team members' access revoked simultaneously
+
+### Scenario: Team member added but instance creation fails
+
+**Behavior:**
+- Log error, continue with other installations
+- Member addition succeeds (instances can be created manually later)
+- No rollback - partial instance creation is acceptable
+
+**Why:**
+- Team membership is independent of MCP instances
+- Failed instance creation shouldn't block member from joining
+- Manual retry available via admin interface
+
+### Scenario: Satellite offline during member add
+
+**Behavior:**
+- Instance rows created with status 'provisioning'
+- Satellite picks up on next heartbeat/command poll
+- Eventually spawns processes for new member
+
+**Timeline:**
+- Satellite comes online → polls backend
+- Receives configure commands for new member
+- Processes spawn as normal
+- Status progresses to online
+
+---
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Status Tracking" icon="signal" href="/development/satellite/status-tracking">
+    Complete status system with 12 states including awaiting_user_config
+  </Card>
+  <Card title="Process Management" icon="microchip" href="/development/satellite/process-management">
+    Per-user process spawning, termination, and lifecycle
+  </Card>
+  <Card title="Team Isolation" icon="users" href="/development/satellite/team-isolation">
+    OAuth-based team and user context resolution
+  </Card>
+  <Card title="Commands" icon="terminal" href="/development/satellite/commands">
+    Satellite command system for instance management
+  </Card>
+</CardGroup>
+
+---
+
+## Summary
+
+The instance lifecycle system ensures each team member has their own isolated MCP server instance with independent status tracking. The four lifecycle processes (Installation, Deletion, Member Added, Member Removed) handle instance creation and cleanup across team operations. Status exists only at the instance level, providing clear per-user feedback without cross-user status aggregation.
