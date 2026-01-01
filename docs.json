@@ -200,6 +200,7 @@
             "pages": [
               "/development/satellite/mcp-transport",
               "/development/satellite/hierarchical-router",
+              "/development/satellite/instance-lifecycle",
               "/development/satellite/process-management",
               "/development/satellite/team-isolation",
               "/development/satellite/tool-discovery",
