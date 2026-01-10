@@ -968,17 +968,17 @@ await server.register(fastifySwagger, {
 });
 ```
 
-## Troubleshooting
+### Common Configuration Issues
 
-### "Route already declared" Error
+#### "Route already declared" Error
 
 This happens when trying to manually add routes that Swagger UI already provides. The `/documentation/json` and `/documentation/yaml` endpoints are automatically created.
 
-### "Failed to fetch API spec" Error
+#### "Failed to fetch API spec" Error
 
 Ensure the server is fully started before trying to fetch the specification. The generation script includes a 2-second delay to allow for complete initialization.
 
-### Missing Route Documentation
+#### Missing Route Documentation
 
 Routes without schema definitions will appear in the specification but with minimal documentation. Add schema objects to routes for complete documentation.
 

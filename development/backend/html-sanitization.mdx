@@ -1,0 +1,299 @@
+---
+title: HTML Sanitization
+description: Comprehensive guide to HTML sanitization in DeployStack Backend, covering XSS prevention, input sanitization, and safe content rendering.
+---
+
+## Overview
+
+HTML sanitization is a critical security measure that protects DeployStack from Cross-Site Scripting (XSS) attacks by ensuring user-provided content is safe to render in HTML contexts. The backend uses a centralized three-function approach powered by the `sanitize-html` library.
+
+The sanitization system provides:
+- **XSS Prevention**: Blocks malicious scripts, event handlers, and dangerous protocols
+- **Content Preservation**: Maintains legitimate formatting while removing threats
+- **Removal Tracking**: Monitors sanitization impact for security insights
+- **Single Source of Truth**: All sanitization logic centralized in one utility
+
+## Centralized Sanitization Utility
+
+All HTML sanitization functions are centralized in [services/backend/src/utils/sanitization.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/utils/sanitization.ts).
+
+**Benefits**:
+- No duplicate sanitization code across the codebase
+- Consistent security behavior application-wide
+- Easier to audit and maintain
+- Comprehensive test coverage (44 tests)
+
+<Info>
+The backend recently migrated from `isomorphic-dompurify` to `sanitize-html`, eliminating ~20MB of dependencies and fixing module errors on remote servers while maintaining equivalent security.
+</Info>
+
+## The Three Sanitization Functions
+
+### sanitizeText()
+
+**Purpose**: Escape all HTML entities for plain text rendering.
+
+**Function Signature**:
+```typescript
+sanitizeText(text: string): string
+```
+
+**Use Cases**:
+- Error messages in OAuth callbacks
+- User input displayed in HTML attributes
+- Any text that must display literally (not as HTML)
+
+**Security**: Converts dangerous characters to HTML entities:
+- `<script>` → `&lt;script&gt;`
+- Escapes: `&`, `<`, `>`, `"`, `'`
+
+**Example**:
+```typescript
+import { sanitizeText } from '../../../utils/sanitization';
+
+// OAuth error callback
+const errorMsg = query.error_description || query.error;
+const html = `<p><strong>Error:</strong> ${sanitizeText(errorMsg)}</p>`;
+```
+
+### sanitizeForEmail()
+
+**Purpose**: Sanitize user-provided text for email rendering with newline preservation.
+
+**Function Signature**:
+```typescript
+sanitizeForEmail(text: string): string
+```
+
+**Allowed Tags**: Only `<br />` tags for line breaks.
+
+**Defense-in-Depth Approach**:
+1. Normalize line endings (`\r\n` → `\n`)
+2. Trim whitespace
+3. Escape HTML entities (primary defense)
+4. Convert newlines to `<br />` tags
+5. Sanitize with sanitize-html (secondary defense)
+
+**Behavior**:
+```typescript
+Input:  "Hello\nWorld"
+Output: "Hello<br />World"
+```
+
+**Security Features**:
+- Escapes all HTML except `<br />` tags
+- Prevents XSS while preserving email formatting
+- Users can type HTML-like text (e.g., "The `<button>` component") and it displays literally
+
+**Example**:
+```typescript
+import { sanitizeForEmail } from './sanitization';
+
+// Sanitize user feedback message
+const sanitizedMessage = sanitizeForEmail(userFeedbackText);
+
+// Use in email template (Pug syntax with != for unescaped output)
+// feedback.pug: p!= feedbackMessage
+```
+
+<Info>
+The email sanitization wrapper at [services/backend/src/utils/emailSanitization.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/utils/emailSanitization.ts) provides backwards compatibility with existing code.
+</Info>
+
+### sanitizeMarkdown()
+
+**Purpose**: Sanitize GitHub README and markdown content for safe display with rich formatting.
+
+**Function Signature**:
+```typescript
+sanitizeMarkdown(content: string): {
+  content: string;
+  originalLength: number;
+  sanitizedLength: number;
+  removalBytes: number;
+  removalPercentage: number;
+}
+```
+
+**Allowed Tags** (38+ tags):
+- **Text formatting**: `p`, `br`, `strong`, `em`, `u`, `s`, `del`, `ins`
+- **Headings**: `h1`, `h2`, `h3`, `h4`, `h5`, `h6`
+- **Lists**: `ul`, `ol`, `li`, `dl`, `dt`, `dd`
+- **Links and code**: `a`, `code`, `pre`, `blockquote`
+- **Images**: `img`, `picture`, `source`
+- **Tables**: `table`, `thead`, `tbody`, `tfoot`, `tr`, `td`, `th`
+- **Containers**: `div`, `span`, `section`, `article`
+- **GitHub-specific**: `details`, `summary`
+- **Other**: `hr`, `sup`, `sub`
+
+**Security Features**:
+- Blocks `<script>`, `<iframe>`, `<object>`, `<embed>` tags
+- Prevents `javascript:` URLs in links
+- Removes event handlers (`onclick`, `onerror`, `onload`, etc.)
+- Allows data URIs for images only
+- Allows safe protocols: `http`, `https`, `mailto`, `tel`
+
+**Removal Tracking**:
+
+The function returns statistics about content removal. If >10% of content is removed, it indicates possible malicious content that should be logged.
+
+**Example**:
+```typescript
+import { sanitizeMarkdown } from '../utils/sanitization';
+
+const sanitizationResult = sanitizeMarkdown(decodedContent);
+
+// Log security warning if significant removal
+if (sanitizationResult.removalPercentage > 10) {
+  logger.warn({
+    removal_percentage: sanitizationResult.removalPercentage.toFixed(2),
+    removal_bytes: sanitizationResult.removalBytes,
+    repository_url: repositoryUrl
+  }, 'High sanitization removal rate detected');
+}
+
+return {
+  content: sanitizationResult.content,
+  encoding: 'utf8'
+};
+```
+
+## When to Use Which Function
+
+<Info>
+**Plain text only** (no formatting needed)? → Use `sanitizeText()`
+
+Use for:
+- Error messages
+- OAuth callbacks
+- HTML attributes
+- Any text that should display literally
+</Info>
+
+<Info>
+**Email content** with newlines? → Use `sanitizeForEmail()`
+
+Use for:
+- User feedback messages
+- Email notifications
+- Text with line breaks that need to render as `<br />` tags
+</Info>
+
+<Info>
+**Rich markdown/HTML content**? → Use `sanitizeMarkdown()`
+
+Use for:
+- GitHub READMEs
+- Blog posts
+- Documentation
+- Any content with headings, links, images, tables
+</Info>
+
+## XSS Prevention
+
+All three functions prevent common XSS attack vectors:
+
+**Test Vectors Blocked**:
+- `<script>alert(1)</script>` → Removed or escaped
+- `<img src=x onerror=alert(1)>` → `onerror` attribute removed
+- `<a href="javascript:alert(1)">click</a>` → `javascript:` protocol blocked
+- `<iframe src="javascript:alert(1)">` → `iframe` tag removed
+- `<svg onload=alert(1)>` → `onload` attribute removed
+- `<body onload=alert(1)>` → `body` tag removed
+- DOM clobbering attempts → Neutralized
+
+<Warning>
+Never use unsanitized user input directly in HTML context. Always use one of the three sanitization functions before rendering user content.
+</Warning>
+
+<Danger>
+XSS vulnerabilities can lead to:
+- Account compromise through session theft
+- Session hijacking
+- Malicious code execution in user browsers
+- Sensitive data theft
+- Phishing attacks
+</Danger>
+
+## Security Features
+
+### Whitelist Approach
+- Only explicitly allowed tags and attributes pass through
+- Everything else is escaped or removed
+- Safer than blacklist approach (which tries to block known bad patterns)
+
+### Protocol Validation
+- Only safe URL protocols allowed: `http`, `https`, `mailto`, `tel`
+- Blocks dangerous protocols: `javascript:`, `data:` (except for images), `file:`
+- Prevents protocol-relative URLs in strict mode
+
+### Event Handler Removal
+- All JavaScript event handlers stripped automatically
+- Blocked handlers: `onclick`, `onerror`, `onload`, `onfocus`, `onmouseover`, etc.
+- Prevents inline JavaScript execution
+
+### Server-Side Library
+- No DOM emulation (unlike the previous `isomorphic-dompurify`)
+- No CSS parsing dependencies
+- Faster and lighter with better performance
+- Designed specifically for server-side Node.js environments
+
+### Automatic Escaping
+- Text content automatically escaped by sanitize-html
+- No need for manual HTML entity encoding in most cases
+- Reduces risk of escaping bugs
+
+## Implementation Files
+
+**Source Files**:
+- [services/backend/src/utils/sanitization.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/utils/sanitization.ts) - Centralized sanitization utility
+- [services/backend/src/utils/emailSanitization.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/utils/emailSanitization.ts) - Email wrapper for backwards compatibility
+- [services/backend/src/services/githubReadmeService.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/services/githubReadmeService.ts) - README sanitization implementation
+- [services/backend/src/routes/mcp/installations/callback.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/routes/mcp/installations/callback.ts) - OAuth error sanitization
+
+**Test Files**:
+- [tests/unit/utils/sanitization.test.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/tests/unit/utils/sanitization.test.ts) - 44 comprehensive tests
+
+## Testing
+
+The sanitization utility has comprehensive test coverage:
+
+**Test Categories**:
+- HTML entity escaping (6 tests)
+- Email formatting with newlines (10 tests)
+- Markdown/HTML tag handling (28 tests)
+- XSS prevention suite (multiple attack vectors tested)
+
+**All 44 tests pass** ✓
+
+**Run Tests**:
+```bash
+cd services/backend
+npm run test:unit -- sanitization.test.ts
+```
+
+<Tip>
+When adding new sanitization use cases, write tests first to ensure proper XSS prevention before implementation.
+</Tip>
+
+## Migration from isomorphic-dompurify
+
+The backend migrated from `isomorphic-dompurify` to `sanitize-html` for better performance and reliability.
+
+**Migration Benefits**:
+- Removed ~20MB of dependencies (jsdom, CSS parsers)
+- Fixed module errors on remote servers (`@csstools/css-parser-algorithms` missing)
+- Eliminated 2 duplicate `escapeHtml()` functions across the codebase
+- Centralized all sanitization in single utility
+- Better performance (no DOM emulation overhead)
+- Equivalent security with explicit whitelist approach
+
+**Key Difference**:
+- `sanitize-html` outputs self-closing tags: `<br />` instead of `<br>`
+- All tests and expectations updated to match new format
+
+## Related Documentation
+
+- [Security Policy](/development/backend/security) - Overall backend security guidelines including password hashing, session management, and encryption
+- [API Security](/development/backend/api/security) - API-specific security patterns including authorization hooks and RBAC
+- [Mail System](/development/backend/mail) - Email sending system that uses `sanitizeForEmail()`

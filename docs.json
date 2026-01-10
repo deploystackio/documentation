@@ -124,6 +124,7 @@
               "/development/backend/environment-variables",
               "/development/backend/plugins",
               "/development/backend/security",
+              "/development/backend/html-sanitization",
               "/development/backend/logging",
               "/development/backend/test"
             ]

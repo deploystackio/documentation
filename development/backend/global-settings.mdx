@@ -77,6 +77,16 @@ DEPLOYSTACK_ENCRYPTION_SECRET=your-very-secure-32-character-secret-key-here
 
 **Important**: Use a strong, unique secret in production. This key is used to derive the encryption key for all sensitive settings.
 
+### Security Guidelines
+
+Follow these guidelines when working with sensitive settings:
+
+- **Always encrypt sensitive data**: Passwords, API keys, tokens, and secrets must be encrypted
+- **Use descriptive descriptions**: Help administrators understand what each setting does and why it's sensitive
+- **Group sensitive settings**: Keep all sensitive settings for a service in the same group for easier management
+- **Regular audits**: Review settings periodically for unused or outdated values
+- **Environment separation**: Use different encryption secrets for different environments (development, staging, production)
+
 ## Database Schema
 
 ```sql
@@ -102,6 +112,18 @@ CREATE TABLE globalSettings (
   updated_at INTEGER NOT NULL              -- Last update timestamp
 );
 ```
+
+## Naming Conventions
+
+When creating global settings, follow these conventions for consistency:
+
+- **Dot notation for hierarchy**: Use `category.subcategory.setting` structure (e.g., `smtp.host`, `api.openai.key`)
+- **Lowercase with underscores**: Use lowercase letters with underscores for readability (e.g., `smtp.max_retry_count`)
+- **Be descriptive but concise**: Use clear names without redundancy (e.g., `api.openai.key` not `api.openai.api_key`)
+- **Group related settings**: Keep related configuration together (e.g., `database.host`, `database.port`, `database.name`)
+- **Hierarchical keys within groups**: Use dot notation for subcategories (e.g., `group.subcategory.setting`)
+- **Keep all related settings in the same group**: Maintain group consistency for better organization
+- **Provide clear descriptions**: Help administrators understand the purpose of each setting
 
 ## API Endpoints
 
@@ -580,6 +602,23 @@ const apiSettings = await GlobalSettingsService.getByGroup('api-keys');
 const openaiKey = apiSettings.find(s => s.key === 'api.openai.key')?.value;
 ```
 
+### Error Handling
+
+When working with global settings, implement proper error handling:
+
+```typescript
+try {
+  const setting = await GlobalSettingsService.get('api.openai.key');
+  if (!setting) {
+    throw new Error('OpenAI API key not configured');
+  }
+  // Use the setting
+} catch (error) {
+  logger.error('Failed to retrieve setting:', error);
+  // Handle the error appropriately
+}
+```
+
 ## Auto-Initialization System
 
 ### Overview
@@ -693,35 +732,29 @@ When the server starts:
 
 #### SMTP Settings (Group ID: `smtp`)
 
-| Key | Default | Required | Encrypted | Description |
-|-----|---------|----------|-----------|-------------|
-| `smtp.host` | `''` | ✅ | ❌ | SMTP server hostname |
-| `smtp.port` | `'587'` | ✅ | ❌ | SMTP server port |
-| `smtp.username` | `''` | ✅ | ❌ | SMTP authentication username |
-| `smtp.password` | `''` | ✅ | ✅ | SMTP authentication password |
-| `smtp.secure` | `'true'` | ❌ | ❌ | Use SSL/TLS connection |
-| `smtp.from_name` | `'DeployStack'` | ❌ | ❌ | Default sender name |
-| `smtp.from_email` | `''` | ❌ | ❌ | Default sender email |
+**Source**: [services/backend/src/global-settings/smtp.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/global-settings/smtp.ts)
+
+Email server configuration for sending notifications and system emails. Includes SMTP host, port, authentication credentials (encrypted password), SSL/TLS settings, and default sender information.
 
 #### GitHub OAuth Settings (Group ID: `github-oauth`)
 
-| Key | Default | Required | Encrypted | Description |
-|-----|---------|----------|-----------|-------------|
-| `github.oauth.client_id` | `''` | ❌ | ❌ | GitHub OAuth client ID |
-| `github.oauth.client_secret` | `''` | ❌ | ✅ | GitHub OAuth client secret |
-| `github.oauth.enabled` | `'false'` | ❌ | ❌ | Enable GitHub OAuth |
-| `github.oauth.callback_url` | `'http://localhost:3000/api/auth/github/callback'` | ❌ | ❌ | OAuth callback URL |
-| `github.oauth.scope` | `'user:email'` | ❌ | ❌ | OAuth requested scopes |
+**Source**: [services/backend/src/global-settings/github-oauth.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/global-settings/github-oauth.ts)
+
+GitHub OAuth application credentials for user authentication. Includes client ID, client secret (encrypted), enabled flag, callback URL, and requested OAuth scopes.
 
 #### Global Settings (Group ID: `global`)
 
-| Key | Default | Required | Encrypted | Description |
-|-----|---------|----------|-----------|-------------|
-| `global.page_url` | `'http://localhost:5173'` | ❌ | ❌ | Base URL for the application frontend |
-| `global.send_mail` | `'false'` | ❌ | ❌ | Enable or disable email sending functionality |
-| `global.enable_login` | `'true'` | ❌ | ❌ | Enable or disable all login functionality |
-| `global.enable_email_registration` | `'true'` | ❌ | ❌ | Enable or disable email registration |
-| `global.enable_swagger_docs` | `'true'` | ❌ | ❌ | Enable or disable Swagger API documentation endpoint (/documentation) |
+**Source**: [services/backend/src/global-settings/global.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/global-settings/global.ts)
+
+Application-wide configuration settings. Controls frontend URL, email functionality toggle, login/registration enablement, and API documentation visibility.
+
+#### User Display Settings (Group ID: `user-display`)
+
+**Source**: [services/backend/src/global-settings/user-display.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/global-settings/user-display.ts)
+
+Controls UI element visibility for users across the application. Manages header buttons like Discord community link and feedback form.
+
+**Special behavior**: These settings are automatically included in the `/api/users/me` endpoint response, making them immediately available to the frontend without additional API calls.
 
 ### Helper Methods
 
@@ -874,37 +907,18 @@ const maintenanceMode = (await GlobalSettingsService.get('system.maintenance_mod
 const maxUploadSize = parseInt((await GlobalSettingsService.get('system.max_upload_size'))?.value || '5242880');
 ```
 
-## Best Practices
+## Group Design Guidelines
 
-### Key Naming Conventions
+When designing setting groups for your application, follow these guidelines:
 
-- Use dot notation for hierarchy: `category.subcategory.setting`
-- Use lowercase with underscores for readability: `smtp.max_retry_count`
-- Be descriptive but concise: `api.openai.key` not `api.openai.api_key`
-- Group related settings: `database.host`, `database.port`, `database.name`
+- **Logical grouping**: Group related settings together (e.g., all SMTP settings in one group)
+- **Clear names**: Use descriptive group names that are clear for frontend display
+- **Consistent icons**: Use consistent iconography across groups for better UX
+- **Proper ordering**: Set `sort_order` values to control tab display sequence in the frontend
 
-### Group Design
+## Performance Considerations
 
-- **Logical Grouping**: Group related settings together (e.g., all SMTP settings)
-- **Clear Names**: Use descriptive group names for frontend display
-- **Consistent Icons**: Use consistent iconography across groups
-- **Proper Ordering**: Set sort_order to control tab display sequence
-
-### Setting Organization
-
-- **Hierarchical Keys**: Use dot notation within groups: `group.subcategory.setting`
-- **Group Consistency**: Keep all related settings in the same group
-- **Clear Descriptions**: Provide helpful descriptions for administrators
-
-### Security Guidelines
-
-- **Always encrypt sensitive data**: Passwords, API keys, tokens, secrets
-- **Use descriptive descriptions**: Help other administrators understand the purpose
-- **Group sensitive settings**: Keep all sensitive settings for a service in one group
-- **Regular audits**: Review settings periodically for unused or outdated values
-- **Environment separation**: Use different encryption secrets for different environments
-
-### Performance: In-Memory Cache
+### In-Memory Cache
 
 The global settings system uses an **in-memory cache** to eliminate database queries for read operations. This is critical for high-frequency endpoints like health checks (`/`) and Swagger documentation (`/documentation`).
 
@@ -968,21 +982,6 @@ if (GlobalSettingsCache.isInitialized()) {
 
 - **Batch operations**: Use bulk endpoints when creating multiple related settings
 - **Group retrieval**: Use `getGroupValues()` to fetch all settings in a group at once
-
-### Error Handling
-
-```typescript
-try {
-  const setting = await GlobalSettingsService.get('api.openai.key');
-  if (!setting) {
-    throw new Error('OpenAI API key not configured');
-  }
-  // Use the setting
-} catch (error) {
-  logger.error('Failed to retrieve setting:', error);
-  // Handle the error appropriately
-}
-```
 
 ## Migration and Setup
 
