@@ -1,0 +1,645 @@
+---
+title: GitHub Deployment
+description: How DeployStack Satellite handles GitHub-based MCP server deployments, including download, build, execution, and temp directory lifecycle.
+sidebarTitle: MCP Server Deploy
+---
+
+DeployStack Satellite supports deploying MCP servers directly from GitHub repositories. This enables teams to deploy private MCP servers without publishing to npm or PyPI.
+
+## Overview
+
+GitHub deployments allow teams to run MCP servers from private or public repositories. The satellite handles the full lifecycle: downloading the repository, installing dependencies, building the project, and executing the resulting artifacts.
+
+**Key Benefits:**
+- Deploy private MCP servers without package registry publishing
+- Use specific commits or branches for version control
+- Full build pipeline with sandboxed execution
+
+## Deployment Flow
+
+The deployment process follows these steps:
+
+```
+Config Detection → Token Fetch → Download → Extract → Install → Build → Spawn
+       ↓               ↓            ↓          ↓         ↓        ↓       ↓
+   source:github   GitHub App   Tarball    /tmp dir   npm/uv  Optional  Process
+```
+
+**Step-by-Step:**
+
+1. **Config Detection**: Satellite identifies GitHub deployments via `source: 'github'` and command (`npx`/`uvx`)
+2. **Token Fetch**: Satellite fetches GitHub App installation token from backend
+3. **Download**: Repository tarball downloaded via Octokit API
+4. **Extract**: Tarball extracted to deployment directory:
+   - **Production**: tmpfs at `/opt/mcp-deployments/{team-id}/{installation-id}` with 300MB quota
+   - **Development**: Regular filesystem at `/tmp/mcp-{uuid}` (no quota)
+5. **Install**: Dependencies installed (`npm install` or `uv sync`)
+6. **Build**: Build script executed if present (`npm run build`)
+7. **Spawn**: Process spawned with transformed config
+
+## Runtime Support
+
+| Runtime | Package Manager | Installation Pattern Detection | Entry Point Resolution |
+|---------|-----------------|-------------------------------|------------------------|
+| Node.js | npm | Standard package.json workflow | `bin` or `main` in package.json |
+| Python | uv/pip | Auto-detects 3 patterns (see below) | 7 fallback patterns (see below) |
+| Quota | Production: 300MB | Kernel-enforced via tmpfs | Development: No quota |
+
+### Node.js Entry Point Resolution
+
+The satellite resolves Node.js entry points in this order:
+
+1. `bin` field in package.json (if string or object with matching key)
+2. `main` field in package.json
+3. `dist/index.js` fallback
+4. `index.js` fallback
+
+### Python Installation Patterns
+
+The satellite automatically detects the Python project type and uses the appropriate installation method:
+
+#### Pattern 1: Installable Package
+
+**Detection:**
+- Has `pyproject.toml` with `[build-system]` section
+- Has proper package structure (`src/` directory OR package directory matching project name)
+- Has `[project.scripts]` or `[project.gui-scripts]` entries
+
+**Installation:**
+```bash
+uv sync --no-dev --python /usr/local/bin/python3.13
+```
+
+**Entry Point:** `.venv/bin/{script_name}` from `[project.scripts]`
+
+**Example Repository Structure:**
+```
+my-mcp-server/
+├── pyproject.toml      # Has [build-system] + [project.scripts]
+├── src/
+│   └── my_mcp_server/
+│       └── __init__.py
+└── README.md
+
+Classification: Installable package
+```
+
+#### Pattern 2: Simple Script with pyproject.toml
+
+**Detection:**
+- Has `pyproject.toml` with dependencies
+- Lacks `[build-system]` OR lacks proper package structure
+- Has standalone script files at root (`server.py`, `main.py`, `app.py`, or `__main__.py`)
+
+**Installation:**
+```bash
+# Step 1: Create virtual environment with selected Python
+uv venv .venv --python /usr/local/bin/python3.13
+
+# Step 2: Parse dependencies from pyproject.toml and install directly
+# Example: dependencies = ["mcp>=1.0.0"]
+uv pip install mcp>=1.0.0
+```
+
+**Entry Point:** `.venv/bin/python {script_name}`
+
+**Example Repository Structure:**
+```
+my-mcp-server/
+├── pyproject.toml      # Has dependencies but no [build-system]
+├── server.py           # ← Standalone script
+└── README.md
+
+Classification: Simple script
+```
+
+**Why This Pattern Exists:**
+Many MCP servers are simple scripts that don't need package installation. Building them as packages would fail due to missing package structure. Instead, we create a venv and install just the dependencies.
+
+#### Pattern 3: Legacy with requirements.txt
+
+**Detection:**
+- Has `requirements.txt`
+- No `pyproject.toml` (or pyproject.toml without dependencies)
+
+**Installation:**
+```bash
+# Step 1: Create virtual environment
+uv venv .venv
+
+# Step 2: Install dependencies from requirements.txt
+uv pip install -r requirements.txt
+```
+
+**Entry Point:** `.venv/bin/python {script_name}` or `python3 {script_name}`
+
+**Example Repository Structure:**
+```
+my-mcp-server/
+├── requirements.txt
+├── server.py
+└── README.md
+
+Classification: Legacy script
+```
+
+### Python Entry Point Resolution
+
+The satellite resolves Python entry points in this priority order:
+
+1. **Installed script from pyproject.toml**: `.venv/bin/{script_name}` from `[project.scripts]`
+2. **GUI script from pyproject.toml**: `.venv/bin/{script_name}` from `[project.gui-scripts]`
+3. **__main__.py at root**: `.venv/bin/python __main__.py` (or `python3` if no venv)
+4. **src/__main__.py**: `.venv/bin/python src/__main__.py`
+5. **server.py**: `.venv/bin/python server.py`
+6. **main.py**: `.venv/bin/python main.py`
+7. **app.py**: `.venv/bin/python app.py`
+8. **run.py**: `.venv/bin/python run.py`
+
+**Implementation Reference:** `services/satellite/src/process/github-deployment.ts` - `resolvePythonPackageEntry()`
+
+### Smart Python Version Selection
+
+The satellite automatically selects the best Python version for deployments to maximize wheel compatibility and avoid build failures.
+
+**Selection Algorithm:**
+
+1. Discovers all available Python 3.x versions on the system (python3.8 through python3.20)
+2. Identifies bleeding-edge versions (latest minor version with limited wheel support)
+3. Prefers stable versions with mature package ecosystems
+4. Falls back gracefully if preferred versions are unavailable
+
+**Priority Order:**
+
+- **Current stable version** (e.g., 3.13 when 3.14 is bleeding-edge)
+- **Previous stable version** (e.g., 3.12)
+- **LTS versions** (e.g., 3.11, 3.10, 3.9)
+- **System default** (last resort)
+
+**Example on macOS with Python 3.9, 3.10, 3.11, 3.13, 3.14 installed:**
+
+```
+Available: [3.9, 3.10, 3.11, 3.13, 3.14]
+
+Analysis:
+  - 3.14: Bleeding edge (skip - limited wheel availability)
+  - 3.13: Current stable ✓ SELECTED
+  - 3.11, 3.10, 3.9: Fallback options
+
+Selected: Python 3.13.9 (/usr/local/bin/python3.13)
+Reason: Current stable version with mature wheel ecosystem
+```
+
+**Why This Matters:**
+
+Bleeding-edge Python versions (like 3.14 when just released) often lack pre-built wheels for popular packages like `pydantic-core` and `cryptography`. This causes build failures when dependencies need source compilation. The smart selector avoids this by preferring stable versions with mature package ecosystems.
+
+**Startup Logging:**
+
+The satellite logs discovered Python versions at startup:
+
+```json
+{
+  "operation": "python_versions_discovered",
+  "versions": ["3.13.9 (python3.13)", "3.10.19 (python3.10)", "3.14.0 (python3.14)"],
+  "total_count": 3
+}
+```
+
+**Deployment Logging:**
+
+When deploying a Python MCP server:
+
+```json
+{
+  "operation": "python_version_selection_complete",
+  "selected_version": "3.13.9",
+  "selected_path": "/usr/local/bin/python3.13",
+  "reason": "Current stable version with mature wheel ecosystem",
+  "alternatives": ["3.10.19", "3.14.0"],
+  "skipped": ["3.14.0 (bleeding edge)"],
+  "duration_ms": 174
+}
+```
+
+**Implementation Reference:** `services/satellite/src/utils/runtime-validator.ts` - `selectBestPythonForDeployment()`
+
+## Deployment Directory Lifecycle
+
+GitHub deployments store built artifacts in dedicated directories with different strategies for development and production:
+
+### Production Mode (Linux)
+
+**Directory:** `/opt/mcp-deployments/{team-id}/{installation-id}`
+**Type:** tmpfs (memory-backed filesystem)
+**Quota:** 300MB kernel-enforced hard limit
+
+**Benefits:**
+- Kernel enforces quota - process killed immediately if exceeded
+- Memory-backed for faster I/O
+- Auto cleanup on reboot
+- Proper nsjail mounting as `/app`
+
+### Development Mode (macOS/Windows/Linux)
+
+**Directory:** `/tmp/mcp-{uuid}`
+**Type:** Regular filesystem
+**Quota:** None (for ease of development)
+
+### When Directory is Preserved
+
+| Scenario | Behavior |
+|----------|----------|
+| Dormant Shutdown | Process goes idle, directory preserved for fast respawn |
+| Crash Recovery | Process crashes, directory preserved for restart |
+| Manual Termination | Process stopped, directory preserved for restart |
+
+### When Directory is Deleted
+
+| Scenario | Production | Development | Trigger |
+|----------|-----------|-------------|---------|
+| **Redeploy** | tmpfs unmounted, fresh download | Directory removed, fresh download | User clicks "Redeploy" button |
+| Uninstall | tmpfs unmounted (`isUninstallShutdown` flag) | Directory removed with `rm -rf` | User uninstalls MCP server |
+| System Reboot | tmpfs automatically freed by kernel | Depends on OS tmpdir cleanup | Server restart |
+
+<Info>
+**Memory Optimization**: When a GitHub-deployed process goes dormant due to inactivity, the deployment directory with built artifacts is preserved. This allows respawning in 1-2 seconds instead of 30+ seconds for a full rebuild.
+</Info>
+
+<Warning>
+**Redeploy Behavior**: When users click "Redeploy", the deployment directory is ALWAYS deleted to force a fresh download from GitHub. This ensures new code changes (new tools, bug fixes, etc.) are applied. Redeploy does NOT reuse cached deployment directories.
+</Warning>
+
+## Config Transformation
+
+During `prepareDeployment()`, the config is transformed from package manager command to direct execution.
+
+**Before (original config from backend):**
+```json
+{
+  "command": "npx",
+  "args": ["-y", "github:owner/repo"],
+  "source": "github",
+  "git_commit_sha": "abc123def456...",
+  "repository_url": "https://github.com/owner/repo",
+  "git_branch": "main"
+}
+```
+
+**After (transformed for execution):**
+```json
+{
+  "command": "node",
+  "args": ["/tmp/mcp-xxx/dist/index.js"],
+  "temp_dir": "/tmp/mcp-xxx"
+}
+```
+
+The transformed config is stored in the dormant map, so respawning uses the local artifacts directly.
+
+## Dynamic Args Reconstruction
+
+### Why Args Don't Include SHA
+
+GitHub-deployed MCP servers receive args WITHOUT the commit SHA baked in:
+
+**Backend Sends:**
+```json
+{
+  "command": "npx",
+  "args": ["-y", "github:owner/repo"],
+  "git_commit_sha": "abc123def456...",
+  "source": "github"
+}
+```
+
+**Why This Architecture:**
+- `template_args` stored at deployment time would become stale on redeploy
+- Redeploy updates `git_commit_sha` column but NOT `template_args`
+- Baked SHA would cause old code to run after redeploy
+- Dynamic reconstruction ensures latest SHA is always used
+
+### Reconstruction Logic
+
+The satellite's `reconstructGitHubArgs()` private method combines base args with current SHA:
+
+**Safety Checks:**
+```typescript
+if (config.source !== 'github' || !config.git_commit_sha || !config.args) {
+  return undefined; // Skip reconstruction - use original args
+}
+```
+
+**Reconstruction Patterns:**
+
+**Node.js:**
+```
+Input:  ["-y", "github:owner/repo"]
+SHA:    "abc123def456"
+Output: ["-y", "github:owner/repo#abc123def456"]
+```
+
+**Python:**
+```
+Input:  ["git+https://github.com/owner/repo.git"]
+SHA:    "abc123def456"
+Output: ["git+https://github.com/owner/repo.git@abc123def456"]
+```
+
+### What Gets Reconstructed
+
+| Server Type | Source | Has SHA? | Reconstruction |
+|------------|--------|----------|----------------|
+| **Catalog STDIO** | `official_registry` / `manual` | ❌ No | Skipped - uses static package refs |
+| **Catalog HTTP/SSE** | `official_registry` / `manual` | ❌ No | Skipped - uses URL, no args |
+| **GitHub Deploy** | `github` | ✅ Yes | Reconstructed dynamically with SHA |
+
+**Key Insight:** Catalog servers from the MCP registry (like sequential-thinking, context7) use static package references (e.g., `@modelcontextprotocol/server-sequential-thinking`) that don't need SHA reconstruction. Only GitHub-deployed servers (`source: 'github'`) get dynamic reconstruction.
+
+**Implementation:** `services/satellite/src/process/github-deployment.ts` - `reconstructGitHubArgs()`
+
+**Logs During Reconstruction:**
+```json
+{
+  "operation": "github_args_reconstructed",
+  "original_args": ["-y", "github:owner/repo"],
+  "reconstructed_args": ["-y", "github:owner/repo#abc123def456"],
+  "git_commit_sha": "abc123def456"
+}
+```
+
+**Logs When Skipped (Catalog Servers):**
+```json
+{
+  "operation": "github_args_reconstruction_skipped",
+  "reason": "not_github_source",
+  "source": "official_registry"
+}
+```
+
+## Redeploy
+
+When users need to deploy updated code from GitHub (new tools, bug fixes, updates), they use the **Redeploy** feature.
+
+**What Redeploy Does:**
+- Stops ALL user instances for the installation
+- Deletes the shared deployment directory
+- Downloads fresh code from GitHub
+- Reinstalls dependencies and rebuilds
+- Respawns ALL instances with new code
+
+**Why It's Needed:**
+
+Normal restart preserves the deployment directory for performance. Redeploy forces a complete refresh to ensure the latest code from GitHub is used.
+
+**Performance:**
+- Initial deployment: 20-60 seconds
+- Normal restart: 1-2 seconds (cached)
+- Redeploy: 20-60 seconds (fresh download)
+
+For complete redeploy documentation, see [GitHub Deployment Redeploy](/development/satellite/github-deployment-redeploy).
+
+## Quota and Security
+
+### 300MB Kernel-Enforced Quota (Production)
+
+GitHub deployments in production use tmpfs with a hard 300MB quota enforced by the Linux kernel.
+
+**How It Works:**
+1. Satellite creates tmpfs: `mount -t tmpfs -o size=300M tmpfs /opt/mcp-deployments/{team}/{install}`
+2. Repository extracted to tmpfs
+3. Dependencies installed (npm/pip) within tmpfs
+4. **If total size exceeds 300MB**: Kernel kills the process immediately
+5. No reactive checks needed - quota is proactive
+
+**Benefits:**
+- **Proactive Protection**: Process killed before disk exhaustion
+- **Cannot Be Bypassed**: Kernel enforces limit, no userspace workaround
+- **Fast Failure**: Immediate termination vs delayed detection
+- **Memory-Backed**: Faster I/O than disk
+- **Auto Cleanup**: tmpfs freed on reboot even if unmount fails
+
+**What Counts Toward Quota:**
+- Repository files after extraction
+- `node_modules/` or Python packages
+- Build artifacts (`dist/`, `.venv/`)
+- Any temporary files created during build
+
+**Development Mode:**
+- No quota enforced (uses regular `/tmp` directory)
+- Allows easier debugging of large dependencies
+- Set `MCP_USE_TMPFS=true` in `.env` to test tmpfs behavior locally
+
+### Directory Structure
+
+**Base Directory:** `/opt/mcp-deployments/` (created automatically on first deployment)
+
+**Per-Deployment Path:**
+```
+/opt/mcp-deployments/
+├── {team-id}/
+│   ├── {installation-id-1}/  ← tmpfs mount (300MB each)
+│   ├── {installation-id-2}/
+│   └── {installation-id-3}/
+```
+
+**Example:**
+```
+/opt/mcp-deployments/
+├── team-abc123/
+│   └── install-xyz789/
+│       ├── package.json
+│       ├── node_modules/  ← Counts toward 300MB
+│       ├── dist/          ← Counts toward 300MB
+│       └── src/
+```
+
+**Mounted in nsjail as:** `/app` (read-only)
+**Working directory:** `/app`
+**Entry point:** `/app/dist/index.js` (relative path resolved from `/app`)
+
+## Build Pipeline
+
+### Install Phase
+
+Dependencies are installed in a sandboxed environment:
+
+**Node.js:**
+```bash
+npm install --omit=dev
+```
+
+**Python Pattern 1: Installable Package**
+```bash
+# Detected: pyproject.toml with [build-system] and src/ directory
+uv sync --no-dev --python /usr/local/bin/python3.13
+```
+
+**Python Pattern 2: Simple Script with pyproject.toml**
+```bash
+# Detected: pyproject.toml without [build-system], server.py at root
+# Step 1: Create venv with selected Python
+uv venv .venv --python /usr/local/bin/python3.13
+
+# Step 2: Parse dependencies from pyproject.toml: ["mcp>=1.0.0"]
+uv pip install mcp>=1.0.0
+```
+
+**Python Pattern 3: Legacy with requirements.txt**
+```bash
+# Detected: requirements.txt only
+# Step 1: Create venv
+uv venv .venv
+
+# Step 2: Install from requirements.txt
+uv pip install -r requirements.txt
+```
+
+### Build Phase
+
+If a build script is present, it runs after installation:
+
+**Node.js (if `scripts.build` exists in package.json):**
+```bash
+npm run build
+```
+
+<Warning>
+Build scripts are validated for dangerous patterns before execution. See the Security section below.
+</Warning>
+
+### Timeout Configuration
+
+| Phase | Default Timeout | Purpose |
+|-------|-----------------|---------|
+| Download | 60 seconds | Repository tarball download |
+| Install | 120 seconds | Dependency installation |
+| Build | 120 seconds | Build script execution |
+
+### Quota Enforcement
+
+In production, all build operations occur within the 300MB tmpfs quota:
+
+**If Quota Exceeded:**
+- Process killed by kernel during `npm install` or build phase
+- Satellite logs error: "Failed to create deployment tmpfs"
+- Installation status set to `failed`
+- tmpfs automatically unmounted
+
+**Common Causes:**
+- Large dependency trees (e.g., React app with 1000+ packages)
+- Binary dependencies (e.g., native modules)
+- Large build artifacts (e.g., bundled assets)
+
+**Workaround:**
+- Optimize dependencies (remove unused packages)
+- Use `--production` or `--omit=dev` flags
+- Pre-build assets before deployment
+- Deploy pre-built artifact instead of source
+
+## Security
+
+GitHub deployments include multiple security layers to prevent malicious code execution during the build phase.
+
+### Build Script Validation
+
+The backend validates build scripts before allowing deployment. The satellite re-validates as defense-in-depth.
+
+**Blocked Patterns:**
+- Network commands (`curl`, `wget`, `nc`, `ssh`)
+- File exfiltration (`scp`, `rsync`, `ftp`)
+- Sensitive file access (`/etc/passwd`, `~/.ssh`, `~/.aws`)
+- Environment variable dumping (`printenv`, `env`, `export`)
+
+### Sandboxed Builds
+
+Install and build commands run inside nsjail with:
+
+- Resource limits (512MB memory, 60s CPU time)
+- Restricted filesystem access
+- Network policy: allowed for install, blocked for build
+- No access to user-provided environment variables
+
+### No Secrets in Builds
+
+User-provided environment variables (API keys, tokens) are NOT passed to build commands. This prevents exfiltration via malicious build scripts.
+
+**Build Environment:**
+```bash
+CI=true
+PATH=/usr/bin:/bin:/usr/local/bin
+HOME=/build
+NODE_ENV=production  # Node.js only
+```
+
+### Defense-in-Depth
+
+The satellite re-validates scripts before execution, even though the backend already validated them:
+
+```typescript
+// Defense-in-depth: Re-validate scripts before execution
+const validation = validateBuildScripts(packageJson.scripts);
+if (!validation.valid) {
+  throw new Error(`Security: ${validation.error}`);
+}
+```
+
+See [MCP Server Security](/development/satellite/mcp-server-security#sandboxed-build-commands-github-deployments) for details on sandbox configuration.
+
+## Error Handling
+
+### Download Failures
+
+If repository download fails:
+- Installation status set to `failed`
+- Error logged with repository details
+- Temp directory cleaned up if created
+
+### Build Failures
+
+If install or build commands fail:
+- Installation status set to `failed`
+- Build output captured in logs
+- Temp directory preserved for debugging
+
+### Missing Entry Point
+
+If no valid entry point is found:
+- Error thrown with attempted resolution paths
+- Installation fails with descriptive error message
+
+## Monitoring
+
+### Log Events
+
+| Event | Description |
+|-------|-------------|
+| `github_deployment_started` | Download initiated |
+| `github_deployment_extracted` | Tarball extracted to temp dir |
+| `github_deployment_installed` | Dependencies installed |
+| `github_deployment_built` | Build script completed |
+| `github_deployment_ready` | Process ready to spawn |
+| `github_deployment_failed` | Any step failed |
+
+### Debugging
+
+Turn on detailed logging for GitHub deployments:
+
+```bash
+LOG_LEVEL=debug npm run dev
+```
+
+Logs include:
+- Repository owner/name/commit
+- Temp directory path
+- Resolved entry point
+- Build command output
+
+## Related Documentation
+
+- [GitHub Deployment Redeploy](/development/satellite/github-deployment-redeploy) - Redeploying with fresh code for all users
+- [Process Management](/development/satellite/process-management) - Process lifecycle and termination
+- [Idle Process Management](/development/satellite/idle-process-management) - Dormant state handling
+- [Instance Lifecycle](/development/satellite/instance-lifecycle) - Per-user instance management
+- [MCP Server Security](/development/satellite/mcp-server-security) - Build sandboxing and nsjail configuration
+- [Backend MCP Server Security](/development/backend/mcp-server-security) - First-line build script validation

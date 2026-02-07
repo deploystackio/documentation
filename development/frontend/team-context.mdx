@@ -1,0 +1,469 @@
+---
+title: Team Context Management
+description: Complete guide to using the useTeamContext composable for team-based access control and state management in the DeployStack frontend.
+sidebarTitle: Team Context
+---
+
+The DeployStack frontend provides a centralized team context management system through the `useTeamContext` composable. This system eliminates duplicate code across pages and provides consistent team switching, role checking, and permission management.
+
+> **📖 For event bus fundamentals, see [Global Event Bus](/development/frontend/event-bus)**
+
+## Overview
+
+The team context composable solves common team management challenges:
+- **Eliminates Code Duplication**: Single source of truth for team state across all pages
+- **Automatic Team Switching**: Responds to sidebar team selection events automatically
+- **Role-Based Access Control**: Built-in computed properties for permissions (admin, owner)
+- **Type Safety**: Full TypeScript support with proper Team types
+- **Persistent State**: Integrates with event bus storage for cross-session persistence
+- **Reactive Updates**: All properties are reactive and update automatically
+
+## When to Use
+
+Use `useTeamContext` in any page or component that needs:
+- Access to the currently selected team
+- Team switching functionality via sidebar
+- Role-based permissions (admin, owner checks)
+- Team ID for API calls
+- Team-scoped data filtering
+
+**Pages currently using this composable:**
+- Dashboard (`/views/dashboard/index.vue`)
+- MCP Server List (`/views/mcp-server/index.vue`)
+- Deployments List (`/views/deploy/index.vue`)
+- Deployment Wizard (`/views/deploy/create.vue`)
+
+## Architecture
+
+### Composable Location
+
+```
+services/frontend/src/composables/useTeamContext.ts
+```
+
+> **💡 Tip**: Read the source file for implementation details and inline documentation.
+
+### Integration Points
+
+The composable integrates with several systems:
+1. **Event Bus**: Listens for `team-selected` events from sidebar
+2. **Storage**: Persists `selected_team_id` across sessions
+3. **Team Service**: Fetches team data with roles via API
+4. **Vue Lifecycle**: Automatic cleanup of event listeners
+
+## API Reference
+
+### Return Properties
+
+```typescript
+interface UseTeamContextReturn {
+  // Core team data
+  selectedTeam: Ref<Team | null>        // Full team object with all properties
+  teamId: ComputedRef<string | null>    // Shorthand for selectedTeam.value?.id
+
+  // Role and permissions
+  teamRole: ComputedRef<'team_admin' | 'team_user' | null>
+  isOwner: ComputedRef<boolean>         // True if user is team owner
+  isAdmin: ComputedRef<boolean>         // True if user has team_admin role
+  isDefaultTeam: ComputedRef<boolean>   // True if this is user's default team
+
+  // State management
+  hasTeam: ComputedRef<boolean>         // True if team is selected
+  isLoading: Ref<boolean>               // Loading state during operations
+  error: Ref<string | null>             // Error message if operations fail
+  hasAccess: Ref<boolean>               // True if resource check passed (optional)
+}
+```
+
+### Options
+
+```typescript
+interface UseTeamContextOptions {
+  resourceCheck?: (teamId: string) => Promise<boolean>
+}
+```
+
+The optional `resourceCheck` callback enables resource-specific access control (see Advanced Usage).
+
+## Usage
+
+### Basic Usage
+
+Most pages only need basic team context:
+
+```typescript
+<script setup lang="ts">
+import { useTeamContext } from '@/composables/useTeamContext'
+
+const { selectedTeam, teamId, hasTeam, isAdmin } = useTeamContext()
+
+// Use teamId for API calls
+async function fetchData() {
+  if (!teamId.value) return
+  const data = await api.getData(teamId.value)
+}
+
+// Show admin-only features
+function handleAdminAction() {
+  if (!isAdmin.value) {
+    toast.error('Admin permission required')
+    return
+  }
+  // Perform admin action
+}
+</script>
+
+<template>
+  <div v-if="hasTeam">
+    <h1>{{ selectedTeam.name }}</h1>
+    <Button v-if="isAdmin" @click="handleAdminAction">
+      Admin Settings
+    </Button>
+  </div>
+</template>
+```
+
+### Permission Checks
+
+Use computed properties for role-based access control:
+
+```typescript
+const { isOwner, isAdmin, teamRole } = useTeamContext()
+
+// Check if user can delete team (owner only)
+<Button v-if="isOwner" @click="handleDeleteTeam" variant="destructive">
+  Delete Team
+</Button>
+
+// Check if user can manage members (admin only)
+<Button v-if="isAdmin" @click="handleManageMembers">
+  Manage Members
+</Button>
+
+// Show role badge
+<Badge>{{ teamRole === 'team_admin' ? 'Admin' : 'User' }}</Badge>
+```
+
+### Team Switching
+
+The composable automatically handles team switching from the sidebar. You just need to react to changes:
+
+```typescript
+import { watch } from 'vue'
+
+const { selectedTeam } = useTeamContext()
+
+// Reconnect streams when team changes
+watch(selectedTeam, (newTeam) => {
+  if (newTeam) {
+    const url = buildStreamUrl(newTeam.id)
+    connectToStream(url)
+  }
+})
+```
+
+### Loading States
+
+Handle loading and error states gracefully:
+
+```typescript
+const { isLoading, error, hasTeam } = useTeamContext()
+```
+
+```vue
+<template>
+  <!-- Loading state -->
+  <div v-if="isLoading">
+    Loading team...
+  </div>
+
+  <!-- Error state -->
+  <div v-else-if="error" class="text-red-500">
+    {{ error }}
+  </div>
+
+  <!-- No team selected -->
+  <div v-else-if="!hasTeam">
+    Please select a team from the sidebar
+  </div>
+
+  <!-- Main content -->
+  <div v-else>
+    <!-- Your content here -->
+  </div>
+</template>
+```
+
+## Advanced Usage
+
+### Resource Access Control
+
+For pages that display team-scoped resources (like installation detail pages), use the `resourceCheck` option:
+
+```typescript
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
+const installationId = route.params.id as string
+
+const { selectedTeam, hasAccess, isLoading } = useTeamContext({
+  resourceCheck: async (teamId: string) => {
+    // Verify installation belongs to this team
+    const installation = await McpInstallationService.getInstallationById(
+      teamId,
+      installationId
+    )
+    return installation !== null
+  }
+})
+```
+
+```vue
+<template>
+  <div v-if="isLoading">
+    Verifying access...
+  </div>
+  <div v-else-if="!hasAccess">
+    <Empty>
+      <EmptyTitle>Access Denied</EmptyTitle>
+      <EmptyDescription>
+        You don't have permission to access this resource.
+      </EmptyDescription>
+    </Empty>
+  </div>
+  <div v-else>
+    <!-- Show installation details -->
+  </div>
+</template>
+```
+
+### Accessing Full Team Object
+
+When you need more than just the ID:
+
+```typescript
+const { selectedTeam } = useTeamContext()
+
+// Access all team properties
+const teamName = selectedTeam.value?.name
+const teamSlug = selectedTeam.value?.slug
+const createdAt = selectedTeam.value?.created_at
+const memberCount = selectedTeam.value?.member_count
+```
+
+## Migration Guide
+
+### Before: Manual Team Management
+
+```typescript
+// Old pattern - manual team management (~70 lines)
+const selectedTeam = ref<Team | null>(null)
+
+const initializeSelectedTeam = async () => {
+  try {
+    const userTeams = await TeamService.getUserTeams()
+    if (userTeams.length > 0) {
+      const storedTeamId = eventBus.getState<string>('selected_team_id')
+      if (storedTeamId) {
+        const storedTeam = userTeams.find(team => team.id === storedTeamId)
+        if (storedTeam) {
+          selectedTeam.value = storedTeam
+        } else {
+          const defaultTeam = userTeams.find(team => team.is_default) || userTeams[0]
+          if (defaultTeam) {
+            selectedTeam.value = defaultTeam
+            eventBus.setState('selected_team_id', defaultTeam.id)
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error initializing selected team:', error)
+  }
+}
+
+const handleTeamSelected = async (data: { teamId: string; teamName: string }) => {
+  // More code for team switching...
+}
+
+onMounted(async () => {
+  await initializeSelectedTeam()
+  eventBus.on('team-selected', handleTeamSelected)
+})
+
+onUnmounted(() => {
+  eventBus.off('team-selected', handleTeamSelected)
+})
+```
+
+### After: Using Composable
+
+```typescript
+// New pattern - single line
+const { selectedTeam, teamId, hasTeam, isAdmin } = useTeamContext()
+
+// That's it! Team management is handled automatically
+```
+
+**Benefits:**
+- ~70 lines of duplicate code eliminated per page
+- Automatic event handling and cleanup
+- Consistent behavior across all pages
+- Built-in loading and error states
+- Type-safe access to team properties
+
+## Best Practices
+
+### 1. Destructure Only What You Need
+
+```typescript
+// Good - only import what you use
+const { teamId, isAdmin } = useTeamContext()
+
+// Avoid - importing everything when not needed
+const allTeamContext = useTeamContext()
+```
+
+### 2. Use Computed Properties for Permissions
+
+```typescript
+// Good - use provided computed properties
+const { isAdmin, isOwner } = useTeamContext()
+
+// Avoid - manual permission checks
+const isAdmin = selectedTeam.value?.role === 'team_admin'
+```
+
+### 3. Check for Team Before API Calls
+
+```typescript
+// Good - always check teamId exists
+if (!teamId.value) {
+  toast.error('No team selected')
+  return
+}
+await api.call(teamId.value)
+
+// Avoid - assuming team is always present
+await api.call(teamId.value!) // Don't use non-null assertion
+```
+
+### 4. Watch for Team Changes
+
+```typescript
+// Good - reconnect streams when team changes
+watch(selectedTeam, (newTeam) => {
+  if (newTeam) {
+    reconnectStream(newTeam.id)
+  }
+})
+
+// Avoid - manual event listeners for team switching
+// (composable already handles this)
+```
+
+## Common Patterns
+
+### Dashboard/List Pages
+
+Pages that show team-scoped lists:
+
+```typescript
+const { selectedTeam, teamId, hasTeam } = useTeamContext()
+
+// Watch for team changes to reload data
+watch(selectedTeam, (newTeam) => {
+  if (newTeam) {
+    const url = buildStreamUrl(newTeam.id)
+    connectToStream(url)
+  }
+})
+```
+
+### Resource Detail Pages
+
+Pages that show specific resources:
+
+```typescript
+const { teamId, hasAccess, isLoading } = useTeamContext({
+  resourceCheck: async (teamId) => {
+    const resource = await service.getResource(teamId, resourceId)
+    return resource !== null
+  }
+})
+```
+
+### Forms/Wizards
+
+Pages that create team-scoped resources:
+
+```typescript
+const { teamId, hasTeam, isAdmin } = useTeamContext()
+
+async function handleSubmit() {
+  if (!teamId.value) {
+    toast.error('Please select a team first')
+    router.push('/dashboard')
+    return
+  }
+
+  await service.create(teamId.value, formData)
+}
+```
+
+## Troubleshooting
+
+### Team Not Loading
+
+If `selectedTeam` remains `null`:
+
+1. Check browser console for API errors
+2. Verify user has at least one team: `GET /api/users/me/teams`
+3. Check localStorage for `deploystack_selected_team_id`
+4. Ensure event bus is properly initialized in `main.ts`
+
+### Team Switching Not Working
+
+If sidebar team selection doesn't update the composable:
+
+1. Verify sidebar emits `team-selected` event
+2. Check event bus event listener registration
+3. Confirm `team-selected` event includes correct payload: `{ teamId, teamName }`
+4. Check browser console for errors in `handleTeamSelected` function
+
+### Permission Checks Failing
+
+If `isAdmin` or `isOwner` are incorrect:
+
+1. Verify API returns team with `role` and `is_owner` fields
+2. Check `GET /api/users/me/teams` response structure
+3. Ensure Team type includes role properties
+4. Verify TeamService correctly maps API response
+
+## Related Documentation
+
+- [Global Event Bus](/development/frontend/event-bus) - Event system integration
+- [Storage System](/development/frontend/storage) - Persistent state management
+- [Team Service](/development/frontend/api-services) - API client for teams
+- [Team Management](/general/teams) - Team concepts and features
+
+## Source Code
+
+**Composable Location:**
+```
+services/frontend/src/composables/useTeamContext.ts
+```
+
+**Read the source code for:**
+- Implementation details
+- Type definitions
+- Inline documentation
+- Edge case handling
+
+**Usage Examples:**
+```
+services/frontend/src/views/dashboard/index.vue
+services/frontend/src/views/mcp-server/index.vue
+services/frontend/src/views/deploy/index.vue
+services/frontend/src/views/deploy/create.vue
+```

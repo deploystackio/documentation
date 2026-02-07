@@ -184,7 +184,7 @@ Each satellite instance will contain five core components:
 │  │    Manager      │    │ Communicator    │                   │
 │  │                 │    │                 │                   │
 │  │ • Namespaces    │    │ • HTTP Polling  │                   │
-│  │ • cgroups       │    │ • Config Sync   │                   │
+│  │ • rlimits       │    │ • Config Sync   │                   │
 │  │ • Isolation     │    │ • Status Report │                   │
 │  └─────────────────┘    └─────────────────┘                   │
 │                                                                 │
@@ -350,7 +350,7 @@ See [Log Capture](/development/satellite/log-capture) for buffering implementati
 
 **Resource Management (stdio processes):**
 - **nsjail Isolation**: PID, network, filesystem isolation in production
-- **Resource Quotas**: 100MB RAM, 60s CPU time per process
+- **Resource Quotas**: 512MB physical RAM (cgroup), 2048MB virtual (rlimit), 60s CPU time, 1000 processes
 - **Development Mode**: Direct spawn() without isolation for cross-platform development
 
 **Authentication & Authorization:**
@@ -366,14 +366,24 @@ See [Team Isolation](/development/satellite/team-isolation) for complete impleme
 
 **stdio Subprocess Servers:**
 - **Per-User Instances**: Each team member has their own process for each MCP server
-- **Local Execution**: MCP servers as Node.js child processes
+- **Multi-Runtime Support**: Node.js (npx) and Python (uvx) runtimes with runtime-aware isolation
+  - **Python Enhancements**: Auto-detects simple scripts vs installable packages, smart Python version selection avoids bleeding-edge versions, direct dependency installation for standalone scripts
+- **Local Execution**: MCP servers as child processes with stdio communication
 - **JSON-RPC Communication**: Full MCP protocol 2025-11-05 over stdin/stdout
 - **Process Lifecycle**: Per-user spawn, monitor, auto-restart (max 3 attempts), terminate
 - **Instance Isolation**: Processes tracked by `team_id` AND `user_id` with independent lifecycles
 - **ProcessId Format**: `{server_slug}-{team_slug}-{user_slug}-{installation_id}`
 - **Tool Discovery**: Automatic tool caching with per-user namespacing
-- **Resource Limits**: nsjail in production (100MB RAM, 60s CPU, 50 processes per user)
+- **Resource Limits**: nsjail in production with cgroup enforcement
+  - 512MB physical memory (cgroup_mem_max) - Precise control over actual memory usage
+  - 2048MB virtual memory (rlimit_as) - Fallback for systems without cgroup support
+  - 1000 processes (cgroup_pids_max) - Adequate for package managers
+  - 60s CPU time limit
+  - Runtime-specific cache directories: `/mcp-cache/node/{team_id}`, `/mcp-cache/python/{team_id}`
 - **Development Mode**: Plain spawn() on all platforms for easy debugging
+- **Runtime Examples**:
+  - Node.js: Sequential Thinking (`npx @modelcontextprotocol/server-sequential-thinking`)
+  - Python: DuckDuckGo (`uvx duckduckgo-mcp-server`)
 
 **HTTP Proxy Servers:**
 - **External Endpoints**: Proxy to remote MCP servers
@@ -408,11 +418,14 @@ Configuration → Spawn → Monitor → Health Check → Restart/Terminate
 - **Logging**: Pino structured logging with operation tracking
 - **Error Handling**: Complete HTTP status code mapping
 
-### Planned Resource Jailing Specifications
-- **CPU Limit**: 0.1 cores per MCP server process
-- **Memory Limit**: 100MB RAM per MCP server process
-- **Process Timeout**: 5-minute idle timeout for automatic cleanup
-- **Isolation Method**: Linux namespaces + cgroups v2
+### Current Resource Isolation Specifications
+- **Physical Memory Limit**: 512MB RAM per MCP server process via cgroup (precise enforcement)
+- **Virtual Memory Limit**: 2048MB RAM via rlimit (fallback for non-cgroup systems)
+- **CPU Limit**: 60s CPU time limit
+- **Process Limit**: 1000 processes per MCP server (accommodates package managers like npm, uvx)
+- **Process Timeout**: 3-minute idle timeout for automatic cleanup
+- **Isolation Method**: nsjail with Linux namespaces (PID, mount, UTS, IPC) and cgroup enforcement
+- **Runtime-Aware Caching**: Separate cache directories per runtime (`/mcp-cache/node/{team_id}`, `/mcp-cache/python/{team_id}`)
 
 ### Technology Stack
 - **HTTP Framework**: Fastify with @fastify/http-proxy (implemented)
@@ -473,10 +486,19 @@ The satellite service has completed MCP Transport Implementation and Backend Int
 **Backend Integration:**
 - **Command Polling Service**: Adaptive polling with three modes (normal/immediate/error)
 - **Dynamic Configuration Management**: Replaces hardcoded MCP server configurations
+- **Dynamic Command Resolution**: Resolves tool paths at startup (`node`, `npm`, `python3`, `uvx`, etc.) from system PATH
 - **Command Processing**: HTTP MCP server management (spawn/kill/restart/health_check)
 - **Heartbeat Service**: Process status reporting and system metrics
 - **Configuration Sync**: Real-time MCP server configuration updates
 - **Event System**: Real-time event emission with automatic batching (13 event types including tool metadata)
+
+**Runtime Validation:**
+- **System Runtime Check**: Validates required tools exist at startup (`validateSystemRuntimes`)
+- **Command Path Resolution**: Finds absolute paths using `which` with search priority for user-local installations (`~/.local/bin`, `/usr/local/bin`, `/usr/bin`)
+- **Path Validation**: Security checks on resolved paths (allowed directories only, executable permissions verified)
+- **Memory Caching**: Stores validated paths in `DEPLOYSTACK_COMMAND_CACHE` for runtime use
+
+This allows the satellite to work across different installation methods (system packages, Homebrew, pip --user, custom installs).
 
 **Foundation Infrastructure:**
 - **HTTP Server**: Fastify with Swagger documentation

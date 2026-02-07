@@ -1,0 +1,528 @@
+---
+title: Team MCP Server Limits
+description: Technical guide to understanding and implementing team-level MCP server installation limits in DeployStack Backend.
+---
+
+This guide explains how DeployStack enforces team-level limits on MCP server installations. Understanding these limits is essential for new developers working on the backend, implementing features, or troubleshooting limit-related issues.
+
+## Overview
+
+DeployStack implements three distinct limits to control MCP server installations at the team level:
+
+1. **`mcp_server_limit`** - Total MCP server installations
+2. **`non_http_mcp_limit`** - Catalog STDIO servers only
+3. **`github_mcp_limit`** - GitHub-deployed servers only
+
+These limits work together to provide granular control over team resource usage while maintaining clear separation between curated catalog servers and self-deployed GitHub servers.
+
+## Limit Types Summary
+
+| Limit Field | Purpose | What It Counts | Default | Database Location |
+|------------|---------|----------------|---------|------------------|
+| `mcp_server_limit` | Total installations | All MCP server installations | 5 | `teams.mcp_server_limit` |
+| `non_http_mcp_limit` | Catalog STDIO servers | STDIO servers from catalog only | 1 | `teams.non_http_mcp_limit` |
+| `github_mcp_limit` | GitHub deployments | Self-deployed GitHub servers | 1 | `teams.github_mcp_limit` |
+
+## 1. Total Installations Limit (`mcp_server_limit`)
+
+### Definition
+
+The maximum total number of MCP server installations a team can have, regardless of source or transport type.
+
+### Key Details
+
+- **Default Value**: 5
+- **Database Field**: `teams.mcp_server_limit` (integer)
+- **What It Counts**: ALL installations in `mcpServerInstallations` table for the team
+- **Includes**: Catalog STDIO, catalog HTTP/SSE, and GitHub-deployed servers
+
+### How to Calculate
+
+Count all rows in the `mcpServerInstallations` table where `team_id` matches:
+
+```typescript
+const totalInstallations = await db
+  .select()
+  .from(mcpServerInstallations)
+  .where(eq(mcpServerInstallations.team_id, teamId));
+
+const totalCount = totalInstallations.length;
+
+if (totalCount >= team.mcp_server_limit) {
+  throw new Error(`Team has reached the maximum limit of ${team.mcp_server_limit} MCP server installations`);
+}
+```
+
+### Where Enforced
+
+- **GitHub Deployment**: `services/backend/src/routes/teams/deploy/deploy.ts:256-272`
+- **Installation Creation**: `services/backend/src/services/mcpInstallationService.ts`
+
+### Example Scenario
+
+```
+Team Limit: mcp_server_limit = 5
+
+Current Installations:
+- 2 catalog STDIO servers (sequential-thinking, filesystem)
+- 1 catalog HTTP server (context7)
+- 2 GitHub-deployed servers (custom-mcp-1, custom-mcp-2)
+
+Total: 5 installations ✅ (at limit)
+```
+
+## 2. Catalog STDIO Servers Limit (`non_http_mcp_limit`)
+
+### Definition
+
+The maximum number of STDIO servers from the curated catalog that a team can install.
+
+### Key Details
+
+- **Default Value**: 1
+- **Database Field**: `teams.non_http_mcp_limit` (integer)
+- **What It Counts**: STDIO servers where `source IN ('official_registry', 'manual')`
+- **Purpose**: Limit resource-intensive STDIO processes from the global catalog
+- **Excludes**: HTTP/SSE servers, GitHub-deployed servers
+
+### How to Calculate
+
+1. Get all installations for the team
+2. Join to `mcpServers` table
+3. Filter by `transport_type = 'stdio'`
+4. Filter by `source IN ('official_registry', 'manual')`
+5. Count the results
+
+```typescript
+const currentInstallations = await db
+  .select({
+    installation: mcpServerInstallations,
+    server: mcpServers
+  })
+  .from(mcpServerInstallations)
+  .leftJoin(mcpServers, eq(mcpServerInstallations.server_id, mcpServers.id))
+  .where(eq(mcpServerInstallations.team_id, teamId));
+
+// Count only stdio servers from catalog
+const nonHttpCount = currentInstallations.filter(
+  (row) => row.server?.transport_type === 'stdio' &&
+           (row.server?.source === 'official_registry' || row.server?.source === 'manual')
+).length;
+
+if (nonHttpCount >= team.non_http_mcp_limit) {
+  throw new Error(`Team has reached the maximum limit of ${team.non_http_mcp_limit} non-HTTP (stdio) MCP servers`);
+}
+```
+
+### Where Enforced
+
+- **Installation Creation**: `services/backend/src/services/mcpInstallationService.ts:551-607`
+- **Not Checked In**: GitHub deployment route (GitHub servers have their own limit)
+
+### Example Scenario
+
+```
+Team Limit: non_http_mcp_limit = 1
+
+Current Catalog Installations:
+- 1 STDIO server (sequential-thinking) ✅ (at limit)
+- 2 HTTP servers (context7, brightdata) ✅ (not counted)
+
+GitHub Installations:
+- 2 STDIO servers (custom-mcp-1, custom-mcp-2) ✅ (not counted - separate limit)
+
+Result: 1 catalog STDIO server ✅ (at limit)
+```
+
+## 3. GitHub Deployments Limit (`github_mcp_limit`)
+
+### Definition
+
+The maximum number of self-deployed GitHub MCP servers a team can have.
+
+### Key Details
+
+- **Default Value**: 1
+- **Database Field**: `teams.github_mcp_limit` (integer)
+- **What It Counts**: Servers where `source = 'github'`
+- **Purpose**: Limit self-serve deployments
+- **Transport Type**: Always STDIO (HTTP/SSE deployments not supported)
+- **Excludes**: Catalog servers (manual and official_registry)
+
+### How to Calculate
+
+1. Get all installations for the team
+2. Join to `mcpServers` table
+3. Filter by `source = 'github'`
+4. Count the results
+
+```typescript
+const githubInstallations = await db
+  .select()
+  .from(mcpServerInstallations)
+  .leftJoin(mcpServers, eq(mcpServerInstallations.server_id, mcpServers.id))
+  .where(
+    and(
+      eq(mcpServerInstallations.team_id, teamId),
+      eq(mcpServers.source, 'github')
+    )
+  );
+
+const githubCount = githubInstallations.length;
+
+if (githubCount >= team.github_mcp_limit) {
+  throw new Error(`Team has reached the maximum limit of ${team.github_mcp_limit} GitHub MCP server deployments`);
+}
+```
+
+### Where Enforced
+
+- **GitHub Deployment**: `services/backend/src/routes/teams/deploy/deploy.ts:289-297`
+- **Not Checked In**: Installation creation route (can't install GitHub servers from catalog)
+
+### Example Scenario
+
+```
+Team Limit: github_mcp_limit = 1
+
+Current GitHub Deployments:
+- 1 GitHub server (custom-mcp-server) ✅ (at limit)
+
+Catalog Installations:
+- 3 catalog servers (any type) ✅ (not counted - separate limit)
+
+Result: 1 GitHub deployment ✅ (at limit)
+```
+
+## Why Limits Don't Overlap
+
+The three limits are independent because the `source` field creates mutually exclusive categories:
+
+### Source Field Values
+
+| Source Value | Created By | Counted Against |
+|-------------|-----------|-----------------|
+| `official_registry` | Automatic sync from registry.modelcontextprotocol.io | `non_http_mcp_limit` (if STDIO) |
+| `manual` | Global admin via `/api/mcp/servers/global` | `non_http_mcp_limit` (if STDIO) |
+| `github` | Team admin via `/api/teams/{teamId}/deploy` | `github_mcp_limit` |
+
+### Key Principle
+
+- **Catalog servers** (`non_http_mcp_limit`) have `source IN ('official_registry', 'manual')`
+- **GitHub servers** (`github_mcp_limit`) have `source = 'github'`
+- **These are mutually exclusive** - a server cannot have multiple source values
+
+## Limit Validation Logic
+
+When updating team limits, DeployStack enforces a cross-field validation to ensure logical consistency:
+
+### Validation Rule
+
+```typescript
+// File: services/backend/src/routes/admin/teams/update.ts:187
+
+const minimumRequired = finalNonHttpLimit + finalGithubLimit;
+
+if (finalMcpServerLimit < minimumRequired) {
+  throw new Error(
+    `mcp_server_limit (${finalMcpServerLimit}) must be at least ${minimumRequired} ` +
+    `(non_http_mcp_limit: ${finalNonHttpLimit} + github_mcp_limit: ${finalGithubLimit})`
+  );
+}
+```
+
+### Why This Makes Sense
+
+1. A team could install `non_http_mcp_limit` catalog STDIO servers
+2. A team could deploy `github_mcp_limit` GitHub servers
+3. These don't overlap (different `source` values)
+4. Total installations = `non_http_mcp_limit + github_mcp_limit`
+5. Therefore: `mcp_server_limit >= non_http_mcp_limit + github_mcp_limit`
+
+### Example
+
+```
+Configuration:
+- non_http_mcp_limit = 2
+- github_mcp_limit = 3
+- mcp_server_limit = 5 ✅ (valid: 5 >= 2 + 3)
+
+Maximum possible installations:
+- 2 catalog STDIO servers
+- 3 GitHub servers
+- Total: 5 installations
+
+If mcp_server_limit = 4 ❌ (invalid: 4 < 2 + 3)
+```
+
+## Complete Server Type Matrix
+
+| Server Type | visibility | owner_team_id | source | transport_type | Counts Against |
+|------------|-----------|--------------|---------|----------------|----------------|
+| **Catalog - STDIO** | `global` | `null` | `official_registry` / `manual` | `stdio` | `mcp_server_limit` + `non_http_mcp_limit` |
+| **Catalog - HTTP** | `global` | `null` | `official_registry` / `manual` | `http` | `mcp_server_limit` only |
+| **Catalog - SSE** | `global` | `null` | `official_registry` / `manual` | `sse` | `mcp_server_limit` only |
+| **GitHub Deploy** | `team` | `<team_id>` | `github` | `stdio` (always) | `mcp_server_limit` + `github_mcp_limit` |
+
+## Database Schema Reference
+
+### Teams Table
+
+**File**: `services/backend/src/db/schema-tables/teams.ts`
+
+```typescript
+export const teams = pgTable('teams', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  // ... other fields
+
+  // Limit fields
+  non_http_mcp_limit: integer('non_http_mcp_limit').notNull().default(1),
+  mcp_server_limit: integer('mcp_server_limit').notNull().default(5),
+  github_mcp_limit: integer('github_mcp_limit').notNull().default(1),
+
+  // ... other fields
+});
+```
+
+### MCP Server Installations Table
+
+**File**: `services/backend/src/db/schema-tables/mcp-installations.ts`
+
+```typescript
+export const mcpServerInstallations = pgTable('mcpServerInstallations', {
+  id: text('id').primaryKey(),
+  team_id: text('team_id').notNull().references(() => teams.id),
+  server_id: text('server_id').notNull().references(() => mcpServers.id),
+  // ... other fields
+});
+```
+
+### MCP Servers Table
+
+**File**: `services/backend/src/db/schema-tables/mcp-catalog.ts`
+
+```typescript
+export const mcpServers = pgTable('mcpServers', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+
+  // Key fields for limits
+  source: text('source', { enum: ['official_registry', 'manual', 'github'] }).notNull(),
+  transport_type: text('transport_type', { enum: ['stdio', 'http', 'sse'] }).notNull(),
+  visibility: text('visibility').notNull().default('team'),
+  owner_team_id: text('owner_team_id').references(() => teams.id),
+
+  // ... other fields
+});
+```
+
+## For New Developers
+
+### Common Questions
+
+**Q: How do I calculate the total number of MCP servers for a team?**
+
+A: Query the `mcpServerInstallations` table and count rows where `team_id` matches:
+
+```typescript
+const totalInstallations = await db
+  .select()
+  .from(mcpServerInstallations)
+  .where(eq(mcpServerInstallations.team_id, teamId));
+
+const totalCount = totalInstallations.length;
+```
+
+---
+
+**Q: How do I differentiate between catalog and GitHub servers?**
+
+A: Check the `source` field in the `mcpServers` table:
+- `'official_registry'` or `'manual'` = Catalog server (curated by global admin)
+- `'github'` = GitHub deployment (self-deployed by team)
+
+```typescript
+// Get server source
+const [server] = await db
+  .select({ source: mcpServers.source })
+  .from(mcpServers)
+  .where(eq(mcpServers.id, serverId));
+
+if (server.source === 'github') {
+  console.log('GitHub-deployed server');
+} else {
+  console.log('Catalog server');
+}
+```
+
+---
+
+**Q: How do I count STDIO servers for a team?**
+
+A: Join `mcpServerInstallations` to `mcpServers` and count where `transport_type = 'stdio'`:
+
+```typescript
+const stdioInstallations = await db
+  .select()
+  .from(mcpServerInstallations)
+  .leftJoin(mcpServers, eq(mcpServerInstallations.server_id, mcpServers.id))
+  .where(
+    and(
+      eq(mcpServerInstallations.team_id, teamId),
+      eq(mcpServers.transport_type, 'stdio')
+    )
+  );
+
+const stdioCount = stdioInstallations.length;
+```
+
+---
+
+**Q: Where are the limits enforced in the codebase?**
+
+A:
+- **Total installations**: `services/backend/src/routes/teams/deploy/deploy.ts:256-272`
+- **Catalog STDIO**: `services/backend/src/services/mcpInstallationService.ts:551-607`
+- **GitHub deployments**: `services/backend/src/routes/teams/deploy/deploy.ts:289-297`
+
+---
+
+**Q: Can GitHub deployments use HTTP or SSE transport?**
+
+A: No. GitHub deployments always use `transport_type = 'stdio'`. HTTP and SSE transports are only supported for catalog servers with remote endpoints.
+
+---
+
+**Q: What happens when a team reaches a limit?**
+
+A: The backend throws an error with a descriptive message:
+
+```typescript
+throw new Error(
+  `Team has reached the maximum limit of ${limit} MCP server installations. ` +
+  `Current installations: ${currentCount}. ` +
+  `Please remove existing installations or contact your administrator to increase the limit.`
+);
+```
+
+The frontend displays this error to the user, preventing the action from completing.
+
+## Code Examples
+
+### Calculate Total Installations
+
+```typescript
+async function getTotalInstallations(teamId: string): Promise<number> {
+  const installations = await db
+    .select()
+    .from(mcpServerInstallations)
+    .where(eq(mcpServerInstallations.team_id, teamId));
+
+  return installations.length;
+}
+```
+
+### Calculate Catalog STDIO Servers
+
+```typescript
+async function getCatalogStdioCount(teamId: string): Promise<number> {
+  const installations = await db
+    .select()
+    .from(mcpServerInstallations)
+    .leftJoin(mcpServers, eq(mcpServerInstallations.server_id, mcpServers.id))
+    .where(
+      and(
+        eq(mcpServerInstallations.team_id, teamId),
+        eq(mcpServers.transport_type, 'stdio'),
+        or(
+          eq(mcpServers.source, 'official_registry'),
+          eq(mcpServers.source, 'manual')
+        )
+      )
+    );
+
+  return installations.length;
+}
+```
+
+### Calculate GitHub Deployments
+
+```typescript
+async function getGithubDeploymentCount(teamId: string): Promise<number> {
+  const installations = await db
+    .select()
+    .from(mcpServerInstallations)
+    .leftJoin(mcpServers, eq(mcpServerInstallations.server_id, mcpServers.id))
+    .where(
+      and(
+        eq(mcpServerInstallations.team_id, teamId),
+        eq(mcpServers.source, 'github')
+      )
+    );
+
+  return installations.length;
+}
+```
+
+### Check All Limits Before Installation
+
+```typescript
+async function checkTeamLimits(teamId: string, serverId: string): Promise<void> {
+  // Get team limits
+  const [team] = await db
+    .select({
+      mcp_server_limit: teams.mcp_server_limit,
+      non_http_mcp_limit: teams.non_http_mcp_limit,
+      github_mcp_limit: teams.github_mcp_limit
+    })
+    .from(teams)
+    .where(eq(teams.id, teamId));
+
+  // Get server details
+  const [server] = await db
+    .select({
+      source: mcpServers.source,
+      transport_type: mcpServers.transport_type
+    })
+    .from(mcpServers)
+    .where(eq(mcpServers.id, serverId));
+
+  // Check total installations limit
+  const totalCount = await getTotalInstallations(teamId);
+  if (totalCount >= team.mcp_server_limit) {
+    throw new Error(`Team has reached the maximum limit of ${team.mcp_server_limit} MCP server installations`);
+  }
+
+  // Check catalog STDIO limit (if applicable)
+  if (
+    server.transport_type === 'stdio' &&
+    (server.source === 'official_registry' || server.source === 'manual')
+  ) {
+    const stdioCount = await getCatalogStdioCount(teamId);
+    if (stdioCount >= team.non_http_mcp_limit) {
+      throw new Error(`Team has reached the maximum limit of ${team.non_http_mcp_limit} non-HTTP (stdio) MCP servers`);
+    }
+  }
+
+  // Check GitHub deployment limit (if applicable)
+  if (server.source === 'github') {
+    const githubCount = await getGithubDeploymentCount(teamId);
+    if (githubCount >= team.github_mcp_limit) {
+      throw new Error(`Team has reached the maximum limit of ${team.github_mcp_limit} GitHub MCP server deployments`);
+    }
+  }
+}
+```
+
+## Related Documentation
+
+- [Teams](/general/teams) - Team management and structure
+- [MCP Catalog](/general/mcp-catalog) - MCP server catalog system
+- [Roles and Permissions](/development/backend/roles) - Role-based access control
+- [Database Management](/development/backend/database) - Database schema and operations
+- GitHub Deployment Guide (coming soon) - Deploying MCP servers from GitHub
+
+---
+
+This guide provides the technical foundation for understanding and working with team MCP server limits in DeployStack. For questions or clarifications, refer to the source code files mentioned throughout this document or reach out to the team via Discord.

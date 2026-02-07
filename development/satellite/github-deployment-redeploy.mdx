@@ -1,0 +1,507 @@
+---
+title: GitHub Deployment Redeploy
+description: How DeployStack handles redeploying GitHub-based MCP servers with fresh code for all user instances.
+sidebarTitle: MCP Server Redeploy 
+---
+
+When users click "Redeploy" on a GitHub-deployed MCP server, DeployStack forces a fresh download from GitHub to ensure new code changes (new tools, bug fixes, updates) are applied across all team members.
+
+## Why Redeploy Exists
+
+**The Problem:**
+
+Normal process restart/respawn preserves the deployment directory for performance. When you push new code to GitHub:
+- New tools are added
+- Bugs are fixed
+- Features are updated
+
+But a normal restart would use the **OLD cached code** from the preserved deployment directory.
+
+**The Solution:**
+
+Redeploy explicitly deletes the deployment directory and forces a fresh download from GitHub, ensuring all team members get the latest code.
+
+## Architecture Context
+
+### Per-User Instance Model
+
+DeployStack follows a **per-user instance architecture**:
+
+```
+1 Installation × N Team Members = N Process Instances
+
+Example:
+- Team "Acme Corp" installs custom GitHub MCP server
+- Team has 3 members: Alice, Bob, Charlie
+- Result: 3 separate running processes (one per user)
+```
+
+**Key Concepts:**
+- **Installation**: Team-level MCP server record (`mcpServerInstallations` table)
+- **Instance**: Per-user running process with merged config (`mcpServerInstances` table)
+- **ProcessId**: Unique identifier including user: `{slug}-{team}-{user}-{installation-id}`
+
+See [Instance Lifecycle](/development/satellite/instance-lifecycle) for complete details.
+
+### Shared Deployment Directory
+
+**CRITICAL:** All user instances for an installation share ONE deployment directory:
+
+| Environment | Path | Type |
+|-------------|------|------|
+| **Production (Linux)** | `/opt/mcp-deployments/{team-id}/{installation-id}` | tmpfs (memory-backed) |
+| **Development (Mac/Win)** | `/tmp/mcp-{uuid}` | Regular filesystem |
+
+**Why Shared:**
+- One installation = one GitHub repository
+- Download and build artifacts ONCE
+- All user instances execute from the same code
+- Reduces disk usage and build time
+
+**Code Reference:** `services/satellite/src/process/github-deployment.ts` line 890:
+```typescript
+installationId: config.installation_id  // Not userId - shared directory
+```
+
+## Redeploy vs Restart vs Update
+
+| Action | Deployment Directory | GitHub Download | All Instances | Use Case |
+|--------|---------------------|-----------------|---------------|----------|
+| **Restart** | ✓ Preserved (fast) | ✗ No | Per user | Process crashed, needs restart with same code |
+| **Redeploy** | ✗ Deleted (fresh) | ✓ Yes | All users | New code pushed to GitHub, need latest version |
+| **Update Config** | ✓ Preserved | ✗ No | All users | Changed args/env vars, same code |
+
+## Complete Redeploy Flow
+
+### Step 1: User Action (Frontend)
+
+1. User clicks "Redeploy" button in DeployStack dashboard
+2. Frontend sends POST request to backend: `/api/github-deployments/:installationId/redeploy`
+
+### Step 2: Backend Operations
+
+**File:** `services/backend/src/routes/mcp-servers/github-deployments.ts`
+
+1. **Fetch Latest SHA from GitHub:**
+   - Uses GitHub App API to get latest commit SHA
+   - Updates `mcpServers.git_commit_sha` with new SHA
+
+   **Critical:** Backend updates `mcpServers.git_commit_sha` with the new SHA. The `template_args` field is NOT updated - it continues to store the base GitHub reference without SHA (e.g., `github:owner/repo`). This separation allows the satellite to dynamically reconstruct args with the latest SHA during redeploy.
+
+2. **Update All Instance Statuses:**
+   - Sets ALL user instances to `status: 'restarting'`
+   - Query: `UPDATE mcpServerInstances SET status='restarting' WHERE installation_id=...`
+
+3. **Notify Satellites:**
+   - Calls `satelliteCommandService.notifyMcpRedeploy(installation_id, team_id, user_id)`
+   - Creates `configure` command with priority `immediate`
+   - Command sent to ALL satellites (global deployment)
+
+**Command Payload:**
+```json
+{
+  "commandType": "configure",
+  "priority": "immediate",
+  "payload": {
+    "event": "mcp_redeploy",
+    "installation_id": "wDhLsJlAryOnfcK9qX5CE",
+    "team_id": "4vj7igb2fcwzmko",
+    "user_id": "plhdo1j4kuit0et",
+    "commit_sha": "abc123def456...",
+    "branch": "main"
+  }
+}
+```
+
+See [Satellite Commands](/development/backend/satellite/commands#notifymcpredeploy) for command structure details.
+
+### Step 3: Satellite Command Processing
+
+**File:** `services/satellite/src/services/command-processor.ts`
+
+When satellite receives the `mcp_redeploy` command:
+
+1. **Route to Handler:**
+   - Checks `payload.event === 'mcp_redeploy'`
+   - Routes to `handleMcpRedeploy()` method
+
+2. **Find ALL Instances:**
+   ```typescript
+   // Find ALL instances for this installation (not just one user)
+   for (const [name, config] of Object.entries(servers)) {
+     if (config.installation_id === installation_id) {
+       instanceNames.push(name);  // Collect ALL user instances
+     }
+   }
+   ```
+
+3. **Stop ALL Instances:**
+   ```typescript
+   // Loop through ALL instances
+   for (const instanceName of instanceNames) {
+     await processManager.removeServerCompletely(instanceName);
+   }
+   ```
+
+4. **Clear Tool Cache:**
+   ```typescript
+   // Clear tools for ALL instances
+   for (const instanceName of instanceNames) {
+     stdioDiscoveryManager.clearServerTools(instanceName);
+   }
+   ```
+
+5. **Trigger Config Refresh:**
+   ```typescript
+   await onConfigurationUpdate({});
+   ```
+
+**Why This Works:**
+- Stopping ALL instances ensures no process uses old code
+- `removeServerCompletely()` sets `isUninstallShutdown` flag
+- Termination handler detects flag and deletes deployment directory
+- Config refresh downloads fresh code from GitHub
+- ALL instances respawn from new code
+
+### Step 4: Process Termination & Cleanup
+
+**File:** `services/satellite/src/lib/termination-handler.ts`
+
+For each instance being stopped:
+
+1. **Process Termination:**
+   - Send SIGTERM for graceful shutdown
+   - Wait for timeout (10 seconds)
+   - Send SIGKILL if needed
+
+2. **Deployment Directory Deletion** (only if `isUninstallShutdown = true`):
+   ```typescript
+   if (processInfo.config.temp_dir && processInfo.isUninstallShutdown) {
+     const isTmpfs = await tmpfsManager.isTmpfs(temp_dir);
+
+     if (isTmpfs) {
+       // Production: Unmount tmpfs
+       await tmpfsManager.removeTmpfs(temp_dir);
+     } else {
+       // Development: Delete directory
+       await rm(temp_dir, { recursive: true, force: true });
+     }
+   }
+   ```
+
+**Result:**
+- ALL processes stopped
+- Shared deployment directory deleted
+- Old code completely removed from filesystem
+
+### Step 5: Fresh Download & Build
+
+**File:** `services/satellite/src/process/github-deployment.ts`
+
+Config refresh detects missing deployment and triggers fresh preparation:
+
+1. **Reconstruct Args with New SHA:**
+   - Satellite receives config with `args` WITHOUT SHA: `["github:owner/repo"]`
+   - Receives `git_commit_sha` as separate field: `"def456..."`
+   - Combines them: `["github:owner/repo#def456..."]`
+   - See [Dynamic Args Reconstruction](/development/satellite/github-deployment#dynamic-args-reconstruction)
+
+2. **Download Repository:**
+   - Fetches tarball from GitHub using reconstructed SHA reference
+   - Uses GitHub App installation token for authentication
+
+3. **Create New Deployment Directory:**
+   - Production: `mount -t tmpfs -o size=300M tmpfs /opt/mcp-deployments/{team}/{install}`
+   - Development: `mkdir /tmp/mcp-{new-uuid}`
+
+4. **Extract Tarball:**
+   - Extracts repository contents to deployment directory
+
+5. **Install Dependencies:**
+   - Node.js: `npm install --omit=dev`
+   - Python: `uv sync` or `uv pip install`
+
+6. **Run Build (if configured):**
+   - Node.js: `npm run build` (if `scripts.build` exists)
+   - Python: No build step typically
+
+7. **Resolve Entry Point:**
+   - Node.js: `bin` or `main` from package.json
+   - Python: Installed script or standalone file
+
+**Duration:** 20-60 seconds (same as initial deployment)
+
+See [GitHub Deployment](/development/satellite/github-deployment) for complete build pipeline details.
+
+### Step 6: Respawn ALL Instances
+
+**File:** `services/satellite/src/process/manager.ts`
+
+For each user instance:
+
+1. **Spawn Process:**
+   - Launches process with transformed config
+   - Uses NEW entry point from fresh code
+   - Applies user-specific environment variables
+
+2. **Status Updates:**
+   - `provisioning` → Process starting
+   - `connecting` → Establishing MCP connection
+   - `discovering_tools` → Calling tools/list
+   - `syncing_tools` → Syncing to backend
+   - `online` → Ready for use
+
+3. **Tool Discovery:**
+   - Discovers NEW tools from fresh code
+   - Updates tool cache
+   - Syncs to backend database
+
+**Result:**
+- All team members have NEW code
+- New/updated tools are available
+- Old tools (if removed) are gone
+
+## What Gets Deleted on Redeploy
+
+### Always Deleted
+
+| Item | Location | Why |
+|------|----------|-----|
+| Deployment directory | `/opt/mcp-deployments/{team}/{install}` or `/tmp/mcp-{uuid}` | Forces fresh code download |
+| Installed dependencies | `node_modules/` or `.venv/` | Ensures dependency updates |
+| Build artifacts | `dist/`, compiled files | Forces rebuild with new code |
+| Tool cache | In-memory `StdioToolDiscoveryManager` | Ensures new tools discovered |
+
+### Never Deleted
+
+| Item | Location | Why |
+|------|----------|-----|
+| Runtime cache | `/var/cache/deploystack/npm` or `/var/cache/deploystack/uv` | Shared across all installations |
+| Instance records | Database `mcpServerInstances` | Preserves instance metadata |
+| User configurations | Database (env vars, args) | User settings preserved |
+
+## Performance Impact
+
+| Operation | Duration | Reason |
+|-----------|----------|--------|
+| **Initial Deployment** | 20-60 seconds | Download + install + build |
+| **Normal Restart** | 1-2 seconds | Reuses cached deployment |
+| **Redeploy** | 20-60 seconds | Same as initial deployment |
+
+**Why Redeploy is Slower:**
+
+Must re-download, re-extract, re-install dependencies, and re-build from scratch. This ensures you get the LATEST code from GitHub.
+
+**Trade-off:** Slower operation but guarantees fresh code for all users.
+
+## Logs During Redeploy
+
+### Backend Logs
+
+```json
+{
+  "operation": "github_redeploy_started",
+  "installation_id": "wDhLsJlAryOnfcK9qX5CE",
+  "repository": "owner/repo",
+  "old_sha": "abc123...",
+  "new_sha": "def456..."
+}
+```
+
+```json
+{
+  "operation": "github_redeploy_instances_updated",
+  "instance_count": 3,
+  "status": "restarting"
+}
+```
+
+```json
+{
+  "operation": "github_redeploy_satellites_notified",
+  "command_count": 1,
+  "satellite_ids": ["sat-global-1"]
+}
+```
+
+### Satellite Logs
+
+**Command received:**
+```json
+{
+  "operation": "mcp_redeploy_received",
+  "installation_id": "wDhLsJlAryOnfcK9qX5CE",
+  "instance_count": 3
+}
+```
+
+**Stopping instances:**
+```json
+{
+  "operation": "mcp_redeploy_removing_instance",
+  "instance_name": "calculator-acme-alice-wDh"
+}
+```
+
+**Directory cleanup:**
+```json
+{
+  "operation": "github_cleanup_tmpfs_success",
+  "deployment_dir": "/opt/mcp-deployments/team-abc/install-xyz"
+}
+```
+
+**Fresh download:**
+```json
+{
+  "operation": "github_deployment_started",
+  "repository": "owner/repo",
+  "commit_sha": "def456..."
+}
+```
+
+**Build complete:**
+```json
+{
+  "operation": "github_deployment_ready",
+  "entry_point": "/opt/mcp-deployments/team-abc/install-xyz/dist/index.js"
+}
+```
+
+**Success:**
+```json
+{
+  "operation": "mcp_redeploy_success",
+  "instance_count": 3,
+  "restart_time_ms": 35420
+}
+```
+
+## Verification Steps
+
+### How to Verify Redeploy Worked
+
+1. **Before Redeploy:**
+   - Check deployment directory: `ls -la /opt/mcp-deployments/{team}/{install}/`
+   - Note the directory modification time
+   - Check tool list: `GET /api/mcp-tools?installation_id=...`
+
+2. **Push New Code:**
+   - Add a new tool to your MCP server
+   - Commit and push to GitHub: `git push origin main`
+
+3. **Trigger Redeploy:**
+   - Click "Redeploy" button in DeployStack dashboard
+   - Wait for status to progress: `restarting` → `online`
+
+4. **Verify:**
+   - Check satellite logs for "GitHub deployment directory deleted"
+   - Check satellite logs for "Downloading repository from GitHub"
+   - Verify new tool appears: `GET /api/mcp-tools?installation_id=...`
+   - Check directory modification time (should be recent)
+   - Test new tool: `POST /api/mcp-proxy/execute`
+
+### Debugging Failed Redeployments
+
+If redeploy fails:
+
+1. **Check Backend Logs:**
+   - Look for GitHub API errors (rate limits, auth failures)
+   - Verify commit SHA was updated in database
+
+2. **Check Satellite Logs:**
+   - Search for `mcp_redeploy_failed` operation
+   - Check for tmpfs unmount errors
+   - Look for download/install/build failures
+
+3. **Check Instance Status:**
+   - Query: `SELECT status, status_message FROM mcpServerInstances WHERE installation_id=...`
+   - Look for error status: `failed`, `error`, `requires_reauth`
+
+4. **Common Issues:**
+   - **GitHub token expired**: Re-authorize GitHub App
+   - **Build script failed**: Check build logs, validate dependencies
+   - **Quota exceeded**: Deployment too large (>300MB)
+   - **Process still running**: Old process didn't terminate properly
+
+See [Troubleshooting](/development/satellite/troubleshooting) for detailed debugging guide.
+
+## Edge Cases
+
+### Multiple Users Redeploying Simultaneously
+
+**Scenario:** Two team members click "Redeploy" at the same time.
+
+**Behavior:**
+- Backend processes requests sequentially (database lock)
+- Only one `mcp_redeploy` command created
+- Satellite processes command once
+- Both users see the same result
+
+**Safe:** Commands are idempotent - multiple executions produce same result.
+
+### Redeploy During Active Requests
+
+**Scenario:** Users have active MCP requests when redeploy is triggered.
+
+**Behavior:**
+1. Active processes receive SIGTERM
+2. Processes finish current requests (graceful shutdown)
+3. After 10 seconds, SIGKILL if not terminated
+4. New processes spawn with fresh code
+5. Clients reconnect automatically (if using persistent connections)
+
+**Safe:** Graceful shutdown allows requests to complete.
+
+### Redeploy with Dormant Instances
+
+**Scenario:** Some users' instances are dormant (idle timeout), others are active.
+
+**Behavior:**
+- `removeServerCompletely()` handles both:
+  - Active: Terminates process, deletes directory
+  - Dormant: Clears dormant config (no directory exists yet)
+- Deployment directory deleted once (shared)
+- ALL instances respawn from fresh code
+
+**Safe:** Works regardless of dormant/active state.
+
+### Failed Download After Deletion
+
+**Scenario:** Directory deleted successfully, but GitHub download fails.
+
+**Behavior:**
+1. Directory deletion succeeds
+2. GitHub download fails (rate limit, network error)
+3. Installation status set to `failed`
+4. Next config refresh retries download
+5. Eventually succeeds or requires user intervention
+
+**Recovery:** Automatic retry on next config refresh.
+
+## HTTP/SSE Servers (Non-GitHub)
+
+For HTTP/SSE servers, redeploy triggers **tool re-discovery** instead of code download:
+
+```typescript
+// HTTP/SSE redeploy - trigger tool re-discovery for all instances
+for (const instanceName of instanceNames) {
+  const tools = await remoteToolDiscoveryManager.discoverServerTools(instanceName);
+}
+```
+
+**Why Different:**
+- HTTP/SSE servers are externally hosted
+- No deployment directory to manage
+- Redeploy = "refresh tool list from remote server"
+
+See [Remote MCP Servers](/development/satellite/remote-mcp-servers) for details.
+
+## Related Documentation
+
+- [GitHub Deployment](/development/satellite/github-deployment) - Complete deployment flow
+- [Instance Lifecycle](/development/satellite/instance-lifecycle) - Per-user instance management
+- [Satellite Commands](/development/backend/satellite/commands) - Command types and payloads
+- [Process Management](/development/satellite/process-management) - Process lifecycle and termination
+- [Idle Process Management](/development/satellite/idle-process-management) - Dormant state handling
+- [Backend Events](/development/backend/satellite/events) - Status tracking and event emission

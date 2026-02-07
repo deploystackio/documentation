@@ -140,8 +140,9 @@ DEPLOYSTACK_SATELLITE_URL=https://satellite.example.com
 This optional environment variable configures the publicly accessible URL of the satellite instance.
 
 **Behavior:**
-- **If set**: Satellite sends explicit URL to backend during registration and first heartbeat
-- **If not set**: Backend auto-detects URL from incoming request headers (X-Forwarded-Proto, X-Forwarded-Host)
+- **If set**: Satellite sends explicit URL to backend during registration
+- **If not set**: Backend uses default `http://127.0.0.1:3001` or auto-detects from request headers
+- **Important**: URL is sent only during registration, NOT in heartbeats
 
 **When to Use:**
 - Production deployments with known public URLs
@@ -160,14 +161,44 @@ DEPLOYSTACK_SATELLITE_URL=https://satellite.deploystack.io
 # Production team satellite
 DEPLOYSTACK_SATELLITE_URL=https://satellite-team1.example.com
 
-# Development (auto-detection)
-# DEPLOYSTACK_SATELLITE_URL=    # Leave blank or comment out
+# Development (auto-detection or default)
+# DEPLOYSTACK_SATELLITE_URL=    # Leave blank - uses default http://127.0.0.1:3001
 ```
 
-**URL Update Behavior:**
-- Registration: URL sent during initial satellite registration
-- Startup: URL updated on first heartbeat after satellite restart
-- Runtime: URL remains static until satellite restarts
+**Default URL:**
+- Database default: `http://127.0.0.1:3001`
+- Used when `DEPLOYSTACK_SATELLITE_URL` is not set during registration
+- Can be overridden by setting the environment variable
+
+### Region Configuration (Backend-Only)
+
+**Region Field:**
+
+The `region` field is a backend-configurable field for organizational purposes. **Satellites do not send region data** - it must be set by backend administrators.
+
+**Purpose:**
+- Geographic grouping of satellites
+- Capacity planning and analytics
+- Regional routing strategies
+
+**Configuration:**
+Backend administrators set the region via API or database:
+
+```sql
+-- Set region for a satellite
+UPDATE satellites
+SET region = 'us-east-1'
+WHERE id = 'sat-xxx';
+```
+
+**Common Values:**
+- AWS-style regions: `us-east-1`, `eu-central-1`, `ap-southeast-1`
+- Geographic labels: `north-america`, `europe`, `asia-pacific`
+- Custom labels: `on-premise`, `data-center-1`, `cloud`
+
+<Warning>
+The satellite service does NOT send region information during registration or heartbeat. Region is a backend-only field managed by administrators.
+</Warning>
 
 ## Registration Token Requirements
 

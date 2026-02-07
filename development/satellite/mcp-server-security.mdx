@@ -1,0 +1,571 @@
+---
+title: MCP Server Security
+description: Defense-in-depth security validation and nsjail sandbox protection for MCP server processes in DeployStack Satellite.
+---
+
+DeployStack Satellite implements defense-in-depth security validation as the last line of defense before spawning MCP server processes. Even if malicious configuration bypasses backend validation, the satellite will reject it before process execution.
+
+For backend validation (first line of defense), see [Backend MCP Server Security](/development/backend/mcp-server-security).
+
+## Overview
+
+The satellite protects against security threats at multiple levels:
+
+1. **Input Validation**: Re-validates commands and arguments before spawn
+2. **Command Resolution**: Only allows commands from a strict allowlist
+3. **nsjail Sandbox**: Isolates processes with resource limits and restricted filesystem access
+4. **Environment Sanitization**: Strips dangerous environment variables
+
+This defense-in-depth approach ensures security even if:
+- Backend validation is bypassed due to a bug
+- Database is compromised and contains malicious data
+- Configuration is modified after backend validation
+
+## Defense-in-Depth Architecture
+
+```
+Backend Validation → Database Storage → Satellite Polling → Satellite Validation → nsjail Spawn
+       ↓                    ↓                   ↓                    ↓                  ↓
+  First defense      Persistent store    Config delivery     Last defense      Sandboxed execution
+```
+
+**File References:**
+- `services/satellite/src/config/security-validation.ts` - Validation functions
+- `services/satellite/src/process/nsjail-spawner.ts` - Secure process spawning
+- `services/satellite/src/config/nsjail.ts` - nsjail configuration and blocked env vars
+
+## Command Validation
+
+The satellite validates commands against a strict allowlist before resolving to executable paths.
+
+### Allowed Commands
+
+| Command | Path Resolution | Purpose |
+|---------|----------------|---------|
+| `npx` | Dynamic (resolved at startup) | Node.js package execution |
+| `node` | Dynamic (resolved at startup) | Direct Node.js execution |
+| `uvx` | Dynamic (resolved at startup) | Python UV package execution |
+| `python` | Dynamic (resolved at startup) | Python 2 execution (legacy) |
+| `python3` | Dynamic (resolved at startup) | Python 3 execution |
+
+**Path Resolution:**
+Command paths are resolved dynamically at satellite startup using the system PATH. Common locations searched:
+- `~/.local/bin/` - User-local installations (Python tools via pip)
+- `/usr/local/bin/` - Homebrew, manual installs
+- `/usr/bin/` - System package manager
+- `/bin/` - Core system binaries
+
+Resolved paths are cached in memory and validated against allowed patterns for security.
+
+### Dynamic Command Resolution
+
+Commands are resolved at satellite startup, not hardcoded:
+
+1. **Startup Validation** - `validateSystemRuntimes()` checks commands exist
+2. **Path Resolution** - `initializeCommandCache()` finds absolute paths using `which`
+3. **Security Validation** - Paths validated against allowed patterns
+4. **Caching** - Resolved paths cached in memory for runtime use
+5. **Spawning** - nsjail uses cached paths for process execution
+
+**Search Priority:**
+
+The satellite searches these directories in order:
+
+```bash
+$HOME/.local/bin/     # User-local (pip --user, uv)
+$HOME/.cargo/bin/     # Rust toolchain
+$HOME/bin/            # User bin directory
+/usr/local/bin/       # Homebrew, manual installs
+/usr/bin/             # System packages (apt, yum)
+/bin/                 # Core system binaries
+/opt/homebrew/bin/    # macOS ARM Homebrew
+```
+
+**Security:**
+
+- **Startup-time resolution** - Not per-request, prevents injection
+- **Path validation** - Only allowed directories accepted
+- **File permissions check** - Must be executable
+- **Caching** - Resolved paths cached in memory, can't be manipulated
+- **Allowlist** - Only specific commands allowed
+
+**Example Startup Logs:**
+
+```
+operation: command_cache_init_start
+operation: command_resolved, command: uvx, path: /opt/deploystack/.local/bin/uvx
+operation: command_resolved, command: python3, path: /opt/deploystack/.local/bin/python3
+operation: command_resolved, command: npm, path: /usr/bin/npm
+operation: command_cache_init_complete, cached_commands: 9
+```
+
+**Why Dynamic Resolution?**
+
+**Problem:** Python tools (uvx, uv, pip) install to different locations depending on the installation method:
+- pip with `--user`: `~/.local/bin/`
+- System packages: `/usr/bin/`
+- Homebrew: `/usr/local/bin/`
+- Custom installs: `/opt/*/bin/`
+
+**Solution:** Find commands wherever they're installed, validate, and cache the paths.
+
+### Secure Command Resolution
+
+The `resolveCommandPath()` function validates commands and uses the runtime cache:
+
+```typescript
+// SECURE: Only allows commands from allowlist, uses dynamic resolution
+resolveCommandPath(command: string): string {
+  const validation = validateCommand(command, this.logger);
+  if (!validation.valid) {
+    this.logger.error({
+      operation: 'resolve_command_path_blocked',
+      command,
+      error: validation.error
+    }, `SECURITY: Rejected command '${command}'`);
+    throw new Error(validation.error);
+  }
+
+  // Get path from runtime-resolved cache (populated at startup)
+  const path = getCommandPath(command.toLowerCase());
+  if (!path) {
+    throw new Error(`Command path not found: ${command}`);
+  }
+  return path;
+}
+```
+
+<Warning>
+**Previous Vulnerability (Fixed):** The original implementation allowed absolute paths like `/bin/bash` to bypass the allowlist. This has been fixed - absolute paths are now rejected.
+</Warning>
+
+### Rejected Patterns
+
+- Absolute paths (`/bin/bash`, `/usr/bin/node`)
+- Commands not in the allowlist
+- Empty or non-string commands
+
+## Argument Validation
+
+Arguments are validated before being passed to nsjail to prevent sandbox bypass and command injection.
+
+### Critical Blocked Patterns
+
+| Pattern | Security Impact |
+|---------|-----------------|
+| `--` | Terminates nsjail arguments, allowing arbitrary flags |
+| `;`, `&`, `\|` | Shell command chaining |
+| `` ` ``, `$(`, `${` | Command/parameter substitution |
+| `../` | Path traversal |
+| `--user`, `--group` | nsjail user/group manipulation |
+| `--rlimit*` | Resource limit bypass |
+| `--mount`, `--bindmount` | Filesystem escape |
+| `--cgroup*` | Cgroup manipulation |
+| `--disable*` | Security feature bypass |
+
+### Validation Before Spawn
+
+```typescript
+async spawnWithNsjail(config: MCPServerConfig): Promise<ChildProcess> {
+  // SECURITY: Validate arguments (defense in depth)
+  const argsValidation = validateArgs(config.args, this.logger);
+  if (!argsValidation.valid) {
+    this.logger.error({
+      operation: 'spawn_nsjail_args_blocked',
+      installation_name: config.installation_name,
+      team_id: config.team_id,
+      error: argsValidation.error,
+      blockedItems: argsValidation.blockedItems
+    }, 'SECURITY: Blocked spawn due to dangerous arguments');
+    throw new Error(`Security validation failed: ${argsValidation.error}`);
+  }
+
+  // ... proceed with spawn
+}
+```
+
+## nsjail Sandbox Protection
+
+nsjail provides process isolation with strict resource limits and filesystem restrictions.
+
+### Resource Limits
+
+| Resource | Default | Enforcement | Purpose |
+|----------|---------|-------------|---------|
+| Virtual Memory | 2048 MB | rlimit_as | Prevents memory exhaustion |
+| Physical Memory | N/A | Disabled (permissions) | Cgroup limits disabled due to systemd delegation requirements |
+| CPU Time | 60 seconds | rlimit_cpu | Prevents CPU abuse |
+| Max Processes | 1000 | rlimit_nproc | Allows package managers to work |
+| Open Files | 1024 | rlimit_nofile | Limits file descriptor usage |
+| Max File Size | 50 MB | rlimit_fsize | Prevents disk filling |
+| tmpfs Size | 100 MB | tmpfs mount | Limits temp storage |
+| Deployment tmpfs | 300 MB | tmpfs mount | Limits GitHub deployment working directory size |
+
+<Warning>
+**Cgroup Limits Disabled**: Physical memory (512MB) and process count cgroup limits are currently disabled due to systemd cgroup delegation permissions. The satellite uses rlimit-based resource limits instead, which provide equivalent DoS protection. The primary security model (namespace isolation) remains fully active and unchanged.
+</Warning>
+
+### Filesystem Restrictions
+
+**Read-Only Mounts:**
+- `/usr` - System binaries
+- `/lib`, `/lib64` - System libraries
+- `/bin`, `/sbin` - Core utilities
+- `/etc` - Configuration (includes DNS resolver)
+
+**Writable Mounts:**
+- `/tmp` - Temporary storage (tmpfs with size limit)
+- `/home/{runtime}` - Runtime-specific cache directory
+
+**GitHub Deployment Mounts:**
+- `/app` - GitHub deployment directory (read-only, present only for GitHub deployments)
+
+**Device Access:**
+- `/dev/null` - Required for I/O
+- `/dev/urandom` - Required for crypto operations
+- `/dev/zero` - Required for memory allocation
+- `/dev/fd` - File descriptor management (symlink)
+
+### Namespace Isolation
+
+**Active Namespaces** (Primary Security Boundary):
+- **PID Namespace**: Complete process tree isolation per team
+- **Mount Namespace**: Isolated filesystem view with read-only system directories
+- **User Namespace**: UID/GID mapping (prevents ALL privilege escalation including setuid)
+- **IPC Namespace**: Isolated inter-process communication
+- **UTS Namespace**: Team-specific hostname (`mcp-{team_id}`)
+
+**Disabled Namespaces**:
+- **Network Namespace**: Disabled to allow package downloads via npx/uvx
+- **Cgroup Namespace**: Disabled for kernel compatibility
+
+<Info>
+**Security Model**: Namespace isolation is the **primary security boundary** that prevents malicious code from escaping the sandbox or accessing other teams' data. Resource limits (rlimits) provide **secondary DoS protection**. With user namespace active, privilege escalation attacks (including rlimit bypasses) are prevented.
+</Info>
+
+<Info>
+Network access is currently allowed to enable package downloads via npx/uvx. Future enhancements may add egress filtering to restrict network destinations.
+</Info>
+
+## Environment Variable Sanitization
+
+The satellite strips dangerous environment variables before passing them to nsjail.
+
+### Blocked Variables
+
+**Library Injection:**
+- `LD_PRELOAD` - Most dangerous, injects shared libraries
+- `LD_LIBRARY_PATH` - Library search path manipulation
+- `LD_AUDIT`, `LD_DEBUG`, `LD_PROFILE`
+
+**Runtime Injection:**
+- `NODE_OPTIONS` - Node.js flag injection
+- `NODE_PATH` - Module path manipulation
+- `PYTHONSTARTUP` - Python startup script execution
+- `PYTHONPATH` - Python module path manipulation
+
+**Shell Injection:**
+- `BASH_ENV`, `ENV` - Shell startup script execution
+- `SHELL` - Default shell override
+
+**Path Manipulation:**
+- `PATH`, `HOME`, `TMPDIR` - Already controlled by nsjail
+
+### Sanitization Implementation
+
+```typescript
+sanitizeEnvVars(env: Record<string, string>, installationName: string): string[] {
+  const sanitized: string[] = [];
+  const blocked: string[] = [];
+
+  for (const [key, value] of Object.entries(env)) {
+    if (BLOCKED_ENV_VARS.has(key) || BLOCKED_ENV_VARS.has(key.toUpperCase())) {
+      blocked.push(key);
+      continue;
+    }
+    sanitized.push('-E', `${key}=${value}`);
+  }
+
+  if (blocked.length > 0) {
+    this.logger.warn({
+      operation: 'env_vars_blocked',
+      installation_name: installationName,
+      blocked_vars: blocked,
+      blocked_count: blocked.length
+    }, `Blocked ${blocked.length} dangerous env var(s)`);
+  }
+
+  return sanitized;
+}
+```
+
+## Security Logging
+
+All security-relevant events are logged for audit purposes.
+
+### Log Events
+
+| Operation | Description |
+|-----------|-------------|
+| `security_command_blocked` | Command rejected by allowlist |
+| `security_args_blocked` | Arguments contain dangerous patterns |
+| `spawn_nsjail_args_blocked` | Spawn prevented due to arg validation |
+| `env_vars_blocked` | Dangerous env vars stripped |
+| `resolve_command_path_blocked` | Absolute path or invalid command rejected |
+
+### Log Format
+
+```json
+{
+  "level": "warn",
+  "operation": "security_args_blocked",
+  "blockedCount": 1,
+  "blockedItems": ["[2]: nsjail argument terminator (--)"],
+  "msg": "SECURITY: Blocked 1 dangerous argument(s)"
+}
+```
+
+<Warning>
+Security logs should be monitored for patterns that may indicate attack attempts. Repeated validation failures from the same team or installation warrant investigation.
+</Warning>
+
+## Log Rate Limiting Protection
+
+The satellite implements per-process log rate limiting to prevent stderr flooding attacks.
+
+### Attack Vector
+
+A malicious or buggy MCP server could flood stderr with excessive log output to:
+- Exhaust satellite memory and CPU
+- Overload backend database with INSERT operations
+- Fill EventBus queue causing legitimate log loss
+- Degrade performance for all teams on the satellite
+
+### Protection Mechanism
+
+**Per-Process Rate Limiting:**
+- **Rate limit**: 20 logs per second per MCP process (configurable)
+- **Line truncation**: 1KB maximum per log line (configurable)
+- **Action on exceeded**: Excess logs silently dropped
+- **Warning emission**: Summary warning every 60 seconds when limit exceeded
+
+**Implementation:**
+- Rate limiting happens at stderr capture (before LogBuffer)
+- Sliding window algorithm (20 logs in last 1 second)
+- Independent rate limiter per process (~176 bytes memory overhead)
+- Automatic cleanup on process termination
+
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOG_RATE_LIMIT_PER_SECOND` | 20 | Maximum logs per second per process |
+| `LOG_MAX_LINE_LENGTH_BYTES` | 1024 | Maximum bytes per log line |
+| `LOG_RATE_LIMIT_WARNING_INTERVAL_MS` | 60000 | Warning emission interval (milliseconds) |
+
+### Monitoring
+
+When a process exceeds the rate limit, the satellite logs a warning:
+
+```json
+{
+  "level": "warn",
+  "operation": "log_rate_limit_exceeded",
+  "process_id": "sequential-thinking-acme-alice-abc123",
+  "dropped_count": 3540,
+  "rate_limit": 20,
+  "window_seconds": 1,
+  "elapsed_seconds": 60,
+  "msg": "Process sequential-thinking-acme-alice-abc123 exceeded log rate limit (3540 logs dropped in last 60s)"
+}
+```
+
+The satellite also emits a `mcp.server.log_rate_limit_exceeded` event to the backend for monitoring dashboards and alerts.
+
+**File References:**
+- `services/satellite/src/process/log-rate-limiter.ts` - Rate limiting logic
+- `services/satellite/src/process/manager.ts` - Integration with stderr handler
+
+## Runtime-Specific Configuration
+
+The satellite applies runtime-specific environment variables for each supported runtime.
+
+### Node.js Runtime
+
+```bash
+HOME=/home/node
+PATH=/usr/bin:/bin:/usr/local/bin
+NPM_CONFIG_CACHE=/home/node/.npm
+NPM_CONFIG_PREFIX=/home/node/.npm-global
+NPM_CONFIG_UPDATE_NOTIFIER=false
+```
+
+### Python Runtime
+
+```bash
+HOME=/home/python
+PATH=/usr/bin:/bin:/usr/local/bin
+UV_CACHE_DIR=/home/python/.cache/uv
+UV_TOOL_DIR=/home/python/.local/bin
+PYTHONUNBUFFERED=1
+```
+
+## Sandboxed Build Commands (GitHub Deployments)
+
+For GitHub deployments, build commands (`npm install`, `npm run build`, `uv sync`) run inside the nsjail sandbox with sanitized environments.
+
+**File Reference:** `services/satellite/src/process/nsjail-spawner.ts`
+
+### Build Command Sandboxing
+
+```typescript
+// Spawn build commands inside nsjail
+const result = await processSpawner.spawnBuildCommandWithNsjail(
+  'npm',
+  ['install', '--omit=dev'],
+  tempDir,
+  {
+    allowNetwork: true,   // Install needs network
+    timeoutMs: 120000,    // 2 minutes
+    runtime: 'node'
+  }
+);
+```
+
+### Allowed Build Commands
+
+| Command | Path Resolution | Use Case |
+|---------|----------------|----------|
+| `npm` | Dynamic | Node.js package install/build |
+| `uv` | Dynamic | Python venv creation, package sync, dependency install |
+| `pip` | Dynamic | Python pip install (legacy) |
+| `pip3` | Dynamic | Python 3 pip install (legacy) |
+| `python3` | Dynamic | Direct Python execution (fallback for simple scripts) |
+
+Paths resolved at startup from system PATH. See [Dynamic Command Resolution](#dynamic-command-resolution) for details.
+
+### Sanitized Build Environment
+
+Build commands receive a minimal, sanitized environment with NO secrets:
+
+**Node.js:**
+```bash
+CI=true
+PATH=/usr/bin:/bin:/usr/local/bin
+HOME=/build
+NPM_CONFIG_CACHE=/build/.npm
+NPM_CONFIG_UPDATE_NOTIFIER=false
+NODE_ENV=production
+```
+
+**Python:**
+```bash
+CI=true
+PATH=/usr/bin:/bin:/usr/local/bin
+HOME=/build
+UV_CACHE_DIR=/build/.cache/uv
+PYTHONUNBUFFERED=1
+PIP_NO_CACHE_DIR=1
+```
+
+<Warning>
+User-provided environment variables (API keys, tokens) are NOT passed to build commands. This prevents exfiltration via malicious build scripts.
+</Warning>
+
+### Network Policy
+
+| Phase | Network | Reason |
+|-------|---------|--------|
+| Install (`npm install`, `uv sync`) | Allowed | Required to download packages |
+| Build (`npm run build`) | Blocked | Reduces exfiltration risk |
+
+### Build Script Re-validation (Defense-in-Depth)
+
+The satellite re-validates build scripts before execution, even though the backend already validated them:
+
+```typescript
+// Defense-in-depth: Re-validate scripts before execution
+const validation = validateBuildScripts(packageJson.scripts);
+if (!validation.valid) {
+  throw new Error(`Security: ${validation.error}`);
+}
+```
+
+**File Reference:** `services/satellite/src/config/security-validation.ts`
+
+## Python Runtime Support
+
+The satellite supports Python GitHub deployments with auto-detection of three installation patterns.
+
+### Installation Methods
+
+| Project Pattern | Detection | Installation Method |
+|-----------------|-----------|---------------------|
+| Installable Package | `pyproject.toml` with `[build-system]` + package structure | `uv sync --no-dev --python <selected>` |
+| Simple Script | `pyproject.toml` without package structure + `server.py` at root | `uv venv` + parse and install dependencies directly |
+| Legacy Script | `requirements.txt` only | `uv venv` + `uv pip install -r requirements.txt` |
+
+**For detailed pattern detection logic, see:** [GitHub Deployment](/development/satellite/github-deployment#python-installation-patterns)
+
+### Python Version Selection (Security Consideration)
+
+The satellite uses smart Python version selection to avoid bleeding-edge versions:
+
+- **Avoids bleeding-edge Python** (e.g., 3.14 when just released) to prevent wheel compilation issues
+- **Prefers stable versions** (e.g., 3.13) with mature package ecosystems and pre-built wheels
+- **Respects `requires-python` constraints** from `pyproject.toml`
+
+**Security Impact:**
+
+- **Reduces attack surface**: Avoids unstable Python releases with potential security vulnerabilities
+- **Prevents source compilation**: Pre-built wheels reduce supply chain risks from malicious build scripts
+- **Ensures reproducible builds**: Stable Python versions produce consistent, auditable builds
+- **Minimizes build failures**: Mature ecosystems have better wheel availability
+
+**Priority Order:**
+
+1. Current stable version (e.g., 3.13 when 3.14 is bleeding-edge)
+2. Previous stable version (e.g., 3.12)
+3. LTS versions (e.g., 3.11, 3.10)
+4. System default (last resort)
+
+**Example:** On a system with Python 3.9, 3.10, 3.11, 3.13, 3.14 installed, the satellite selects 3.13 because 3.14 is bleeding-edge.
+
+**Implementation:** `services/satellite/src/utils/runtime-validator.ts` - `selectBestPythonForDeployment()`
+
+### Entry Point Resolution
+
+The satellite resolves Python entry points in this priority order:
+
+1. `[project.scripts]` in pyproject.toml → `.venv/bin/{script_name}`
+2. `[project.gui-scripts]` in pyproject.toml → `.venv/bin/{script_name}`
+3. `__main__.py` fallback → `.venv/bin/python __main__.py`
+4. `src/__main__.py` fallback → `.venv/bin/python src/__main__.py`
+5. `server.py` fallback → `.venv/bin/python server.py`
+6. `main.py` fallback → `.venv/bin/python main.py`
+7. `app.py` fallback → `.venv/bin/python app.py`
+8. `run.py` fallback → `.venv/bin/python run.py`
+
+**File Reference:** `services/satellite/src/process/github-deployment.ts` - `resolvePythonPackageEntry()`
+
+## Configuration
+
+Security settings can be tuned via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NSJAIL_MEMORY_LIMIT_MB` | 2048 | Virtual memory limit |
+| `NSJAIL_CGROUP_MEM_MAX_BYTES` | 536870912 | Physical memory (512MB) |
+| `NSJAIL_CPU_TIME_LIMIT_SECONDS` | 60 | CPU time limit |
+| `NSJAIL_MAX_PROCESSES` | 1000 | Max child processes |
+| `NSJAIL_RLIMIT_NOFILE` | 1024 | Max open files |
+| `NSJAIL_RLIMIT_FSIZE` | 50 | Max file size (MB) |
+| `NSJAIL_TMPFS_SIZE` | 100M | tmpfs size limit |
+
+## Related Documentation
+
+- [Backend MCP Server Security](/development/backend/mcp-server-security) - First-line validation
+- [Process Management](/development/satellite/process-management) - Process lifecycle
+- [Team Isolation](/development/satellite/team-isolation) - Multi-tenant security
+- [Architecture](/development/satellite/architecture) - Overall satellite design
+- [Security and Privacy](/general/security) - User-facing security documentation
