@@ -63,38 +63,85 @@ The OAuth implementation includes:
 
 **Purpose**: Detects if an MCP server requires OAuth and discovers OAuth endpoints using RFC 8414 and RFC 9728.
 
+#### When OAuth Detection Runs
+
+OAuth detection occurs automatically in two scenarios:
+
+1. **Server Creation** (`POST /mcp/servers/global`) - When global admin creates new MCP server
+2. **Server Updates** (`PUT /mcp/servers/global/:id`) - When global admin updates existing MCP server
+
+**Why re-check on updates?**
+- Server's OAuth configuration might have changed
+- URL might be updated to a different endpoint
+- Transport type might change from stdio → http/sse or vice versa
+- Security verification ensures `requires_oauth` flag stays accurate
+
 #### OAuth Detection
 
-The service makes a test request to the MCP server and checks for OAuth requirement:
+The service uses a hybrid detection approach to handle different server configurations:
+
+**Detection Strategy**:
+1. **Try GET first** (fast path for most servers like Notion, Box, Linear)
+2. **Try POST with MCP protocol request** if GET returns non-401 (handles servers like Harmonic AI that only protect POST endpoints)
 
 ```typescript
-// Detection logic
-const response = await fetch(mcpServerUrl);
+// Try GET first (most common case)
+const getResponse = await fetch(mcpServerUrl, { method: 'GET' });
 
-if (response.status === 401 && response.headers.get('www-authenticate')?.includes('Bearer')) {
-  // OAuth is required
+if (getResponse.status === 401 && getResponse.headers.get('www-authenticate')?.includes('Bearer')) {
+  // OAuth detected via GET
   requiresOauth = true;
+} else {
+  // Try POST with MCP protocol request (handles Harmonic-style servers)
+  const postResponse = await fetch(mcpServerUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'tools/list',
+      id: 1
+    })
+  });
+
+  if (postResponse.status === 401 && postResponse.headers.get('www-authenticate')?.includes('Bearer')) {
+    // OAuth detected via POST
+    requiresOauth = true;
+  }
 }
 ```
 
 **Detection criteria**:
-- HTTP 401 Unauthorized response
+- HTTP 401 Unauthorized response (on GET or POST)
 - `WWW-Authenticate: Bearer` header present
+
+**Why two methods?**
+- **Standard servers** (Notion, Box, Linear): Return 401 on GET for public health check endpoints
+- **Harmonic-style servers**: Return 200 on GET (public endpoint), but 401 on POST (protected MCP protocol endpoint)
 
 #### OAuth Metadata Discovery
 
-Once OAuth is detected, the service discovers endpoints using two RFCs:
+Once OAuth is detected, the service discovers endpoints using multiple methods with priority order:
 
-**RFC 9728 - Protected Resource Metadata** (Primary method):
+**Priority 1: WWW-Authenticate Header Discovery URL**
+
+Some servers provide a direct discovery URL in the `WWW-Authenticate` header:
+
 ```typescript
-const metadataUrl = `${mcpServerUrl}/.well-known/oauth-protected-resource`;
-const response = await fetch(metadataUrl);
-const metadata = await response.json();
+// Extract discovery URL from WWW-Authenticate header
+// Format: WWW-Authenticate: Bearer oauth_authorization_server="https://example.com/.well-known/oauth-authorization-server"
+const wwwAuthenticate = response.headers.get('www-authenticate');
+const match = wwwAuthenticate.match(/oauth_authorization_server="([^"]+)"/);
+const discoveryUrl = match ? match[1] : undefined;
 
-// metadata.authorization_servers contains auth server URLs
+if (discoveryUrl) {
+  // Try discovery URL from header first
+  const metadata = await fetch(discoveryUrl).then(r => r.json());
+  // Contains: authorization_endpoint, token_endpoint, registration_endpoint, etc.
+}
 ```
 
-**RFC 8414 - Authorization Server Metadata** (Fallback):
+**Priority 2: RFC 8414 - Authorization Server Metadata**
+
 ```typescript
 const metadataUrl = `${authServerUrl}/.well-known/oauth-authorization-server`;
 const response = await fetch(metadataUrl);
@@ -103,7 +150,19 @@ const metadata = await response.json();
 // Contains: authorization_endpoint, token_endpoint, registration_endpoint, etc.
 ```
 
-**Fallback**: OpenID Connect Discovery (`.well-known/openid-configuration`)
+**Priority 3: OpenID Connect Discovery** (Final fallback):
+
+```typescript
+const metadataUrl = `${authServerUrl}/.well-known/openid-configuration`;
+const response = await fetch(metadataUrl);
+const metadata = await response.json();
+```
+
+**Discovery Priority Chain**:
+1. Discovery URL from `WWW-Authenticate` header (if provided)
+2. RFC 8414 Authorization Server Metadata
+3. OpenID Connect Discovery
+4. Give up - OAuth configuration cannot be determined
 
 #### Metadata Structure
 
@@ -147,6 +206,98 @@ if (provider) {
   };
 }
 ```
+
+### OAuth Detection on Server Updates
+
+**File**: [services/backend/src/routes/mcp/servers/update-global.ts](https://github.com/deploystackio/deploystack/blob/main/services/backend/src/routes/mcp/servers/update-global.ts)
+
+**Endpoint**: `PUT /api/mcp/servers/global/:id`
+
+**Purpose**: Re-checks OAuth requirements whenever a global admin updates an MCP server configuration.
+
+#### Update Detection Logic
+
+When updating a global MCP server, the backend determines "effective values" for OAuth detection:
+
+```typescript
+// Determine effective transport type and remotes
+const effectiveTransportType = updateData.transport_type || existingServer.transport_type;
+const effectiveRemotes = updateData.remotes || existingServer.remotes;
+
+// Run OAuth detection if server is HTTP/SSE
+if (effectiveTransportType === 'http' || effectiveTransportType === 'sse') {
+  const oauthService = new OAuthDiscoveryService(request.log);
+  const oauthResult = await oauthService.detectAndDiscoverOAuth(effectiveRemotes[0].url);
+  updateData.requires_oauth = oauthResult.requiresOauth;
+}
+```
+
+**Effective Values Logic:**
+- If update includes new `transport_type` → Use new value
+- If update doesn't include `transport_type` → Use existing server's value
+- Same logic applies to `remotes` field
+
+**Why effective values?** Allows partial updates while still running OAuth detection correctly.
+
+#### Update Scenarios
+
+**Scenario 1: URL Change**
+```json
+PUT /api/mcp/servers/global/server_123
+{
+  "remotes": [{ "url": "https://new-url.example.com" }]
+}
+```
+- OAuth detection runs with new URL
+- `requires_oauth` updated based on new server's response
+
+**Scenario 2: Transport Type Change (stdio → http)**
+```json
+PUT /api/mcp/servers/global/server_123
+{
+  "transport_type": "http",
+  "remotes": [{ "url": "https://mcp.example.com" }]
+}
+```
+- OAuth detection runs (now HTTP transport)
+- `requires_oauth` set based on detection result
+
+**Scenario 3: Transport Type Change (http → stdio)**
+```json
+PUT /api/mcp/servers/global/server_123
+{
+  "transport_type": "stdio",
+  "packages": [{"npm": "@example/mcp-server"}]
+}
+```
+- OAuth detection skipped (stdio doesn't use OAuth)
+- `requires_oauth` explicitly set to `false`
+
+**Scenario 4: No Transport/URL Change**
+```json
+PUT /api/mcp/servers/global/server_123
+{
+  "description": "Updated description"
+}
+```
+- OAuth detection still runs with existing URL (security re-check)
+- Ensures `requires_oauth` reflects current server state
+
+#### Error Handling
+
+OAuth detection failures during updates are non-blocking:
+
+```typescript
+try {
+  const oauthResult = await oauthService.detectAndDiscoverOAuth(url);
+  updateData.requires_oauth = oauthResult.requiresOauth;
+} catch (error) {
+  logger.warn('OAuth detection failed, defaulting to requires_oauth=false');
+  updateData.requires_oauth = false;
+}
+```
+
+**Why non-blocking?** Server updates should not fail due to temporary OAuth discovery issues. The update succeeds with `requires_oauth=false` as safe default.
 
 ### Authorization Endpoint
 
@@ -1063,56 +1214,96 @@ DEPLOYSTACK_ENCRYPTION_SECRET="your-32-character-secret-key-here"
 ### Step-by-Step Discovery Flow
 
 <Steps>
-  <Step title="Make Test Request">
-    Send HTTP request to MCP server URL to detect OAuth requirement.
+  <Step title="Try GET Request (Fast Path)">
+    Send GET request to MCP server URL to detect OAuth requirement.
 
     ```typescript
-    const response = await fetch(mcpServerUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ method: 'tools/list' })
+    const getResponse = await fetch(mcpServerUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'DeployStack/1.0'
+      }
     });
     ```
   </Step>
 
-  <Step title="Check for OAuth Requirement">
+  <Step title="Check GET Response for OAuth">
     Look for 401 status and WWW-Authenticate header.
 
     ```typescript
-    if (response.status === 401) {
-      const wwwAuth = response.headers.get('www-authenticate');
+    if (getResponse.status === 401) {
+      const wwwAuth = getResponse.headers.get('www-authenticate');
       if (wwwAuth?.toLowerCase().includes('bearer')) {
         requiresOauth = true;
+        // Extract optional discovery URL from header
+        const match = wwwAuth.match(/oauth_authorization_server="([^"]+)"/);
+        discoveryUrl = match ? match[1] : undefined;
       }
     }
     ```
   </Step>
 
-  <Step title="Try Protected Resource Metadata (RFC 9728)">
-    Fetch OAuth server information from MCP server.
+  <Step title="Try POST Request (Harmonic-style Servers)">
+    If GET returns non-401, try POST with MCP protocol request.
 
     ```typescript
-    const metadataUrl = `${mcpServerUrl}/.well-known/oauth-protected-resource`;
-    const metadata = await fetch(metadataUrl).then(r => r.json());
-    // { "resource": "...", "authorization_servers": ["https://auth.example.com"] }
+    if (!requiresOauth) {
+      const postResponse = await fetch(mcpServerUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'tools/list',
+          id: 1
+        })
+      });
+
+      if (postResponse.status === 401) {
+        const wwwAuth = postResponse.headers.get('www-authenticate');
+        if (wwwAuth?.toLowerCase().includes('bearer')) {
+          requiresOauth = true;
+          // Extract optional discovery URL from header
+          const match = wwwAuth.match(/oauth_authorization_server="([^"]+)"/);
+          discoveryUrl = match ? match[1] : undefined;
+        }
+      }
+    }
+    ```
+
+    **Why POST?** Servers like Harmonic AI allow GET for public health checks but require OAuth on POST endpoints.
+  </Step>
+
+  <Step title="Try Discovery URL from Header (Priority 1)">
+    If WWW-Authenticate header includes discovery URL, try it first.
+
+    ```typescript
+    if (discoveryUrl) {
+      // Discovery URL example: "https://example.com/.well-known/oauth-authorization-server"
+      const metadata = await fetch(discoveryUrl).then(r => r.json());
+      if (metadata.authorization_endpoint && metadata.token_endpoint) {
+        return metadata; // Success!
+      }
+    }
     ```
   </Step>
 
-  <Step title="Fetch Authorization Server Metadata (RFC 8414)">
-    Get OAuth endpoints from authorization server.
+  <Step title="Fetch Authorization Server Metadata (Priority 2 - RFC 8414)">
+    If no discovery URL or it failed, try RFC 8414.
 
     ```typescript
-    const authServerUrl = metadata.authorization_servers[0];
-    const serverMetadataUrl = `${authServerUrl}/.well-known/oauth-authorization-server`;
-    const serverMetadata = await fetch(serverMetadataUrl).then(r => r.json());
+    const issuerUrl = new URL(mcpServerUrl);
+    const issuer = `${issuerUrl.protocol}//${issuerUrl.host}`;
+    const rfc8414Url = `${issuer}/.well-known/oauth-authorization-server`;
+    const serverMetadata = await fetch(rfc8414Url).then(r => r.json());
     ```
   </Step>
 
-  <Step title="Fallback to OpenID Connect Discovery">
-    If RFC 8414 fails, try OpenID Connect.
+  <Step title="Fallback to OpenID Connect Discovery (Priority 3)">
+    If RFC 8414 fails, try OpenID Connect as final fallback.
 
     ```typescript
-    const oidcUrl = `${authServerUrl}/.well-known/openid-configuration`;
+    const oidcUrl = `${issuer}/.well-known/openid-configuration`;
     const serverMetadata = await fetch(oidcUrl).then(r => r.json());
     ```
   </Step>
@@ -1169,22 +1360,90 @@ DEPLOYSTACK_ENCRYPTION_SECRET="your-32-character-secret-key-here"
   </Step>
 </Steps>
 
+### Detection Methods by Server Type
+
+Different MCP servers implement OAuth protection at different endpoint levels. DeployStack's hybrid detection approach handles all configurations:
+
+#### Standard Servers (Notion, Box, Linear)
+
+**Behavior**: Return 401 on GET requests to base URL
+
+```
+GET https://mcp.notion.com/
+→ 401 Unauthorized
+WWW-Authenticate: Bearer realm="notion-mcp"
+```
+
+**Detection**: Immediate OAuth detection via GET request (fast path)
+
+#### Harmonic-style Servers (Harmonic AI)
+
+**Behavior**: Allow GET for public health checks, require OAuth on POST endpoints
+
+```
+GET https://mcp.api.harmonic.ai/
+→ 200 OK (public endpoint)
+
+POST https://mcp.api.harmonic.ai/
+Content-Type: application/json
+{ "jsonrpc": "2.0", "method": "tools/list", "id": 1 }
+→ 401 Unauthorized
+WWW-Authenticate: Bearer oauth_authorization_server="https://..."
+```
+
+**Detection**: GET returns 200, POST returns 401 - requires hybrid detection
+
+**Why this pattern?** Public health check endpoints let monitoring systems verify server status without authentication, while actual MCP protocol operations require OAuth.
+
+#### Servers with Discovery URL
+
+**Behavior**: Include `oauth_authorization_server` in WWW-Authenticate header
+
+```
+WWW-Authenticate: Bearer realm="mcp-server",
+                  oauth_authorization_server="https://example.com/.well-known/oauth-authorization-server"
+```
+
+**Detection**: Discovery URL extracted from header and used as first priority for metadata discovery
+
+**Benefit**: Faster discovery - no need to guess or try multiple well-known endpoint patterns
+
 ### Error Handling
 
 **Discovery failures**:
-- **Protected resource metadata not found**: Try authorization server metadata directly (if MCP server provides hint)
+- **GET and POST both return non-401**: Server does not require OAuth
+- **Discovery URL from header fails**: Try RFC 8414 Authorization Server Metadata
 - **Authorization server metadata not found**: Try OpenID Connect discovery
 - **All discovery methods fail**: Return error to user - OAuth configuration cannot be determined
 - **Network timeout**: Retry with exponential backoff (3 attempts)
 - **Invalid JSON**: Log error and return OAuth not supported
 
-**Fallback chain**:
-1. RFC 9728 Protected Resource Metadata
+**Complete Fallback Chain**:
+1. Discovery URL from `WWW-Authenticate` header (if provided)
 2. RFC 8414 Authorization Server Metadata
 3. OpenID Connect Discovery
 4. Give up and return error
 
 ## Integration Points
+
+### Backend → Database
+
+**OAuth detection triggers:**
+
+1. **Server Creation**: `POST /mcp/servers/global`
+   - OAuth detection runs on initial creation
+   - `requires_oauth` stored in `mcpServers` table
+
+2. **Server Updates**: `PUT /mcp/servers/global/:id`
+   - OAuth detection re-runs on every update
+   - `requires_oauth` updated to reflect current state
+   - Ensures accuracy even if server's OAuth config changes
+
+**Why re-detect on updates?**
+- Remote servers might enable/disable OAuth
+- URLs might change to different endpoints
+- Transport types might switch between stdio/http/sse
+- Security verification ensures flag accuracy
 
 ### Frontend → Backend
 
@@ -1285,13 +1544,22 @@ const response = await fetch(mcpServerUrl, {
 
 ### Manual Testing with Real MCP Servers
 
-**Notion MCP Server**:
+**Notion MCP Server** (Standard Detection):
 1. Add Notion to catalog: `https://mcp.notion.com/`
-2. Backend detects OAuth requirement automatically
+2. Backend detects OAuth requirement via GET request (fast path)
 3. Install as user → Opens Notion OAuth page
 4. Authorize → Callback completes installation
 5. Check `mcpOauthTokens` table for encrypted tokens
 6. Verify satellite receives decrypted token in config
+
+**Harmonic AI MCP Server** (Hybrid Detection):
+1. Add Harmonic to catalog: `https://mcp.api.harmonic.ai`
+2. Backend tries GET first (returns 200 - public endpoint)
+3. Backend tries POST with MCP protocol request (returns 401 - OAuth required)
+4. Extracts discovery URL from `WWW-Authenticate` header
+5. Install as user → Opens Harmonic OAuth page
+6. Authorize → Callback completes installation
+7. Verify logs show "OAuth detected via POST"
 
 **Box MCP Server**:
 1. Add Box to catalog: `https://mcp.box.com/`
@@ -1338,11 +1606,69 @@ VALUES (
 3. Check logs for "Using pre-registered OAuth provider: GitHub (Test)"
 4. Verify client_id from provider is used instead of DCR
 
+### Testing OAuth Detection on Updates
+
+**Test Case 1: Update URL to OAuth-enabled server**
+```bash
+# Start with non-OAuth server
+PUT /api/mcp/servers/global/server_123
+{
+  "remotes": [{ "url": "https://public-mcp.example.com" }]
+}
+# → requires_oauth: false
+
+# Update to OAuth-enabled server
+PUT /api/mcp/servers/global/server_123
+{
+  "remotes": [{ "url": "https://mcp.notion.com" }]
+}
+# → OAuth detection runs → requires_oauth: true
+```
+
+**Test Case 2: Security re-check on metadata updates**
+```bash
+# Update description only (URL unchanged)
+PUT /api/mcp/servers/global/server_123
+{
+  "description": "New description"
+}
+# → OAuth detection still runs with existing URL
+# → Verifies OAuth status hasn't changed
+```
+
+**Test Case 3: Transport type change**
+```bash
+# Change from stdio to HTTP
+PUT /api/mcp/servers/global/server_123
+{
+  "transport_type": "http",
+  "remotes": [{ "url": "https://mcp.example.com" }]
+}
+# → OAuth detection runs → requires_oauth updated
+
+# Change from HTTP to stdio
+PUT /api/mcp/servers/global/server_123
+{
+  "transport_type": "stdio"
+}
+# → requires_oauth: false (stdio doesn't use OAuth)
+```
+
 ### Common Issues
+
+**Issue**: "OAuth not detected" for Harmonic-style servers
+- **Cause**: Server returns 200 on GET, only protects POST endpoints
+- **Solution**: Fixed in commit `2d3bf3d7` - Now tries POST with MCP protocol request if GET returns non-401
+- **Verify**: Check logs for "Server returned non-401 on GET, trying POST with MCP protocol request"
 
 **Issue**: "OAuth provider not configured" error
 - **Cause**: MCP server doesn't support DCR and no pre-registered provider matches
 - **Fix**: Add provider to `mcpOauthProviders` table with matching auth server pattern
+
+**Issue**: Discovery URL in header not being used
+- **Cause**: WWW-Authenticate header parsing failed
+- **Debug**: Check logs for "OAuth discovery URL found in WWW-Authenticate header"
+- **Format**: Header must contain `oauth_authorization_server="https://..."`
 
 **Issue**: Tokens not refreshing automatically
 - **Cause**: Cron job not running or refresh token missing
@@ -1362,8 +1688,11 @@ VALUES (
 
 ### Log Analysis
 
-**Successful OAuth flow**:
+**Successful OAuth flow with GET detection** (Standard servers):
 ```
+DEBUG: Making test request to check OAuth requirement (url: https://mcp.notion.com/, method: GET)
+INFO: OAuth detected via GET (url: https://mcp.notion.com/, method: GET)
+INFO: OAuth required, starting discovery (url: https://mcp.notion.com/)
 INFO: Initiating OAuth authorization flow (serverId: notion_mcp, teamId: team_abc)
 INFO: Registering dynamic OAuth client (registrationEndpoint: https://mcp.notion.com/oauth/register)
 INFO: Dynamic client registration successful (clientId: dyn_12345, hasClientSecret: false)
@@ -1371,6 +1700,19 @@ INFO: OAuth authorization initiated successfully (flowId: flow_xyz, authUrl: htt
 INFO: OAuth callback received (flowId: flow_xyz, code: auth_code_123)
 INFO: Token exchange successful (tokenType: Bearer, expiresIn: 3600, hasRefreshToken: true)
 INFO: OAuth flow completed successfully - installation created (installationId: inst_abc)
+```
+
+**Successful OAuth flow with POST detection** (Harmonic-style servers):
+```
+DEBUG: Making test request to check OAuth requirement (url: https://mcp.api.harmonic.ai, method: GET)
+DEBUG: Server returned non-401 status (url: https://mcp.api.harmonic.ai, method: GET, status: 200)
+DEBUG: Server returned non-401 on GET, trying POST with MCP protocol request (url: https://mcp.api.harmonic.ai, method: POST)
+INFO: OAuth requirement detected (401 + WWW-Authenticate: Bearer) (url: https://mcp.api.harmonic.ai, method: POST, discoveryUrl: https://auth.harmonic.ai/.well-known/oauth-authorization-server)
+INFO: OAuth detected via POST (url: https://mcp.api.harmonic.ai, method: POST)
+INFO: OAuth discovery URL found in WWW-Authenticate header (url: https://mcp.api.harmonic.ai, discoveryUrl: https://auth.harmonic.ai/.well-known/oauth-authorization-server)
+DEBUG: Trying discovery URL from WWW-Authenticate header (issuer: https://auth.harmonic.ai, discoveryUrl: https://auth.harmonic.ai/.well-known/oauth-authorization-server)
+INFO: Successfully discovered OAuth metadata via WWW-Authenticate header (issuer: https://auth.harmonic.ai, discoveryUrl: https://auth.harmonic.ai/.well-known/oauth-authorization-server)
+...
 ```
 
 **Failed token refresh**:

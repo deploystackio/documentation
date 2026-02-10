@@ -21,12 +21,17 @@ DeployStack manages MCP server processes on a **per-user basis**:
 
 **Example:**
 ```
-Team "Acme Corp" installs Filesystem MCP with 3 members:
-- Process 1: filesystem-acme-alice-abc123 (Alice's instance)
-- Process 2: filesystem-acme-bob-abc123 (Bob's instance)
-- Process 3: filesystem-acme-charlie-abc123 (Charlie's instance)
+Team "Acme Corp" installs Filesystem MCP (Node.js) with 3 members:
+- Process 1: filesystem-acme-alice-abc123 (Alice's instance, npx command)
+- Process 2: filesystem-acme-bob-abc123 (Bob's instance, npx command)
+- Process 3: filesystem-acme-charlie-abc123 (Charlie's instance, npx command)
 
-Each process runs independently with user-specific configuration.
+Team "Acme Corp" installs DuckDuckGo MCP (Python) with 3 members:
+- Process 1: duckduckgo-acme-alice-def456 (Alice's instance, uvx command)
+- Process 2: duckduckgo-acme-bob-def456 (Bob's instance, uvx command)
+- Process 3: duckduckgo-acme-charlie-def456 (Charlie's instance, uvx command)
+
+Each process runs independently with user-specific configuration and runtime-aware isolation.
 ```
 
 **Core Components:**
@@ -51,12 +56,24 @@ The system automatically selects the appropriate spawning mode based on environm
 - Works on all platforms (macOS, Windows, Linux)
 
 **nsjail Spawn (Production Linux):**
-- Resource limits: 50MB RAM, 60s CPU time, and one process per started MCP server
-- Namespace isolation: PID, mount, UTS, IPC
-- Filesystem isolation: Read-only mounts for `/usr`, `/lib`, `/lib64`, `/bin` with writable `/tmp`
-- Team-specific hostname: `mcp-{team_id}`
-- Non-root user (99999:99999)
-- Network access enabled
+- **Resource limits** (rlimit-based):
+  - Virtual memory: 2048MB (rlimit_as)
+  - CPU time: 60 seconds (rlimit_cpu)
+  - Processes: 1000 (rlimit_nproc)
+  - File descriptors: 1024 (rlimit_nofile)
+  - File size: 50MB (rlimit_fsize)
+- **Namespace isolation** (primary security):
+  - PID namespace: Process tree isolation
+  - Mount namespace: Filesystem isolation
+  - User namespace: UID/GID mapping (prevents privilege escalation)
+  - UTS namespace: Hostname isolation (`mcp-{team_id}`)
+  - IPC namespace: Inter-process communication isolation
+- **Filesystem isolation**:
+  - Read-only system mounts: `/usr`, `/lib`, `/lib64`, `/bin`, `/sbin`, `/etc`
+  - Writable tmpfs: `/tmp` (100MB limit)
+  - Runtime-aware cache directories: `/home/node` for Node.js, `/home/python` for Python
+- **Network access**: Enabled (required for package downloads)
+- **User**: UID/GID mapping via user namespace (deploystack user in production)
 
 <Info>
 **Mode Selection**: The system uses `process.env.NODE_ENV === 'production' && process.platform === 'linux'` to determine isolation mode. This ensures development works seamlessly on all platforms while production deployments get full security.
@@ -69,14 +86,23 @@ Processes are spawned using MCPServerConfig containing:
 - `installation_id`: Database UUID for the installation
 - `team_id`: Team owning the process
 - `user_id`: User owning this specific instance
-- `command`: Executable command (e.g., `npx`, `node`)
+- `command`: Executable command (e.g., `npx` for Node.js, `uvx` for Python, `node`, `python3`)
 - `args`: Command arguments (merged Template + Team + User args)
 - `env`: Environment variables (merged Template + Team + User env vars, plus credentials)
+- `runtime`: Runtime identifier (`node`, `python`) for runtime-aware environment configuration and cache isolation
+- `language`: Programming language (`javascript`, `typescript`, `python`) for categorization
+- `git_commit_sha`: GitHub commit SHA (GitHub deployments only, used for dynamic args reconstruction)
+- `repository_url`: GitHub repository URL (GitHub deployments only)
+- `git_branch`: Git branch name (GitHub deployments only)
 
 <Info>
 **ProcessId Includes User:** The `installation_name` (also called `processId`) now includes the `user_slug` to uniquely identify each user's instance. This enables per-user process isolation and independent lifecycle management.
 
 Example: `filesystem-acme-alice-abc123`
+</Info>
+
+<Info>
+**GitHub Deployments:** For GitHub-deployed servers (`source: 'github'`), the `args` field contains the base GitHub reference WITHOUT the commit SHA (e.g., `github:owner/repo`). The satellite dynamically reconstructs the full reference using `git_commit_sha` during the deployment preparation phase. This ensures redeploys always use the latest SHA without stale template_args. See [Dynamic Args Reconstruction](/development/satellite/github-deployment#dynamic-args-reconstruction).
 </Info>
 
 ### Backend Filtering (awaiting_user_config)
@@ -501,7 +527,8 @@ TeamIsolationService provides:
 - Handshake timeout: 30 seconds
 
 **Resource Usage:**
-- Memory per process: Base ~10-20MB (application-dependent, limited to 50MB in production)
+- Memory per process: Base ~10-20MB (application-dependent, limited to 2048MB virtual via rlimit_as)
+- Runtime-aware cache isolation: Separate cache directories per runtime (`/mcp-cache/node/{team_id}`, `/mcp-cache/python/{team_id}`)
 - Event-driven architecture: Handles multiple processes concurrently
 - CPU overhead: Minimal (background event loop processing)
 
@@ -544,17 +571,28 @@ LOG_LEVEL=debug npm run dev
 - No credentials stored in process arguments or logs
 
 **Resource Limits (Production):**
-- nsjail enforces hard limits: 50MB RAM, 60s CPU, one process
+- nsjail enforces hard limits via rlimits:
+  - Virtual memory: 2048MB (rlimit_as)
+  - CPU time: 60 seconds (rlimit_cpu)
+  - Processes: 1000 (rlimit_nproc)
+  - File descriptors: 1024 (rlimit_nofile)
+  - File size: 50MB (rlimit_fsize)
+- tmpfs for /tmp: 100MB limit
+- tmpfs for GitHub deployments (/app): 300MB kernel-enforced quota
 - Prevents resource exhaustion attacks
+- Runtime-specific cache directories prevent cross-runtime contamination
+- **Note**: Cgroup limits (physical memory 512MB) are currently disabled due to systemd delegation permissions
 
 **Namespace Isolation (Production):**
-- Complete process isolation per team
+- Complete process isolation per team and runtime
 - Separate PID, mount, UTS, IPC namespaces
+- Runtime-aware home directories: `/home/node` for Node.js, `/home/python` for Python
 
 **Filesystem Jailing (Production):**
 - System directories mounted read-only
 - Only `/tmp` writable
-- Prevents filesystem tampering
+- Runtime-specific cache mounts: `/mcp-cache/node/{team_id}`, `/mcp-cache/python/{team_id}`
+- Prevents filesystem tampering and cross-team access
 
 **Network Access:**
 - Enabled by default (MCP servers need external connectivity)

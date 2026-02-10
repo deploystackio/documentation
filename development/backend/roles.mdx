@@ -81,6 +81,44 @@ The RoleSyncService will automatically populate the role's permissions from your
 
 All permissions are auto-generated from role definitions. The `AVAILABLE_PERMISSIONS` array in `permissions/index.ts` contains all unique permissions across all roles, sorted alphabetically.
 
+### Common Permission Categories
+
+**MCP Installations**
+- `mcp.installations.view` - View installation details and configurations
+- `mcp.installations.logs.view` - Read server logs from MCP installations (**global_admin**, **team_admin** only)
+- `mcp.installations.create` - Create new MCP installations
+- `mcp.installations.edit` - Modify installation settings
+- `mcp.installations.delete` - Delete installations
+- `mcp.installations.stats.view` - View installation statistics
+- `mcp.installations.instances.view` - View active instances
+
+**MCP Servers**
+- `mcp.servers.read` - Browse MCP server catalog
+- `mcp.servers.global.view` - View global MCP server definitions
+- `mcp.servers.global.create` - Create global MCP servers
+- `mcp.servers.global.edit` - Edit global MCP servers
+- `mcp.servers.global.delete` - Delete global MCP servers
+
+**Team Management**
+- `teams.view` - View team information
+- `teams.create` - Create new teams
+- `teams.edit` - Modify team settings
+- `teams.delete` - Delete teams
+- `teams.manage` - Full team management access
+- `team.members.view` - View team members
+- `team.members.manage` - Add/remove team members
+
+**User Management**
+- `users.view` - View user accounts
+- `users.create` - Create new users
+- `roles.manage` - Assign and modify user roles
+
+**System**
+- `system.admin` - System administration access
+- `settings.view` - View system settings
+- `settings.edit` - Modify system settings
+- `settings.delete` - Delete system settings
+
 ### Permission Checking
 
 Use the middleware functions for route protection:

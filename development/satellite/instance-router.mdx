@@ -1,0 +1,1012 @@
+---
+title: Instance Router (Path-Based Access)
+description: Direct MCP endpoint access for individual instances using token authentication. Enables standard MCP clients to connect without OAuth complexity.
+---
+
+DeployStack Satellite provides a second MCP access method alongside the hierarchical router: **path-based instance routing**. This enables standard MCP clients to connect directly to individual instances using simple token authentication, without OAuth2 setup or meta-tool discovery.
+
+<Info>
+**Use Case**: Standard MCP clients that need direct access to a specific instance's tools without the complexity of OAuth2 or the two-step discovery pattern of the hierarchical router.
+</Info>
+
+For AI agents and applications requiring access to multiple instances, see [Hierarchical Router](/development/satellite/hierarchical-router) which uses OAuth2 and provides 2 meta-tools for dynamic tool discovery.
+
+## The Problem It Solves
+
+### OAuth2 Complexity for Direct Integration
+
+Standard MCP clients (libraries, scripts, custom applications) face challenges with OAuth2:
+
+**Traditional OAuth2 Requirements:**
+- Browser-based authorization flow
+- Token refresh management
+- Client ID/secret configuration
+- Redirect URL handling
+- State management
+
+**Impact on Simple Clients:**
+```typescript
+// ❌ Complex: OAuth2 flow for simple script
+const oauth = new OAuth2Client(clientId, clientSecret, redirectUrl);
+const authUrl = oauth.generateAuthUrl();
+// User must open browser, authorize, get code...
+const tokens = await oauth.getTokens(authorizationCode);
+// Refresh token management, expiry handling...
+```
+
+### The Instance Router Solution
+
+Path-based routing with token authentication provides direct access:
+
+```typescript
+// ✅ Simple: Direct connection with token
+const client = new Client({ name: "my-script", version: "1.0.0" }, {});
+
+await client.connect(new StreamableHTTPClientTransport({
+  url: "https://satellite.example.com/i/bold-penguin-42a3/mcp?token=ds_inst_abc123..."
+}));
+
+// Done! Start using tools immediately
+```
+
+**Benefits:**
+- No OAuth2 flow required
+- Single token in URL
+- Works in scripts, CLIs, automation
+- Standard MCP client compatibility
+- No browser required
+
+## Architecture Overview
+
+### Two Parallel Routers
+
+The satellite operates two independent MCP routers simultaneously:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Satellite Server                          │
+│                                                              │
+│  ┌──────────────────────────────────────────────┐          │
+│  │      Hierarchical Router (/mcp)               │          │
+│  │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │          │
+│  │  Auth: OAuth2 Bearer token                    │          │
+│  │  Scope: All user's instances                  │          │
+│  │  Tools: 2 meta-tools (discover + execute)     │          │
+│  │  Use: AI agents (Claude, Cursor)              │          │
+│  └────────────────┬─────────────────────────────┘          │
+│                   │                                          │
+│                   │ shares                                   │
+│                   ▼                                          │
+│  ┌──────────────────────────────────────────────┐          │
+│  │       McpToolExecutor (SHARED)                │          │
+│  │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │          │
+│  │  • stdio tool execution                       │          │
+│  │  • HTTP/SSE tool execution                    │          │
+│  │  • OAuth token injection                      │          │
+│  │  • Request logging & batching                 │          │
+│  │  • Error handling & recovery                  │          │
+│  └────────────────▲─────────────────────────────┘          │
+│                   │                                          │
+│                   │ shares                                   │
+│                   │                                          │
+│  ┌────────────────┴─────────────────────────────┐          │
+│  │      Instance Router (/i/:path/mcp)           │          │
+│  │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │          │
+│  │  Auth: Query param ?token=ds_inst_...         │          │
+│  │  Scope: Single specific instance              │          │
+│  │  Tools: ALL tools from that instance          │          │
+│  │  Use: Direct MCP clients                      │          │
+│  └──────────────────────────────────────────────┘          │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Key Design Principles
+
+**Shared Execution, Separate Sessions:**
+- Both routers share the same `McpToolExecutor` for consistent tool execution
+- OAuth token injection, retry logic, and recovery are shared
+- Each router maintains its own session manager to prevent collision
+- Independent authentication mechanisms (OAuth2 vs token)
+
+**Single Responsibility:**
+- **Hierarchical Router**: Multi-instance access for AI agents
+- **Instance Router**: Single-instance access for direct clients
+
+## Route Endpoints
+
+The instance router exposes three standard MCP endpoints:
+
+### POST /i/:instancePath/mcp
+
+**Purpose:** Client-to-server MCP messages (initialize, tools/list, tools/call)
+
+**URL Format:**
+```
+POST https://satellite.example.com/i/:instancePath/mcp?token=<instance_token>
+```
+
+**Parameters:**
+- `:instancePath` - URL path parameter (e.g., `bold-penguin-42a3`)
+- `token` - Query parameter (e.g., `ds_inst_abc123...`)
+
+**Headers:**
+- `Content-Type: application/json`
+- `mcp-session-id: <session-id>` (optional, for session reuse)
+
+**Body:** JSON-RPC 2.0 request
+
+**Examples:**
+- Initialize: `{"method": "initialize", ...}`
+- List tools: `{"method": "tools/list", ...}`
+- Call tool: `{"method": "tools/call", "params": {"name": "create_issue", "arguments": {...}}}`
+
+### GET /i/:instancePath/mcp
+
+**Purpose:** Server-to-client notifications via Server-Sent Events (SSE)
+
+**URL Format:**
+```
+GET https://satellite.example.com/i/:instancePath/mcp?token=<instance_token>
+```
+
+**Headers:**
+- `mcp-session-id: <session-id>` (required)
+
+**Response:** SSE stream with MCP notifications
+
+### DELETE /i/:instancePath/mcp
+
+**Purpose:** Session termination
+
+**URL Format:**
+```
+DELETE https://satellite.example.com/i/:instancePath/mcp?token=<instance_token>
+```
+
+**Headers:**
+- `mcp-session-id: <session-id>` (required)
+
+**Response:** Session closed
+
+## Authentication Flow
+
+### Token Format
+
+Instance tokens follow a specific format for easy identification:
+
+```
+ds_inst_<64 hexadecimal characters>
+```
+
+**Example:**
+```
+ds_inst_a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456
+```
+
+**Components:**
+- `ds_inst_` - Prefix for token type identification (12 characters)
+- `<64 hex>` - Cryptographically random token (64 characters)
+- **Total Length**: 71 characters
+
+### SHA-256 Hash Validation
+
+Tokens are validated using SHA-256 hash comparison:
+
+**Storage:**
+- Backend generates token during instance creation
+- SHA-256 hash stored in database (`instance_token_hash` column)
+- Plain token shown to user ONCE (copy before closing)
+- Hash included in satellite configuration
+
+**Validation Process:**
+```typescript
+// 1. Extract token from query parameter
+const token = request.query.token; // "ds_inst_abc123..."
+
+// 2. Validate format
+if (!token || !token.startsWith('ds_inst_')) {
+  return 401; // Invalid token format
+}
+
+// 3. Hash incoming token
+const hash = crypto.createHash('sha256').update(token).digest('hex');
+
+// 4. Compare with stored hash
+if (hash !== config.instance_token_hash) {
+  return 401; // Invalid token
+}
+
+// 5. Store auth context
+request.instanceAuth = { processId, serverConfig, instancePath };
+```
+
+### Authentication Error Responses
+
+**404 Not Found:**
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32000,
+    "message": "Instance not found: instance-path-xyz"
+  },
+  "id": null
+}
+```
+
+**401 Unauthorized (Missing Token):**
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32000,
+    "message": "Missing or invalid token format"
+  },
+  "id": null
+}
+```
+
+**401 Unauthorized (Invalid Token):**
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32000,
+    "message": "Invalid token for instance: instance-path-xyz"
+  },
+  "id": null
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32603,
+    "message": "Instance missing token hash in configuration"
+  },
+  "id": null
+}
+```
+
+## Session Management
+
+### Session Lifecycle
+
+The instance router supports three session modes:
+
+#### 1. Create New Session (Initialize)
+
+**Trigger:** Client sends `initialize` request without existing session
+
+**Process:**
+1. Validate token
+2. Check if stdio process is active (respawn if dormant)
+3. Create new MCP session
+4. Generate unique session ID
+5. Set up MCP server with instance tools
+6. Return session ID in response
+
+**Client Receives:**
+- Session ID in response
+- Should include in subsequent requests as `mcp-session-id` header
+
+#### 2. Reuse Existing Session
+
+**Trigger:** Client sends request with valid `mcp-session-id` header
+
+**Process:**
+1. Validate token
+2. Look up session by ID
+3. Verify session exists and is active
+4. Process request using existing session
+
+**Benefits:**
+- No session recreation overhead
+- Maintains state between requests
+- Faster request processing
+
+#### 3. Resurrect Stale Session
+
+**Trigger:** Client sends request with `mcp-session-id` for non-existent session
+
+**Process:**
+1. Validate token
+2. Session not found in memory (possibly satellite restarted)
+3. Respawn stdio process if needed
+4. Create new session with same ID
+5. Send synthetic `initialize` request to MCP server
+6. Process client's original request
+
+**Why This Matters:**
+- Handles satellite restarts gracefully
+- Client doesn't need to reinitialize manually
+- Maintains user experience
+
+### Session Storage
+
+Sessions are stored in a separate `McpSessionManager` instance:
+
+```typescript
+// Separate from hierarchical router
+const instanceSessionManager = new McpSessionManager(logger);
+
+// Session map structure
+Map<sessionId, {
+  transport: StreamableHTTPServerTransport,
+  instancePath: string,
+  processId: string,
+  createdAt: Date
+}>
+```
+
+**Key Points:**
+- Sessions isolated from hierarchical router
+- No collision risk between routers
+- Independent cleanup lifecycle
+- Session ID format: UUID v4
+
+### Process Respawning (stdio Only)
+
+For stdio-based MCP servers, the instance router ensures processes are active:
+
+**When Respawning Happens:**
+- Initialize request AND process is dormant/crashed
+- Stale session resurrection AND stdio transport
+
+**Process:**
+```typescript
+async ensureProcessActive(processId: string): Promise<void> {
+  const instance = this.processManager.getInstance(processId);
+
+  if (!instance) return; // Process not found
+  if (instance.status === 'online') return; // Already active
+  if (instance.transport !== 'stdio') return; // HTTP/SSE never dormant
+
+  // Respawn process
+  await this.processManager.startProcess(processId);
+
+  // Wait for startup (non-blocking)
+  await this.processManager.waitForReady(processId, { timeout: 5000 });
+}
+```
+
+**Non-Fatal:**
+- Respawn failures log warning and continue
+- Client request proceeds anyway
+- Tool execution will fail if process actually down
+- Recovery system handles permanent failures
+
+## Tool Discovery & Execution
+
+### Tool List Response
+
+Unlike the hierarchical router's 2 meta-tools, the instance router returns **ALL actual tools** from the specific instance:
+
+**Hierarchical Router (2 meta-tools):**
+```json
+{
+  "tools": [
+    {"name": "discover_mcp_tools", "description": "...", "inputSchema": {...}},
+    {"name": "execute_mcp_tool", "description": "...", "inputSchema": {...}}
+  ]
+}
+```
+
+**Instance Router (actual tools):**
+```json
+{
+  "tools": [
+    {"name": "create_issue", "description": "Create a GitHub issue", "inputSchema": {...}},
+    {"name": "get_file", "description": "Read file contents", "inputSchema": {...}},
+    {"name": "list_repos", "description": "List repositories", "inputSchema": {...}},
+    {"name": "create_branch", "description": "Create a new branch", "inputSchema": {...}}
+  ]
+}
+```
+
+**Key Differences:**
+- Tool names are **original/non-namespaced** (`create_issue` not `github:create_issue`)
+- Full tool definitions included (name, description, inputSchema)
+- Filtered to specific instance only (other instances' tools hidden)
+- No search required (direct list)
+
+### Tool Name Conversion
+
+Internally, the instance router converts tool names for execution:
+
+**Client Perspective (External Format):**
+```typescript
+// Client calls tool with original name
+await client.callTool({
+  name: "create_issue",  // Non-namespaced
+  arguments: { title: "Bug", body: "Fix" }
+});
+```
+
+**Satellite Internal (Routing Format):**
+```typescript
+// Router converts to namespaced format
+const toolName = request.params.name; // "create_issue"
+const namespacedTool = `${processId}:${toolName}`; // "proc_123:create_issue"
+
+// Execute via shared executor
+await toolExecutor.executeToolCall(namespacedTool, args, processId);
+```
+
+**Why Conversion is Needed:**
+- `McpToolExecutor` expects namespaced format for routing
+- Maintains consistency with hierarchical router's internal format
+- Enables process-specific targeting
+- Transparent to client (automatic conversion)
+
+### Shared Tool Executor
+
+Both routers use the same `McpToolExecutor` instance:
+
+**Shared Functionality:**
+- stdio tool execution (JSON-RPC to subprocess)
+- HTTP/SSE tool execution (HTTP requests to remote servers)
+- OAuth token injection (for servers requiring authentication)
+- Retry logic and error recovery
+- Request logging and batching
+- Status tracking integration
+
+**Benefits:**
+- No code duplication
+- Consistent behavior across routers
+- Single source of truth for execution logic
+- Shared request log buffer (unified analytics)
+
+## Complete Request Flow
+
+### Step 1: Initialize Session
+
+**Request:**
+```bash
+curl -X POST "https://satellite.example.com/i/bold-penguin-42a3/mcp?token=ds_inst_abc123..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "initialize",
+    "id": 0,
+    "params": {
+      "protocolVersion": "2024-11-05",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "my-client",
+        "version": "1.0.0"
+      }
+    }
+  }'
+```
+
+**Processing:**
+1. Token validated (SHA-256 hash comparison)
+2. Instance found by path: `bold-penguin-42a3`
+3. stdio process respawned if dormant
+4. New session created with UUID
+5. MCP server set up with instance tools
+6. Initialize forwarded to underlying MCP server
+
+**Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {
+      "tools": {}
+    },
+    "serverInfo": {
+      "name": "github",
+      "version": "1.0.0"
+    }
+  },
+  "id": 0
+}
+```
+
+**Client Action:**
+- Extract session ID from response headers
+- Include in all subsequent requests
+
+### Step 2: List Tools
+
+**Request:**
+```bash
+curl -X POST "https://satellite.example.com/i/bold-penguin-42a3/mcp?token=ds_inst_abc123..." \
+  -H "Content-Type: application/json" \
+  -H "mcp-session-id: 550e8400-e29b-41d4-a716-446655440000" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tools/list",
+    "id": 1
+  }'
+```
+
+**Processing:**
+1. Token validated
+2. Session reused (ID found in header)
+3. Filter cached tools by `processId`
+4. Return actual tool definitions (not meta-tools)
+
+**Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "tools": [
+      {
+        "name": "create_issue",
+        "description": "Create a new issue in a repository",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "repo": {"type": "string"},
+            "title": {"type": "string"},
+            "body": {"type": "string"}
+          },
+          "required": ["repo", "title"]
+        }
+      },
+      {
+        "name": "get_file",
+        "description": "Read file contents from repository",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "repo": {"type": "string"},
+            "path": {"type": "string"}
+          },
+          "required": ["repo", "path"]
+        }
+      }
+    ]
+  },
+  "id": 1
+}
+```
+
+### Step 3: Call Tool
+
+**Request:**
+```bash
+curl -X POST "https://satellite.example.com/i/bold-penguin-42a3/mcp?token=ds_inst_abc123..." \
+  -H "Content-Type: application/json" \
+  -H "mcp-session-id: 550e8400-e29b-41d4-a716-446655440000" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "id": 2,
+    "params": {
+      "name": "create_issue",
+      "arguments": {
+        "repo": "deploystackio/deploystack",
+        "title": "Test issue",
+        "body": "This is a test"
+      }
+    }
+  }'
+```
+
+**Processing:**
+1. Token validated
+2. Session reused
+3. Tool name converted: `create_issue` → `proc_123:create_issue`
+4. Routed to shared `McpToolExecutor`
+5. Tool executed via stdio subprocess
+6. Result returned
+
+**Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"issue_number\": 42, \"url\": \"https://github.com/deploystackio/deploystack/issues/42\"}"
+      }
+    ]
+  },
+  "id": 2
+}
+```
+
+## Comparison: Hierarchical vs Instance Router
+
+| Aspect | Hierarchical (`/mcp`) | Instance (`/i/:path/mcp`) |
+|--------|----------------------|---------------------------|
+| **Authentication** | OAuth2 Bearer token | URL query param `?token=` |
+| **Token Validation** | Backend API introspection | SHA-256 hash (local, fast) |
+| **Authorization Scope** | All user's instances across team | Single specific instance only |
+| **Tools Exposed** | 2 meta-tools (discover + execute) | ALL actual tools from instance |
+| **Tool Names** | Namespaced (`server:tool`) | Original (`tool`) |
+| **Tool Discovery** | Fuse.js fuzzy search | Direct list (no search) |
+| **Discovery Step** | Required (two-step pattern) | Not required (tools in list) |
+| **Session Manager** | Own instance | Own instance (separate) |
+| **Tool Executor** | Shared | Shared |
+| **Primary Use Case** | AI agents (Claude, Cursor, VS Code) | Direct clients (scripts, apps, CLIs) |
+| **Setup Complexity** | OAuth2 flow required | Single token in URL |
+| **Browser Requirement** | Yes (for OAuth authorization) | No |
+| **Multi-Instance Access** | Yes (all user's instances) | No (one instance per connection) |
+| **Best For** | Interactive AI assistance | Automation, scripts, integrations |
+
+## Client Integration Examples
+
+### TypeScript/Node.js
+
+```typescript
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamablehttp.js";
+
+// Create MCP client
+const client = new Client(
+  {
+    name: "my-automation-script",
+    version: "1.0.0"
+  },
+  {
+    capabilities: {}
+  }
+);
+
+// Connect to specific instance via path-based router
+await client.connect(
+  new StreamableHTTPClientTransport({
+    url: "https://satellite.example.com/i/bold-penguin-42a3/mcp?token=ds_inst_abc123def456..."
+  })
+);
+
+// List available tools (returns actual tools, not meta-tools)
+const { tools } = await client.listTools();
+console.log(`Instance has ${tools.length} tools`);
+
+tools.forEach(tool => {
+  console.log(`- ${tool.name}: ${tool.description}`);
+});
+
+// Call a tool directly (no discovery step needed)
+const result = await client.callTool({
+  name: "create_issue",
+  arguments: {
+    repo: "deploystackio/deploystack",
+    title: "Automated issue from script",
+    body: "This issue was created by an automation script."
+  }
+});
+
+console.log("Issue created:", result);
+
+// Close connection when done
+await client.close();
+```
+
+### Python
+
+```python
+from mcp import Client, StreamableHTTPClientTransport
+import asyncio
+
+async def main():
+    # Create client
+    client = Client(
+        {
+            "name": "python-automation",
+            "version": "1.0.0"
+        },
+        {
+            "capabilities": {}
+        }
+    )
+
+    # Connect to instance
+    transport = StreamableHTTPClientTransport(
+        url="https://satellite.example.com/i/bold-penguin-42a3/mcp?token=ds_inst_abc123..."
+    )
+
+    await client.connect(transport)
+
+    # List tools
+    tools_response = await client.list_tools()
+    print(f"Instance has {len(tools_response['tools'])} tools")
+
+    # Call tool
+    result = await client.call_tool(
+        "create_issue",
+        {
+            "repo": "deploystackio/deploystack",
+            "title": "Issue from Python",
+            "body": "Created via Python script"
+        }
+    )
+
+    print("Result:", result)
+
+    # Cleanup
+    await client.close()
+
+asyncio.run(main())
+```
+
+### Raw HTTP (curl)
+
+```bash
+#!/bin/bash
+
+SATELLITE_URL="https://satellite.example.com"
+INSTANCE_PATH="bold-penguin-42a3"
+TOKEN="ds_inst_abc123def456..."
+BASE_URL="${SATELLITE_URL}/i/${INSTANCE_PATH}/mcp?token=${TOKEN}"
+
+# Initialize session
+INIT_RESPONSE=$(curl -s -X POST "$BASE_URL" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "initialize",
+    "id": 0,
+    "params": {
+      "protocolVersion": "2024-11-05",
+      "capabilities": {},
+      "clientInfo": {"name": "bash-script", "version": "1.0.0"}
+    }
+  }')
+
+# Extract session ID from response headers (implementation-specific)
+SESSION_ID="<extract-from-headers>"
+
+# List tools
+curl -X POST "$BASE_URL" \
+  -H "Content-Type: application/json" \
+  -H "mcp-session-id: $SESSION_ID" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tools/list",
+    "id": 1
+  }'
+
+# Call tool
+curl -X POST "$BASE_URL" \
+  -H "Content-Type: application/json" \
+  -H "mcp-session-id: $SESSION_ID" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "id": 2,
+    "params": {
+      "name": "create_issue",
+      "arguments": {
+        "repo": "deploystackio/deploystack",
+        "title": "Issue from bash script",
+        "body": "Automation test"
+      }
+    }
+  }'
+```
+
+## Performance Characteristics
+
+### Token Validation Latency
+
+**SHA-256 Hash Comparison:**
+- **Latency**: < 1ms (local computation)
+- **No Network Calls**: Unlike OAuth2 introspection (50-200ms)
+- **CPU Overhead**: Negligible (SHA-256 is fast)
+
+**Comparison:**
+| Method | Latency | Network | Caching |
+|--------|---------|---------|---------|
+| SHA-256 Hash | < 1ms | No | N/A |
+| OAuth2 Introspection | 50-200ms | Yes | Possible |
+
+### Session Overhead
+
+**New Session Creation:**
+- Process respawn (stdio only): 500-2000ms
+- Session setup: 5-10ms
+- MCP initialize: 10-50ms
+- **Total**: 15-60ms (HTTP/SSE), 515-2050ms (stdio with cold start)
+
+**Session Reuse:**
+- Session lookup: < 1ms
+- No initialization overhead
+- **Total**: < 1ms additional latency
+
+**Stale Session Resurrection:**
+- Similar to new session creation
+- Synthetic initialize: +5ms
+- **Total**: Same as new session
+
+### Shared Executor Benefits
+
+**Memory:**
+- Single executor instance serves both routers
+- No duplication of execution logic
+- Shared request log buffer (batched emission)
+
+**Consistency:**
+- Same OAuth injection logic
+- Same retry behavior
+- Same error recovery
+- Same logging format
+
+**Latency:**
+- Routing overhead: < 1ms
+- Tool execution time: depends on tool (stdio: 10-500ms, HTTP: 50-2000ms)
+
+## Implementation Details
+
+### Code Locations
+
+**Main Implementation:**
+```
+services/satellite/src/core/instance-router.ts (404 lines)
+```
+
+**Shared Modules:**
+```
+services/satellite/src/lib/mcp-tool-executor.ts
+services/satellite/src/lib/mcp-session-manager.ts
+```
+
+**Integration:**
+```
+services/satellite/src/server.ts (lines 1262-1282, 1325-1336)
+```
+
+### Key Classes and Methods
+
+**InstanceRouter Class:**
+
+```typescript
+class InstanceRouter {
+  constructor({
+    logger: FastifyBaseLogger,
+    toolExecutor: McpToolExecutor,
+    sessionManager: McpSessionManager,
+    configManager: DynamicConfigManager,
+    toolDiscoveryManager: UnifiedToolDiscoveryManager,
+    processManager: ProcessManager
+  })
+
+  // Route registration
+  setupRoutes(fastify: FastifyInstance): void
+
+  // Authentication
+  private authenticateInstance(request, reply): Promise<void>
+
+  // Instance lookup
+  private findInstanceByPath(instancePath: string): { processId, config } | null
+
+  // MCP server setup
+  private setupInstanceMcpServer(processId: string): McpServer
+
+  // Process management
+  private async ensureProcessActive(processId: string): Promise<void>
+}
+```
+
+**Key Methods:**
+
+1. **`authenticateInstance()`** - Token validation middleware
+   - Extracts token from query param
+   - Validates format (`ds_inst_` prefix)
+   - Computes SHA-256 hash
+   - Compares with stored hash
+   - Stores auth context in request
+
+2. **`findInstanceByPath()`** - Instance lookup
+   - Searches all enabled configs
+   - Matches by `instance_path` field
+   - Returns `{ processId, config }` or null
+
+3. **`setupInstanceMcpServer()`** - MCP server registration
+   - Registers `tools/list` handler (returns actual tools)
+   - Registers `tools/call` handler (converts names, executes)
+   - Filters tools by process ID
+   - Returns MCP Server instance
+
+4. **`ensureProcessActive()`** - Process respawning
+   - Checks process status
+   - Respawns if dormant (stdio only)
+   - Waits for ready state
+   - Non-fatal on failure
+
+### Dependencies
+
+**Direct Dependencies:**
+- `@modelcontextprotocol/sdk` - MCP protocol implementation
+- `fastify` - HTTP server framework
+- `crypto` - SHA-256 hash computation
+
+**Internal Dependencies:**
+- `DynamicConfigManager` - Instance configuration lookup
+- `UnifiedToolDiscoveryManager` - Tool cache access
+- `ProcessManager` - stdio process lifecycle
+- `McpToolExecutor` - Shared tool execution
+- `McpSessionManager` - Session lifecycle
+
+## Security Considerations
+
+### Token Security
+
+**Storage:**
+- ✅ Plain token NEVER stored in database
+- ✅ SHA-256 hash stored instead
+- ✅ Token shown to user once (must copy)
+- ❌ No token recovery if lost
+
+**Transmission:**
+- ⚠️ Token in URL query parameter (visible in logs)
+- ✅ HTTPS required in production (encrypts URL)
+- ✅ No token in request body (prevents accidental logging)
+
+**Best Practices:**
+- Use HTTPS in production (required)
+- Treat tokens like passwords (don't share)
+- Rotate tokens if compromised
+- Monitor for unauthorized access attempts
+
+### Instance Isolation
+
+**Process-Level:**
+- Each instance runs in separate subprocess (stdio)
+- No cross-instance tool access
+- Token scoped to specific instance
+
+**Session-Level:**
+- Sessions isolated per instance
+- No cross-session data leakage
+- Independent session managers prevent collision
+
+**Configuration-Level:**
+- Instance path uniqueness enforced in database
+- Token hash uniqueness enforced in database
+- No instance path collisions possible
+
+## When to Use Each Router
+
+### Use Hierarchical Router (`/mcp`) When:
+
+✅ Building AI agent integrations (Claude Desktop, Cursor, VS Code)
+✅ Users need access to multiple instances
+✅ OAuth2 authentication is acceptable
+✅ Two-step discovery pattern is okay
+✅ User identity matters (per-user tool filtering)
+
+### Use Instance Router (`/i/:path/mcp`) When:
+
+✅ Building automation scripts or CLIs
+✅ Direct integration with standard MCP clients
+✅ Single instance access is sufficient
+✅ OAuth2 is too complex for use case
+✅ Token-based auth is preferred
+✅ Browser-less operation required
+✅ Tool list should show all tools directly
+
+### Example Decision Tree
+
+```
+Need MCP integration?
+├─ Yes → Do you need OAuth2 user context?
+│        ├─ Yes → Use Hierarchical Router
+│        └─ No → Do you need multiple instances?
+│                 ├─ Yes → Use Hierarchical Router
+│                 └─ No → Use Instance Router
+└─ No → (not relevant)
+```
+
+## Related Documentation
+
+- [Hierarchical Router](/development/satellite/hierarchical-router) - OAuth2-based multi-instance access with 2 meta-tools
+- [Tool Discovery](/development/satellite/tool-discovery) - Internal tool caching and discovery system
+- [Instance Lifecycle](/development/satellite/instance-lifecycle) - Per-user instance management and status tracking
+- [Process Management](/development/satellite/process-management) - stdio MCP server process lifecycle
+- [MCP Transport Protocols](/development/satellite/mcp-transport) - StreamableHTTP transport details
+- [Session Management](/development/satellite/mcp-transport) - MCP session lifecycle and resurrection
+- [OAuth Authentication](/development/satellite/oauth-authentication) - OAuth token injection for MCP servers
+- [Architecture Overview](/development/satellite/architecture) - Complete satellite design and components

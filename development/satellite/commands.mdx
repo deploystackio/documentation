@@ -44,23 +44,72 @@ Each satellite command contains:
 **Payload Structure**:
 ```json
 {
-  "event": "mcp_installation_created|mcp_installation_updated",
+  "event": "mcp_installation_created|mcp_installation_updated|mcp_installation_deleted|mcp_recovery|mcp_redeploy",
   "installation_id": "installation-uuid",
-  "team_id": "team-uuid"
+  "team_id": "team-uuid",
+  "user_id": "user-uuid"
 }
 ```
 
+**Event Types**:
+
+| Event | Purpose | Triggered By |
+|-------|---------|--------------|
+| `mcp_installation_created` | Initial MCP server installation | User installs new MCP server |
+| `mcp_installation_updated` | Configuration update (args, env) | User modifies MCP server settings |
+| `mcp_installation_deleted` | MCP server removal | User uninstalls MCP server |
+| `mcp_recovery` | Offline server recovery | Backend health check detects server back online |
+| `mcp_redeploy` | GitHub deployment redeploy | User clicks "Redeploy" on GitHub-deployed server |
+
 **Satellite Actions**:
+
+**For `mcp_installation_created` and `mcp_installation_updated`**:
 1. Fetch updated MCP server configurations from backend
 2. Compare with existing configurations using hash-based change detection
 3. Spawn new MCP servers based on transport type:
    - **stdio transport**: Spawn Node.js subprocess via ProcessManager
    - **HTTP transport**: Configure HTTP proxy routes
-4. Terminate MCP servers for deleted installations:
+4. Perform tool discovery on newly spawned/configured servers
+5. Report process status to backend via events
+
+**For `mcp_installation_deleted`**:
+1. Terminate MCP servers for deleted installations:
    - **stdio transport**: Graceful process termination (SIGTERM → SIGKILL)
    - **HTTP transport**: Remove proxy routes
-5. Perform tool discovery on newly spawned/configured servers
-6. Report process status to backend via team-grouped heartbeat
+2. Clean up deployment directories (GitHub deployments)
+3. Clear dormant configs and restart tracking
+
+**For `mcp_recovery`**:
+1. Find server config by installation_id
+2. Skip stdio servers (handled via process lifecycle)
+3. For HTTP/SSE servers:
+   - Emit `connecting` status
+   - Trigger tool re-discovery
+   - Emit `discovering_tools` → `online` status progression
+4. Update frontend with recovered server status
+
+**For `mcp_redeploy`** (GitHub deployments only):
+1. Find server config by installation_id and user_id
+2. For active stdio processes:
+   - Call `removeServerCompletely()` to delete deployment directory
+   - Trigger config refresh to download fresh from GitHub
+   - Extract, install dependencies, build, spawn with new code
+3. For dormant stdio processes:
+   - Clear dormant config to force fresh download
+   - Trigger config refresh
+4. For HTTP/SSE servers:
+   - Trigger tool re-discovery (no code download needed)
+5. Status progression: `restarting` → `connecting` → `discovering_tools` → `online`
+6. New tools from GitHub repository become available
+
+**GitHub Redeploy Flow**:
+- Deletes old deployment directory (`/tmp/mcp-xxx` or `/opt/mcp-deployments/...`)
+- Downloads fresh tarball from GitHub (new commit SHA)
+- Extracts to new directory
+- Runs `npm install` or `uv sync`
+- Runs build scripts if configured
+- Spawns process with updated code
+- Discovers new/updated tools
 
 ### restart
 

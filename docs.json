@@ -32,6 +32,7 @@
             "pages": [
               "/general/mcp-catalog",
               "/general/mcp-installation",
+              "/general/mcp-connection-methods",
               "/general/mcp-categories",
               "/general/mcp-admin-schema-workflow",
               "/general/mcp-oauth"
@@ -83,6 +84,7 @@
               "/development/frontend/architecture",
               "/development/frontend/environment-variables",
               "/development/frontend/event-bus",
+              "/development/frontend/team-context",
               "/development/frontend/global-settings",
               "/development/frontend/internationalization",
               "/development/frontend/plugins",
@@ -124,6 +126,7 @@
               "/development/backend/environment-variables",
               "/development/backend/plugins",
               "/development/backend/security",
+              "/development/backend/mcp-server-security",
               "/development/backend/html-sanitization",
               "/development/backend/logging",
               "/development/backend/test"
@@ -133,6 +136,7 @@
             "group": "Advanced",
             "pages": [
               "/development/backend/user-preferences-system",
+              "/development/backend/team-mcp-limits",
               "/development/backend/events",
               "/development/backend/global-settings",
               "/development/backend/job-queue",
@@ -201,8 +205,12 @@
             "pages": [
               "/development/satellite/mcp-transport",
               "/development/satellite/hierarchical-router",
+              "/development/satellite/instance-router",
               "/development/satellite/instance-lifecycle",
               "/development/satellite/process-management",
+              "/development/satellite/github-deployment",
+              "/development/satellite/github-deployment-redeploy",
+              "/development/satellite/mcp-server-security",
               "/development/satellite/team-isolation",
               "/development/satellite/tool-discovery",
               "/development/satellite/idle-process-management",
@@ -223,6 +231,7 @@
             "pages": [
               "/development/satellite/backend-communication",
               "/development/satellite/event-system",
+              "/development/satellite/heartbeat",
               "/development/satellite/polling",
               "/development/satellite/commands",
               "/development/satellite/registration"

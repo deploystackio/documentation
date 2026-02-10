@@ -63,6 +63,21 @@ MCP Client                    Satellite                    Backend
 
 For detailed team isolation implementation, see [Team Isolation Implementation](/development/satellite/team-isolation).
 
+**RFC 9728 Protected Resource Metadata:**
+- Exposes `/.well-known/oauth-protected-resource` endpoint for MCP client discovery
+- Returns resource identifier: `${DEPLOYSTACK_SATELLITE_URL}/mcp` (fixes Gemini CLI audience mismatch)
+- Advertises supported scopes: `["mcp:read", "mcp:tools:execute"]`
+- Specifies bearer token methods: `["header"]`
+- Provides documentation link for MCP clients
+- Enables zero-configuration OAuth for compliant MCP clients
+
+**RFC 8707 Audience Validation:**
+- Validates token `aud` (audience) claim matches satellite URL
+- Prevents token reuse across different satellites
+- Audience format: `https://satellite.deploystack.io/mcp`
+- Backend generates `aud` claim from `resource` parameter
+- Satellite validates via token introspection response
+
 **Dynamic Client Support:**
 - Supports RFC 7591 dynamically registered clients
 - Handles VS Code MCP extension client caching
@@ -82,11 +97,28 @@ For detailed team isolation implementation, see [Team Isolation Implementation](
 - File: `services/satellite/src/middleware/auth-middleware.ts`
 - Purpose: Bearer token validation and scope enforcement
 - Integration: Fastify preValidation hooks
+- **RFC 9728 Enhancements:**
+  - WWW-Authenticate headers use `resource_metadata` instead of direct URIs
+  - Includes OAuth error codes (`invalid_token`, `insufficient_scope`)
+  - Adds Link header for proactive discovery: `Link: </.well-known/oauth-protected-resource>; rel="oauth-protected-resource"`
+  - Error responses include `resource_metadata_uri` for discovery starting point
 
 **Team-Aware MCP Handler:**
 - File: `services/satellite/src/services/team-aware-mcp-handler.ts`
 - Purpose: Team-filtered tool discovery and execution
 - Dependencies: DynamicConfigManager, RemoteToolDiscoveryManager
+
+**OAuth Discovery Routes:**
+- File: `services/satellite/src/routes/oauth-discovery.ts`
+- Purpose: RFC 9728 Protected Resource Metadata and RFC 8414 Authorization Server Metadata
+- Endpoints:
+  - `GET /.well-known/oauth-protected-resource` - Resource metadata with scopes and capabilities
+  - `GET /.well-known/oauth-authorization-server` - Proxy to backend authorization server metadata
+  - `GET /.well-known/openid-configuration` - VS Code compatibility endpoint
+- **Resource URL Format:** `${DEPLOYSTACK_SATELLITE_URL}/mcp` (fixes Gemini CLI audience mismatch)
+- **Environment Variables:**
+  - `DEPLOYSTACK_SATELLITE_URL` - Base satellite URL (e.g., `https://satellite.deploystack.io`)
+  - `DEPLOYSTACK_RESOURCE_DOCUMENTATION` - Documentation URL (defaults to `https://docs.deploystack.io/`)
 
 ### Route Integration
 
@@ -114,6 +146,14 @@ For detailed team isolation implementation, see [Team Isolation Implementation](
 - Required for tool execution (`tools/call`)
 - Required for MCP JSON-RPC message sending
 - Includes read permissions implicitly
+
+**offline_access:**
+- Required for refresh token issuance
+- Enables long-lived sessions for MCP clients
+
+<Info>
+**Default Scopes**: The `scope` parameter is optional in authorization requests. When not provided, the Backend defaults to `mcp:read mcp:tools:execute offline_access`. This allows MCP clients that don't send scope (like Claude Code) to authenticate without errors.
+</Info>
 
 ### Team-Based Access Control
 
@@ -691,6 +731,7 @@ console.log('Challenge:', challenge);
 "
 
 # Step 2: Authorization request (browser)
+# Note: scope is optional - defaults to "mcp:read mcp:tools:execute offline_access"
 http://localhost:3000/api/oauth2/auth?response_type=code&client_id=test_client&redirect_uri=http://localhost:3000/callback&scope=mcp:read%20mcp:tools:execute&team=<TEAM_ID>&state=abc123&code_challenge=<CHALLENGE>&code_challenge_method=S256
 
 # Step 3: Token exchange

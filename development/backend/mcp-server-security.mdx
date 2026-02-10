@@ -1,0 +1,413 @@
+---
+title: MCP Server Security
+description: Input validation and security measures for MCP server configuration in DeployStack Backend, preventing command injection, argument manipulation, and other security threats.
+---
+
+DeployStack Backend implements a comprehensive input validation system to protect against security threats when users configure MCP servers. This validation occurs before any data is stored in the database, serving as the first line of defense.
+
+For satellite-side validation (defense-in-depth), see [Satellite MCP Server Security](/development/satellite/mcp-server-security).
+
+## Overview
+
+Users can configure MCP servers with custom arguments, environment variables, HTTP headers, and query parameters. Without validation, these inputs could enable:
+
+- **Command injection**: Executing arbitrary commands via malicious args
+- **nsjail sandbox bypass**: Using `--` to terminate nsjail arguments
+- **Library injection**: Setting `LD_PRELOAD` or `NODE_OPTIONS` to load malicious code
+- **Header injection**: CRLF injection for HTTP response splitting
+- **Shell metacharacter attacks**: Using `;`, `|`, `&` for command chaining
+
+The validation library prevents all these attack vectors through strict allowlists and blocklists.
+
+## Validation Library Architecture
+
+The security validation library is located at `services/backend/src/lib/security/`:
+
+```
+services/backend/src/lib/security/
+├── index.ts           # Re-exports all validators
+├── common.ts          # Shared types (ValidationResult, ValidationErrorDetails)
+├── stdioValidator.ts  # Command and argument validation
+├── envValidator.ts    # Environment variable validation
+└── httpValidator.ts   # Headers and query params validation
+```
+
+**ValidationResult Interface:**
+
+```typescript
+interface ValidationResult {
+  valid: boolean;
+  error?: string;
+  details?: ValidationErrorDetails;
+}
+
+interface ValidationErrorDetails {
+  type: 'BLOCKED_PATTERN' | 'INVALID_FORMAT' | 'BLOCKED_KEY' | 'BLOCKED_VALUE' | 'INVALID_COMMAND';
+  index?: number;
+  key?: string;
+  value?: string;
+  reason: string;
+}
+```
+
+## Command Validation (Stdio)
+
+Only specific commands are allowed to spawn MCP servers. Absolute paths are rejected to prevent arbitrary command execution.
+
+**Allowed Commands (strict allowlist):**
+
+| Command | Use Case |
+|---------|----------|
+| `npx` | Node.js package execution |
+| `node` | Direct Node.js execution |
+| `uvx` | Python UV package execution |
+| `python` | Python 2 execution |
+| `python3` | Python 3 execution |
+
+**Rejected Patterns:**
+- Absolute paths (`/bin/bash`, `/usr/bin/node`)
+- Any command not in the allowlist
+
+**File Reference:** `services/backend/src/lib/security/stdioValidator.ts`
+
+```typescript
+export const ALLOWED_COMMANDS = new Set(['npx', 'node', 'uvx', 'python', 'python3']);
+
+export function validateCommand(command: string): ValidationResult {
+  // Reject absolute paths
+  if (command.startsWith('/') || command.startsWith('\\')) {
+    return invalidResult('Absolute paths not allowed');
+  }
+  // Check allowlist
+  if (!ALLOWED_COMMANDS.has(command.toLowerCase())) {
+    return invalidResult(`Command '${command}' not allowed`);
+  }
+  return validResult();
+}
+```
+
+## Argument Validation
+
+Arguments are validated against both a blocklist (dangerous patterns) and an allowlist (valid characters).
+
+### Blocked Patterns
+
+| Pattern | Reason |
+|---------|--------|
+| `--` | nsjail argument terminator (critical sandbox bypass) |
+| `;` | Shell command separator |
+| `&` | Background/chaining operator |
+| `\|` | Pipe operator |
+| `` ` `` | Backtick command substitution |
+| `$(` | Command substitution |
+| `${` | Parameter expansion |
+| `../` | Path traversal |
+| `--user`, `--group`, `--rlimit`, etc. | nsjail configuration flags |
+| `-R`, `-B`, `-E`, `-T`, `-M` | nsjail short flags |
+
+### Valid Argument Pattern
+
+All arguments must match this pattern:
+
+```
+^[a-zA-Z0-9@/_.\-=:#]+$
+```
+
+**Allowed characters:**
+- Alphanumeric: `a-z`, `A-Z`, `0-9`
+- Package name characters: `@`, `/`, `_`, `.`, `-`
+- Flag characters: `=`, `:`
+- Git refs: `#`
+
+**Valid examples:**
+- `-y`, `--verbose`, `--port=3000`
+- `@modelcontextprotocol/server-sequential-thinking`
+- `github:user/repo#abc123def`
+
+### Limits
+
+| Constraint | Value |
+|------------|-------|
+| Max argument length | 500 characters |
+| Max argument count | 100 |
+
+## Environment Variable Validation
+
+Environment variables are validated to prevent library and code injection attacks.
+
+### Blocked Environment Variables
+
+These variables are blocked because they can be exploited for code injection:
+
+**Linux Dynamic Linker:**
+- `LD_PRELOAD` - Shared library injection (most dangerous)
+- `LD_LIBRARY_PATH` - Library search path hijacking
+- `LD_AUDIT`, `LD_DEBUG`, `LD_PROFILE` - Various injection vectors
+
+**Node.js Specific:**
+- `NODE_OPTIONS` - Can inject `--require`, `--inspect`, etc.
+- `NODE_PATH` - Module resolution hijacking
+- `NODE_EXTRA_CA_CERTS` - CA certificate injection
+
+**Python Specific:**
+- `PYTHONSTARTUP` - Executes script on interpreter start
+- `PYTHONPATH` - Module resolution hijacking
+- `PYTHONHOME` - Installation path hijacking
+
+**Shell Injection:**
+- `BASH_ENV` - Executed on non-interactive bash start
+- `ENV` - Executed on sh start
+- `SHELL` - Default shell override
+
+**Path Manipulation:**
+- `PATH`, `HOME`, `TMPDIR`, `TMP`, `TEMP`
+- `IFS` - Shell word splitting manipulation
+
+### Key Format Validation
+
+Environment variable keys must follow POSIX naming:
+
+```
+^[A-Za-z_][A-Za-z0-9_]*$
+```
+
+### Limits
+
+| Constraint | Value |
+|------------|-------|
+| Max key length | 256 characters |
+| Max value length | 32 KB |
+| Max env var count | 100 |
+
+**File Reference:** `services/backend/src/lib/security/envValidator.ts`
+
+<Warning>
+The blocked environment variables list is synchronized between backend and satellite to ensure consistent protection across both validation layers.
+</Warning>
+
+## HTTP Header Validation
+
+HTTP headers are validated to prevent header injection and request smuggling attacks.
+
+### Blocked Headers
+
+These headers cannot be set by users:
+
+| Header | Reason |
+|--------|--------|
+| `host` | Request routing manipulation |
+| `content-length` | Request smuggling |
+| `transfer-encoding` | Request smuggling |
+| `connection` | Connection hijacking |
+| `keep-alive` | Connection manipulation |
+| `upgrade` | Protocol switching |
+| `expect` | Request behavior manipulation |
+| `proxy-*` | Proxy attacks |
+| `te`, `trailer` | Transfer encoding manipulation |
+
+### Header Key Validation
+
+Keys must match HTTP token format:
+
+```
+^[A-Za-z0-9\-]+$
+```
+
+### Header Value Validation
+
+Values are checked for CRLF injection:
+
+- No carriage return (`\r`)
+- No line feed (`\n`)
+- No null bytes (`\x00`)
+
+### Limits
+
+| Constraint | Value |
+|------------|-------|
+| Max key length | 256 characters |
+| Max value length | 8 KB |
+| Max header count | 50 |
+
+**File Reference:** `services/backend/src/lib/security/httpValidator.ts`
+
+## Query Parameter Validation
+
+URL query parameters have similar validation to headers.
+
+### Key Validation
+
+```
+^[A-Za-z0-9_\-]+$
+```
+
+### Value Validation
+
+- No control characters (`\x00-\x1f`)
+
+### Limits
+
+| Constraint | Value |
+|------------|-------|
+| Max key length | 256 characters |
+| Max value length | 2 KB |
+| Max param count | 50 |
+
+## Build Script Validation (GitHub Deployments)
+
+For GitHub deployments, build scripts are validated before accepting the deployment to prevent arbitrary code execution during `npm install` or `npm run build`.
+
+**File Reference:** `services/backend/src/lib/security/build-script-validation.ts`
+
+### Blocked Patterns in Build Scripts
+
+| Pattern | Reason |
+|---------|--------|
+| `curl`, `wget`, `nc`, `netcat`, `telnet` | Network exfiltration |
+| `bash -c`, `sh -c`, `zsh -c` | Arbitrary shell execution |
+| `node -e`, `python -c`, `eval()` | Code execution from string |
+| `base64 -d`, piped base64 | Obfuscation techniques |
+| `$VAR \|`, `echo $VAR >` | Environment variable exfiltration |
+| `rm -rf /`, `chmod 777` | Dangerous system operations |
+| `os.system()`, `subprocess.*()` | Python command execution |
+
+### Node.js Validation
+
+```typescript
+import { validateNodeScripts } from '../lib/security/build-script-validation';
+
+// Validates package.json scripts object
+const validation = validateNodeScripts(packageJson.scripts);
+if (!validation.valid) {
+  return { valid: false, error: validation.error, step: 'validate_build_scripts' };
+}
+```
+
+### Python Validation
+
+```typescript
+import { validatePythonProject } from '../lib/security/build-script-validation';
+
+// Blocks projects with setup.py (can run arbitrary code during pip install)
+// Also checks pyproject.toml for build hooks
+const validation = validatePythonProject(pyprojectContent, hasSetupPy);
+```
+
+**Python-Specific Blocks:**
+- `setup.py` existence (can execute arbitrary code during install)
+- `[tool.hatch.build.hooks]` (custom build hooks)
+- `[tool.setuptools.cmdclass]` (command class overrides)
+
+<Warning>
+Build script validation is mirrored in the satellite for defense-in-depth. See [Satellite MCP Server Security](/development/satellite/mcp-server-security#build-script-re-validation-defense-in-depth).
+</Warning>
+
+## JSON Schema Constraints
+
+In addition to programmatic validation, JSON schemas provide early rejection at the Fastify validation layer.
+
+**File Reference:** `services/backend/src/routes/mcp/installations/schemas.ts`
+
+```typescript
+team_args: {
+  type: 'array',
+  items: {
+    type: 'string',
+    maxLength: 500,
+    pattern: '^[a-zA-Z0-9@/_\\.\\-=:#]+$'
+  },
+  maxItems: 100
+}
+
+team_env: {
+  type: 'object',
+  additionalProperties: { type: 'string', maxLength: 32768 },
+  maxProperties: 100,
+  propertyNames: {
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$',
+    maxLength: 256
+  }
+}
+
+team_headers: {
+  type: 'object',
+  additionalProperties: { type: 'string', maxLength: 8192 },
+  maxProperties: 50,
+  propertyNames: {
+    pattern: '^[A-Za-z0-9\\-]+$',
+    maxLength: 256
+  }
+}
+```
+
+<Info>
+JSON schema validation provides a first layer of defense at the HTTP request level. The programmatic validators provide deeper checks including blocklist matching and pattern analysis.
+</Info>
+
+## API Integration
+
+Validation is applied in the following API routes:
+
+| Route | Validations Applied |
+|-------|---------------------|
+| `POST /teams/:teamId/mcp/installations` | args, env, headers, query params |
+| `PUT /teams/:teamId/mcp/installations/:id` | args, env |
+| `PATCH .../installations/:id/args` | args |
+| `PATCH .../installations/:id/environment-variables` | env |
+| `PATCH .../installations/:id/headers` | headers |
+| `PATCH .../installations/:id/query-params` | query params |
+| `POST /teams/:teamId/deploy` | template_args, team_env |
+
+**Integration Pattern:**
+
+```typescript
+// Before any database operation
+if (installationData.team_args?.length > 0) {
+  const argsValidation = validateArgs(installationData.team_args);
+  if (!argsValidation.valid) {
+    request.log.warn({
+      operation: 'security_validation',
+      validationType: 'team_args',
+      error: argsValidation.error,
+      details: argsValidation.details
+    }, 'Security validation failed');
+
+    return reply.status(400).send({
+      success: false,
+      error: argsValidation.error
+    });
+  }
+}
+```
+
+## Error Response Format
+
+When validation fails, the API returns a 400 status with details:
+
+```json
+{
+  "success": false,
+  "error": "Argument at index 2 contains blocked pattern: nsjail argument terminator not allowed"
+}
+```
+
+Security validation failures are logged with full context for audit purposes:
+
+```
+operation: "security_validation"
+validationType: "team_args"
+error: "Argument at index 2 contains blocked pattern"
+details: {
+  type: "BLOCKED_PATTERN",
+  index: 2,
+  value: "--",
+  reason: "nsjail argument terminator not allowed"
+}
+```
+
+## Related Documentation
+
+- [Satellite MCP Server Security](/development/satellite/mcp-server-security) - Defense-in-depth validation
+- [MCP Configuration Architecture](/development/backend/mcp-configuration-architecture) - Three-tier configuration system
+- [Security Policy](/development/backend/security) - Overall backend security
+- [Security and Privacy](/general/security) - User-facing security documentation

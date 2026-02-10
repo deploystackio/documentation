@@ -83,6 +83,7 @@ Commands trigger **per-user instance** status changes through satellite event em
 | `configure` (install) | N/A | `provisioning` or `awaiting_user_config` | New installation - depends on required user config |
 | `configure` (update) | `online` | `restarting` → `online` | Configuration change applied |
 | `configure` (delete) | Any | Instance deleted (CASCADE) | Installation removal |
+| `configure` (redeploy) | `online` or `dormant` | `restarting` → `connecting` → `discovering_tools` → `online` | GitHub deployment redeploy with fresh code download |
 | `health_check` (credential) | `online` | `requires_reauth` | OAuth token invalid for this user |
 | `restart` | `online` | `restarting` → `online` | Manual restart requested |
 
@@ -113,6 +114,7 @@ All `configure` commands include an `event` field in the payload for tracking an
 | `mcp_installation_updated` | Config changes (args/env/headers) | Satellite refreshes config, restarts affected servers |
 | `mcp_installation_deleted` | Installation removed | Satellite refreshes config, terminates removed servers |
 | `mcp_recovery` | Server recovered from failure | Satellite rediscovers tools for recovered server |
+| `mcp_redeploy` | GitHub deployment redeploy | Satellite deletes deployment directory, downloads fresh from GitHub, rebuilds and respawns |
 
 ### Event Field Usage
 
@@ -210,6 +212,61 @@ await satelliteCommandService.notifyMcpRecovery(
 
 For complete recovery system documentation, see [Backend Communication - Auto-Recovery](/development/backend/satellite/communication#auto-recovery-system).
 
+### notifyMcpRedeploy()
+
+Creates immediate priority configure commands for GitHub deployment redeploy.
+
+```typescript
+await satelliteCommandService.notifyMcpRedeploy(
+  installationId,
+  teamId,
+  userId,
+  {
+    commit_sha: latestSha,
+    branch: branchName
+  }
+);
+```
+
+**Payload**:
+```json
+{
+  "event": "mcp_redeploy",
+  "installation_id": "installation-uuid",
+  "team_id": "team-uuid",
+  "user_id": "user-uuid",
+  "commit_sha": "abc123...",
+  "branch": "main"
+}
+```
+
+**Use Case**: GitHub-deployed MCP servers only
+
+**Satellite Actions**:
+1. **For active processes**:
+   - Calls `removeServerCompletely()` to delete deployment directory
+   - Triggers config refresh
+   - Downloads fresh tarball from GitHub
+   - Extracts, installs dependencies, builds
+   - Spawns with new code
+2. **For dormant processes**:
+   - Clears dormant config cache
+   - Triggers config refresh
+   - Forces fresh download on respawn
+
+**Status Flow**:
+- Backend sets status to `restarting`
+- Satellite deletes old deployment directory
+- Downloads fresh code from GitHub (new SHA)
+- Status progresses: restarting → connecting → discovering_tools → online
+- New/updated tools become available
+
+**Key Difference from Update**:
+- `notifyMcpUpdate()` → Restarts with existing cached code
+- `notifyMcpRedeploy()` → Deletes cache, downloads fresh from GitHub
+
+For GitHub deployment details, see [GitHub Deployment](/development/satellite/github-deployment).
+
 ## Critical Pattern
 
 **ALWAYS use the correct convenience method**:
@@ -218,8 +275,12 @@ For complete recovery system documentation, see [Backend Communication - Auto-Re
 - Installation updated → `notifyMcpUpdate()`
 - Installation deleted → `notifyMcpDeletion()`
 - Server recovered → `notifyMcpRecovery()`
+- GitHub deployment redeploy → `notifyMcpRedeploy()`
 
-**NEVER** call the wrong method for an operation! For example, don't call `notifyMcpInstallation()` for delete operations.
+**NEVER** call the wrong method for an operation! For example:
+- ❌ Don't call `notifyMcpInstallation()` for delete operations
+- ❌ Don't call `notifyMcpUpdate()` for GitHub redeploy (won't download fresh code)
+- ❌ Don't call `notifyMcpInstallation()` for redeploy (wrong semantic meaning)
 
 ## Command Lifecycle
 

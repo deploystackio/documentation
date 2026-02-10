@@ -1,0 +1,421 @@
+---
+title: Satellite Heartbeat System
+description: Technical documentation for DeployStack Satellite heartbeat mechanism - periodic health monitoring, MCP status tracking, and backend integration.
+---
+
+DeployStack Satellite sends periodic heartbeats to the Backend every 30 seconds to maintain connectivity status, report system health, and provide real-time visibility into running MCP server processes.
+
+## Overview
+
+### Purpose
+
+The heartbeat system enables:
+- **Health Monitoring**: Track satellite connectivity and availability
+- **System Metrics**: Monitor CPU, memory, disk usage, and uptime
+- **MCP Process Tracking**: Real-time visibility into running MCP server instances
+- **Tool Discovery Status**: Track discovered tools and server availability
+- **Automatic Activation**: Satellites become active on first heartbeat
+
+### Communication Pattern
+
+```
+Satellite (Every 30s)          Backend
+     │                            │
+     │─── POST /heartbeat ───────▶│
+     │    {                        │
+     │      system_metrics,        │
+     │      mcp_status,            │
+     │      processes_by_team      │
+     │    }                        │
+     │                            │
+     │◀── { success: true } ──────│
+     │                            │
+     │                            │─── Update satellites.last_heartbeat
+     │                            │─── Insert satelliteHeartbeats record
+     │                            │─── Store mcp_status JSON
+```
+
+**Characteristics:**
+- **Interval**: 30 seconds (fixed)
+- **Transport**: HTTPS POST with Bearer token authentication
+- **Direction**: Satellite → Backend (outbound-only, firewall-friendly)
+- **Timeout**: 10 seconds
+
+## Heartbeat Payload Structure
+
+### TypeScript Interface
+
+```typescript
+interface HeartbeatPayload {
+  status: 'active' | 'degraded' | 'error';
+  system_metrics: SystemMetrics;
+  processes: ProcessInfo[];  // Legacy HTTP proxy processes
+  processes_by_team: Record<string, StdioProcessMetric[]>;
+  normalized_data?: NormalizedHeartbeatData;  // Large-scale deployments
+  mcp_status?: McpStatusSnapshot;  // MCP server runtime status
+  error_count: number;
+  version: string;
+}
+```
+
+### System Metrics
+
+```typescript
+interface SystemMetrics {
+  cpu_usage_percent: number;    // 0-100
+  memory_usage_mb: number;       // Heap memory in MB
+  disk_usage_percent: number;    // 0-100
+  uptime_seconds: number;        // Process uptime
+}
+```
+
+**Collection:**
+- **Memory**: From `process.memoryUsage().heapUsed`
+- **Uptime**: From `process.uptime()`
+- **CPU/Disk**: Placeholder (future implementation)
+
+### MCP Status Snapshot
+
+The `mcp_status` field provides lightweight runtime visibility into MCP servers:
+
+```typescript
+interface McpStatusSnapshot {
+  summary: {
+    total_instances: number;      // Total running instances
+    active_instances: number;     // Instances in 'running' state
+    dormant_instances: number;    // Idle processes (cached for respawn)
+    total_tools: number;          // Total discovered tools
+    online_servers: number;       // Servers in 'online' state
+    offline_servers: number;      // Servers in 'offline' state
+    error_servers: number;        // Servers in 'error' state
+  };
+  instances: Array<{
+    installation_id: string;      // Installation UUID
+    installation_name: string;    // {server}-{team}-{user}-{id}
+    instance_id: string;          // Per-user instance identifier
+    user_id: string;              // User owning this instance
+    team_id: string;              // Team identifier
+    status: string;               // 'starting' | 'running' | 'failed'
+    transport_type: string;       // 'stdio' | 'http' | 'sse'
+    uptime_seconds: number;       // Instance uptime
+    message_count: number;        // Total messages sent
+    error_count: number;          // Total errors
+    health_status: string;        // 'healthy' | 'unhealthy' | 'unknown'
+    pid?: number;                 // Process ID (stdio only)
+  }>;
+  tool_names: Array<{
+    namespaced_name: string;      // {server-slug}:{tool-name}
+    server_slug: string;          // Server identifier
+    transport: string;            // 'stdio' | 'http' | 'sse'
+  }>;
+  server_status_counts: {
+    online: number;
+    offline: number;
+    error: number;
+    requires_reauth: number;
+  };
+}
+```
+
+**Key Characteristics:**
+- **Lightweight**: Excludes tool descriptions/schemas (~8-15KB vs ~200-500KB)
+- **Per-User Instances**: Includes `instance_id` for granular tracking
+- **Fresh Data**: Replaced on each heartbeat (no accumulation)
+- **Optional**: Missing if satellite has no running MCP servers
+
+## Backend Processing
+
+### Endpoint
+
+**Route:** `POST /api/satellites/{satelliteId}/heartbeat`
+
+**Authentication:** Satellite API key (Bearer token)
+
+### Database Operations
+
+**1. Update Satellite Status and MCP Status**
+```sql
+UPDATE satellites
+SET
+  last_heartbeat = NOW(),
+  status = 'active',
+  mcp_status = :mcp_status_json
+WHERE id = :satelliteId;
+```
+
+**2. Insert Heartbeat Record**
+```sql
+INSERT INTO satelliteHeartbeats (
+  id,
+  satellite_id,
+  status,
+  system_metrics,     -- JSON string
+  process_count,
+  healthy_process_count,
+  error_count,
+  uptime_seconds,
+  version,
+  timestamp
+) VALUES (...);
+```
+
+**3. Update Process Statuses** (if included)
+- Upserts records in `satelliteProcesses` table
+
+### Data Retention
+
+**Cleanup Policy:**
+- **Global satellites**: Keep 1000 most recent heartbeats (~8.3 hours at 30s intervals)
+- **Team satellites**: Keep 500 most recent heartbeats (~4.2 hours)
+- **Cron job**: Runs every 3 minutes
+
+## Database Schema
+
+### satellites Table
+
+The `satellites` table stores the **latest** MCP status from the most recent heartbeat:
+
+```typescript
+export const satellites = pgTable('satellites', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  satellite_type: text('satellite_type', { enum: ['global', 'team'] }).notNull(),
+  team_id: text('team_id'),
+  status: text('status', { enum: ['active', 'inactive', 'maintenance', 'error'] }).notNull(),
+  last_heartbeat: timestamp('last_heartbeat', { withTimezone: true }),
+  mcp_status: text('mcp_status'),  // JSON: Latest MCP status (updated on each heartbeat)
+  satellite_url: text('satellite_url').notNull(),
+  region: text('region'),
+  // ... other fields
+});
+```
+
+**Usage:**
+- **Latest Status**: Query this table to get the current MCP status of a satellite
+- **Real-Time View**: Always reflects the most recent heartbeat data
+- **Lightweight Query**: No need to scan heartbeat history
+
+### satelliteHeartbeats Table
+
+```typescript
+export const satelliteHeartbeats = pgTable('satelliteHeartbeats', {
+  id: text('id').primaryKey(),
+  satellite_id: text('satellite_id').notNull(),
+  status: text('status', { enum: ['active', 'degraded', 'error'] }).notNull(),
+  system_metrics: text('system_metrics').notNull(),  // JSON
+  process_count: integer('process_count').notNull().default(0),
+  healthy_process_count: integer('healthy_process_count').notNull().default(0),
+  error_count: integer('error_count').notNull().default(0),
+  response_time_ms: integer('response_time_ms'),
+  uptime_seconds: integer('uptime_seconds'),
+  version: text('version'),
+  timestamp: timestamp('timestamp', { withTimezone: true }).notNull().defaultNow(),
+});
+```
+
+**Indexes:**
+- `(satellite_id, timestamp)` - Query heartbeats for specific satellite
+- `(status)` - Filter by satellite status
+- `(timestamp)` - Time-series queries
+
+**Purpose:**
+- Historical record of all heartbeats
+- Time-series analysis of system metrics
+- Audit trail for satellite connectivity
+
+## Querying Heartbeat Data
+
+### Get Current MCP Status (Recommended)
+
+Query the `satellites` table for the latest MCP status:
+
+```sql
+SELECT
+  id,
+  name,
+  status,
+  last_heartbeat,
+  mcp_status::json AS mcp_status
+FROM satellites
+WHERE id = 'sat-xxx';
+```
+
+**Why use this?**
+- Fastest query (single row lookup)
+- Always current (updated on each heartbeat)
+- No need to scan heartbeat history
+
+### Extract MCP Status Summary
+
+```sql
+SELECT
+  id,
+  name,
+  mcp_status::json->'summary'->>'total_instances' AS total_instances,
+  mcp_status::json->'summary'->>'active_instances' AS active_instances,
+  mcp_status::json->'summary'->>'total_tools' AS total_tools,
+  mcp_status::json->'summary'->>'online_servers' AS online_servers
+FROM satellites
+WHERE id = 'sat-xxx';
+```
+
+### Get Per-Instance Details
+
+```sql
+SELECT
+  id,
+  name,
+  jsonb_array_elements(mcp_status::jsonb->'instances') AS instance
+FROM satellites
+WHERE id = 'sat-xxx';
+```
+
+### Get Historical System Metrics
+
+Query the `satelliteHeartbeats` table for system metrics over time:
+
+```sql
+SELECT
+  timestamp,
+  system_metrics::json->'memory_usage_mb' AS memory_mb,
+  system_metrics::json->'uptime_seconds' AS uptime,
+  process_count,
+  healthy_process_count
+FROM satelliteHeartbeats
+WHERE satellite_id = 'sat-xxx'
+ORDER BY timestamp DESC
+LIMIT 100;
+```
+
+### Monitor Heartbeat Lag
+
+```sql
+SELECT
+  id,
+  name,
+  last_heartbeat,
+  NOW() - last_heartbeat AS lag,
+  status
+FROM satellites
+WHERE status = 'active'
+ORDER BY lag DESC;
+```
+
+## Testing & Debugging
+
+### Enable Debug Logging
+
+```bash
+cd services/satellite
+LOG_LEVEL=debug npm run dev
+```
+
+### Watch for Heartbeat Logs
+
+**Success:**
+```json
+{
+  "level": "debug",
+  "operation": "mcp_status_snapshot_collected",
+  "total_instances": 5,
+  "total_tools": 42,
+  "msg": "Collected MCP status snapshot for heartbeat"
+}
+
+{
+  "level": "debug",
+  "satelliteId": "sat-xxx",
+  "msg": "Heartbeat sent successfully"
+}
+```
+
+**Failure:**
+```json
+{
+  "level": "error",
+  "error": "Request timeout",
+  "msg": "Failed to send heartbeat"
+}
+```
+
+### Verify Payload Size
+
+**Expected payload size**: ~13-18 KB per heartbeat
+- System metrics: ~500 bytes
+- MCP status: ~8-15 KB (lightweight snapshot)
+- Processes by team: ~5-10 KB
+
+**Check logs for large payloads** (may indicate issue with data collection).
+
+### Manual Heartbeat Trigger
+
+Satellites send heartbeats automatically every 30 seconds. For testing:
+1. Start satellite
+2. Wait 30 seconds for first heartbeat
+3. Check backend logs for `POST /api/satellites/{id}/heartbeat`
+4. Query database for new record
+
+## Implementation Details
+
+### Satellite Side
+
+**File:** `services/satellite/src/services/heartbeat-service.ts`
+
+**Key methods:**
+- `start()` - Initializes 30s interval
+- `sendHeartbeat()` - Collects data and sends POST request
+- `collectSystemMetrics()` - Gathers CPU, memory, uptime
+- `collectStdioProcessesByTeam()` - Groups stdio processes by team
+- `collectMcpStatusSnapshot()` - Builds lightweight MCP status
+
+**Dependencies:**
+- `RuntimeState` - Process tracking
+- `UnifiedToolDiscoveryManager` - Tool and server status
+- `BackendClient` - HTTP communication
+
+### Backend Side
+
+**File:** `services/backend/src/routes/satellites/heartbeat.ts`
+
+**Processing steps:**
+1. Validate satellite exists
+2. Update `satellites.last_heartbeat` and status
+3. Insert `satelliteHeartbeats` record
+4. Parse and store `mcp_status` JSON
+5. Update `satelliteProcesses` if included
+
+## Troubleshooting
+
+### Heartbeat Not Being Sent
+
+**Check:**
+- Is satellite registered? (`runtimeState.satelliteId` set?)
+- Backend URL correct? (`DEPLOYSTACK_BACKEND_URL`)
+- Network connectivity? (firewall, DNS)
+- API key valid? (not revoked)
+
+### Backend Rejecting Heartbeat
+
+**Check:**
+- JSON schema validation errors in backend logs
+- Satellite ID exists in database
+- API key authentication header correct
+
+### Old Heartbeats Not Cleaned Up
+
+**Check:**
+- Cleanup cron job running (`cleanupSatelliteHeartbeats`)
+- Worker logs for errors
+- Database retention limits configured
+
+### Large Payload Size
+
+**Expected:** ~13-18 KB
+**If larger:** Check `mcp_status` collection - may be including descriptions/schemas
+
+## Related Documentation
+
+- [Satellite Registration](/development/satellite/registration) - Initial satellite setup
+- [Process Management](/development/satellite/process-management) - MCP process lifecycle
+- [Tool Discovery](/development/satellite/tool-discovery) - How tools are discovered
+- [Event Emission](/development/satellite/event-emission) - Process lifecycle events
