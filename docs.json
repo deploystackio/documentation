@@ -32,6 +32,7 @@
             "pages": [
               "/general/mcp-catalog",
               "/general/mcp-installation",
+              "/general/mcp-connection-methods",
               "/general/mcp-categories",
               "/general/mcp-admin-schema-workflow",
               "/general/mcp-oauth"
@@ -204,6 +205,7 @@
             "pages": [
               "/development/satellite/mcp-transport",
               "/development/satellite/hierarchical-router",
+              "/development/satellite/instance-router",
               "/development/satellite/instance-lifecycle",
               "/development/satellite/process-management",
               "/development/satellite/github-deployment",
