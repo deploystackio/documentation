@@ -9,6 +9,10 @@ DeployStack Satellite implements a hierarchical router pattern to solve the MCP 
 **Problem Solved**: Traditional MCP implementations expose all tools directly, consuming 40-80% of the context window before any actual work begins. The hierarchical router reduces this to \<1% while maintaining full functionality.
 </Info>
 
+<Note>
+**Alternative Access Method**: For direct MCP client integration without OAuth complexity, see [Instance Router](/development/satellite/instance-router) which provides token-based access to individual instances.
+</Note>
+
 For information about how tools are discovered and cached internally, see [Tool Discovery Implementation](/development/satellite/tool-discovery).
 
 ## The Context Window Problem

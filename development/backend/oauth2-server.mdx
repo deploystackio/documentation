@@ -117,6 +117,25 @@ Manages the authorization flow:
 - Ensures single use
 - Validates client and redirect URI match
 
+#### Resource Indicators (RFC 8707)
+- Accepts optional `resource` parameter in authorization requests
+- Stores resource identifier with authorization code
+- Returns resource with verification result
+- Enables audience binding for tokens
+
+**Purpose:** RFC 8707 Resource Indicators bind tokens to specific resources (e.g., specific MCP satellite URLs) to prevent token reuse across different services.
+
+**Flow:**
+1. Client sends `resource` parameter (e.g., `https://satellite.deploystack.io/mcp`)
+2. Backend stores resource with authorization code
+3. Token generation includes resource in `aud` (audience) claim
+4. Satellite validates token audience matches its URL
+5. Prevents token stolen from one satellite being used on another
+
+**Database Schema:**
+- `oauth_authorization_codes.resource` - TEXT column (nullable)
+- Backward compatible - existing codes without resource still work
+
 ### Dynamic Client Registration
 
 Implements RFC 7591 Dynamic Client Registration:
@@ -159,7 +178,13 @@ Handles token lifecycle:
 - Issues 1-week access tokens for MCP clients
 - Issues 1-hour access tokens for CLI tools
 - Includes user, team, and scope data
+- Includes `aud` (audience) claim from resource parameter (RFC 8707)
 - Enables API authentication
+
+**Audience Claim Generation:**
+- If `resource` parameter provided: `aud` = `[resource]` (e.g., `["https://satellite.deploystack.io/mcp"]`)
+- If no resource: `aud` = `["deploystack:team:{teamId}"]` (backward compatibility)
+- Token payload includes `aud` field for satellite validation
 
 #### Refresh Token Handling
 - Issues 30-day refresh tokens
@@ -172,6 +197,24 @@ Handles token lifecycle:
 - Checks expiration
 - Verifies against database
 - Supports introspection endpoint
+- Returns `aud` (audience) claim in introspection response (RFC 7662 + RFC 8707)
+
+**Introspection Response with Audience:**
+```json
+{
+  "active": true,
+  "scope": "mcp:read mcp:tools:execute",
+  "client_id": "vscode_mcp_extension",
+  "username": "user@example.com",
+  "sub": "user_id",
+  "aud": ["https://satellite.deploystack.io/mcp"],
+  "iss": "https://cloud.deploystack.io",
+  "team_id": "team_xyz",
+  "team_name": "Acme Corp"
+}
+```
+
+Satellites use the `aud` claim to validate tokens are intended for them.
 
 #### Token Refresh
 - Exchanges refresh for access token
@@ -253,6 +296,26 @@ For complete API specifications including request parameters, response schemas, 
 
 **CLI Tool Scopes:**
 For the current list of CLI-supported scopes, see the source code at `services/backend/src/services/oauth/authorizationService.ts` in the `validateScope()` method.
+
+### Default Scopes
+
+The `scope` parameter is **optional** in authorization requests. When not provided, the server defaults to all MCP scopes:
+
+```
+mcp:read mcp:tools:execute offline_access
+```
+
+This allows MCP clients that don't send the `scope` parameter (like Claude Code) to authenticate without errors.
+
+### Resource Indicators (RFC 8707)
+
+The authorization endpoint supports the optional `resource` parameter for audience binding:
+
+```
+GET /api/oauth2/auth?...&resource=https://satellite.deploystack.io/
+```
+
+This parameter identifies the target MCP server (satellite) and can be used for token audience validation.
 
 ### Scope Enforcement
 

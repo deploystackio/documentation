@@ -63,6 +63,29 @@ The SDK provides automatic session management with:
 1. **Standard JSON:** Direct JSON-RPC response
 2. **SSE Streaming:** Response sent via Server-Sent Events
 
+### SSE Keep-Alive Ping
+
+When satellites are deployed behind reverse proxies (Cloudflare, nginx), idle SSE connections can timeout after 60-100 seconds, causing `502 Bad Gateway` errors for MCP clients.
+
+**Solution:** The satellite includes an `SsePingService` that sends periodic SSE comments to keep connections alive:
+
+- **Ping interval:** Every 30 seconds
+- **Ping format:** `: ping\n\n` (SSE comment, ignored by clients)
+- **Automatic cleanup:** Connections are removed when closed
+
+**How it works:**
+
+1. When a client opens an SSE connection (GET `/mcp`), the session is registered
+2. Every 30 seconds, the service sends a ping comment to all active connections
+3. The ping data keeps the TCP connection alive through proxy timeouts
+4. When the connection closes, it's automatically unregistered
+
+**Implementation files:**
+- `services/satellite/src/services/sse-ping-service.ts` - Ping service
+- `services/satellite/src/core/mcp-server-wrapper.ts` - Connection registration
+
+This ensures MCP clients (Cursor, VS Code, Claude.ai) maintain stable connections even during extended idle periods when deployed in production environments behind proxies.
+
 ## Supported MCP Methods
 
 ### Core Protocol

@@ -117,6 +117,39 @@ DeployStack satellites automatically protect sensitive values in log files and m
        Headers: Authorization=Bea*****
 ```
 
+### MCP Server Configuration Security
+
+DeployStack implements defense-in-depth security validation for MCP server configurations to prevent command injection, sandbox bypass, and other security threats.
+
+**Two-Layer Protection:**
+- **Backend Validation**: Validates all user inputs before storing in database
+- **Satellite Validation**: Re-validates before spawning processes (last line of defense)
+
+**Protected Input Types:**
+
+| Input | Protection |
+|-------|------------|
+| Commands | Strict allowlist (npx, node, uvx, python, python3 only) |
+| Arguments | Blocked shell metacharacters, nsjail flags, path traversal |
+| Environment Variables | Blocked injection vectors (LD_PRELOAD, NODE_OPTIONS, etc.) |
+| HTTP Headers | CRLF injection prevention, blocked dangerous headers |
+| Query Parameters | Control character filtering |
+
+**What this means for you**: Even if malicious configuration data reaches the satellite, it will be rejected before any process is spawned. The nsjail sandbox provides additional isolation with resource limits and restricted filesystem access.
+
+**GitHub Deployment Security:**
+
+When deploying MCP servers from GitHub repositories, additional protections apply:
+
+- **Build Script Validation**: Scripts in `package.json` (Node.js) and `pyproject.toml` (Python) are scanned for dangerous patterns before deployment is accepted
+- **Sandboxed Builds**: Build commands (`npm install`, `npm run build`, `uv sync`) run inside an isolated sandbox
+- **No Secrets in Builds**: Build processes cannot access your API keys or tokens, preventing exfiltration
+- **Python setup.py Blocked**: Projects using `setup.py` are rejected because it can execute arbitrary code during installation
+
+<Info>
+For technical details, see [Backend MCP Server Security](/development/backend/mcp-server-security) and [Satellite MCP Server Security](/development/satellite/mcp-server-security).
+</Info>
+
 ### Global Settings Encryption
 Your global configuration data is protected with encryption:
 

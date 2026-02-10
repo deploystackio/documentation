@@ -1,0 +1,365 @@
+---
+title: MCP Connection Methods
+description: Understanding the two ways to connect AI agents to your MCP servers - which one should you use?
+---
+
+DeployStack offers two different ways to connect your AI agents (like Claude, Cursor, or custom applications) to your MCP servers. This guide explains the difference in simple terms and helps you choose the right one.
+
+<Info>
+**TL;DR**: Use **Hierarchical Router** for AI agents like Claude Desktop or Cursor. Use **Direct MCP Endpoint** for custom applications or when your agent needs to connect to just one specific server.
+</Info>
+
+## The Two Connection Methods
+
+### Method 1: Hierarchical Router (Token-Saving)
+
+**What it is:** A smart connection that saves your AI's "thinking space" (context window) by exposing only 2 tools instead of hundreds.
+
+**URL Format:**
+```
+https://satellite.deploystack.io/mcp
+```
+
+**How you connect:**
+- Use OAuth2 login (browser-based)
+- AI sees 2 simple tools: "discover" and "execute"
+- AI can search through ALL your MCP servers
+- Saves up to 98% of context window space
+
+**Think of it like:** A librarian at a huge library. Instead of showing you every book (overwhelming!), the librarian gives you a search tool and a checkout tool. You search for what you need, then check it out.
+
+### Method 2: Direct MCP Endpoint (Per-Server)
+
+**What it is:** A direct connection to ONE specific MCP server, showing all its tools immediately.
+
+**URL Format:**
+```
+https://satellite.deploystack.io/i/bold-penguin-42a3/mcp?token=ds_inst_abc123...
+```
+
+**How you connect:**
+- Use a simple token (copy-paste from dashboard)
+- AI sees ALL tools from that one server right away
+- No search needed - everything is visible
+- Works with standard MCP clients
+
+**Think of it like:** Walking directly into a specific store. You see everything on the shelves immediately and can grab what you need.
+
+## Which One Should I Use?
+
+<CardGroup cols={2}>
+  <Card title="Use Hierarchical Router" icon="brain">
+    **For AI Agents with Many Servers**
+
+    ✅ Claude Desktop
+
+    ✅ Cursor IDE
+
+    ✅ VS Code with MCP
+
+    ✅ You have 5+ MCP servers
+
+    ✅ AI needs access to multiple servers
+
+    ✅ You want to save context window space
+  </Card>
+
+  <Card title="Use Direct MCP Endpoint" icon="link">
+    **For Single-Server Connections**
+
+    ✅ Custom automation scripts
+
+    ✅ CLI tools you're building
+
+    ✅ Workflow automation (n8n, Zapier, Make.com)
+
+    ✅ No-code/low-code platforms
+
+    ✅ AI only needs ONE server
+
+    ✅ You want simple token auth
+
+    ✅ No OAuth complexity needed
+
+    ✅ Standard MCP client compatibility
+  </Card>
+</CardGroup>
+
+## The Context Window Problem (Why This Matters)
+
+### What is a Context Window?
+
+Think of your AI agent's "context window" as its working memory - like RAM in a computer. It's limited space where the AI keeps:
+- Your conversation history
+- Instructions you gave it
+- Tool definitions (what tools can do)
+- Everything it needs to help you
+
+**The problem:** If you have 20 MCP servers with 10 tools each (200 tools total), listing all tools can use **40-80% of the AI's memory BEFORE it even starts helping you!**
+
+### How Hierarchical Router Solves This
+
+Instead of loading 200 tool definitions (huge!), the AI only sees 2 tools:
+1. **discover_mcp_tools** - Search for tools
+2. **execute_mcp_tool** - Run a tool
+
+**Result:** Uses less than 1% of context window instead of 40-80%. Your AI has 99% of its memory free for actual work!
+
+### When Direct Endpoint Makes Sense
+
+If your AI only connects to ONE server (not 20), there's no context window problem:
+- 1 server with 10 tools = only 5% of context used
+- No need for the search pattern
+- Direct access is simpler and faster
+
+## Real-World Examples
+
+### Example 1: Claude Desktop User with Multiple Servers
+
+**Scenario:** You have these MCP servers installed:
+- GitHub (create issues, read repos)
+- PostgreSQL (query databases)
+- Figma (fetch designs)
+- Slack (send messages)
+- Sequential Thinking (reasoning)
+
+**Best Choice:** ✅ **Hierarchical Router**
+
+**Why:** Claude needs to search across all these servers. With hierarchical router:
+```
+Claude: "I need to create a GitHub issue"
+→ Searches and finds: github:create_issue
+→ Executes it
+```
+
+Context window saved: **~75,000 tokens (37%)**
+
+### Example 2: n8n Workflow Automation
+
+**Scenario:** You're building an n8n workflow that:
+- Monitors GitHub webhooks
+- Creates Slack notifications
+- Queries PostgreSQL database
+- Needs access to 3 separate MCP servers
+
+**Best Choice:** ✅ **Direct MCP Endpoint (3 separate connections)**
+
+**Why:** Workflow automation tools like n8n work best with direct connections:
+
+**In your n8n workflow:**
+1. **HTTP Request Node (GitHub MCP)**
+   ```
+   URL: https://satellite.example.com/i/my-github/mcp?token=ds_inst_abc123...
+   Method: POST
+   Body: {"jsonrpc":"2.0","method":"tools/call","params":{"name":"create_issue",...}}
+   ```
+
+2. **HTTP Request Node (Slack MCP)**
+   ```
+   URL: https://satellite.example.com/i/my-slack/mcp?token=ds_inst_def456...
+   Method: POST
+   Body: {"jsonrpc":"2.0","method":"tools/call","params":{"name":"send_message",...}}
+   ```
+
+3. **HTTP Request Node (PostgreSQL MCP)**
+   ```
+   URL: https://satellite.example.com/i/my-postgres/mcp?token=ds_inst_ghi789...
+   Method: POST
+   Body: {"jsonrpc":"2.0","method":"tools/call","params":{"name":"run_query",...}}
+   ```
+
+**Why not hierarchical?**
+- n8n/Zapier/Make.com work with HTTP webhooks, not OAuth flows
+- Each workflow step is independent (no shared context)
+- Direct endpoints are simpler to configure in visual workflow builders
+- No context window concerns (workflows don't use AI agents)
+
+### Example 3: Custom Automation Script for GitHub
+
+**Scenario:** You're building a Node.js script that:
+- Monitors GitHub repositories
+- Creates issues automatically
+- Only needs GitHub MCP server
+
+**Best Choice:** ✅ **Direct MCP Endpoint**
+
+**Why:** Your script connects to ONE server (GitHub). Direct endpoint is simpler:
+
+```typescript
+// Simple connection - no OAuth, just token
+await client.connect(
+  "https://satellite.example.com/i/my-github/mcp?token=ds_inst_abc123..."
+);
+
+// All GitHub tools visible immediately
+const tools = await client.listTools();
+// Returns: create_issue, get_file, list_repos, etc.
+```
+
+No search needed, no OAuth flow, just works.
+
+### Example 4: Cursor IDE Developer
+
+**Scenario:** Using Cursor IDE for coding with:
+- Sequential Thinking MCP
+- Filesystem MCP
+- Context7 documentation MCP
+- PostgreSQL MCP
+
+**Best Choice:** ✅ **Hierarchical Router**
+
+**Why:** Cursor needs access to multiple servers while coding. Hierarchical router prevents context overflow:
+- Cursor can ask: "search for database tools"
+- Gets back: postgres:run_query
+- Executes it without loading 50+ other tools
+
+## Feature Comparison
+
+| Feature | Hierarchical Router | Direct MCP Endpoint |
+|---------|---------------------|---------------------|
+| **Authentication** | OAuth2 (browser login) | Simple token (copy-paste) |
+| **Access Scope** | All your MCP servers | One specific server |
+| **Tools Visible** | 2 meta-tools (discover + execute) | All tools from that server |
+| **Context Usage** | < 1% (saves tokens!) | 5-10% per server |
+| **Best For** | AI agents with many servers | Custom apps, single server |
+| **Search Needed** | Yes (discover first, then execute) | No (tools listed immediately) |
+| **Setup Complexity** | Medium (OAuth setup) | Low (just paste token) |
+
+## How to Get Started
+
+### Setting Up Hierarchical Router
+
+<Steps>
+  <Step title="Get Your Satellite URL">
+    From DeployStack dashboard, find your satellite URL:
+    ```
+    https://satellite.deploystack.io/mcp
+    ```
+  </Step>
+
+  <Step title="Configure OAuth2">
+    Set up OAuth2 authentication in your AI agent's settings with your DeployStack credentials.
+  </Step>
+
+  <Step title="Connect Your Agent">
+    Point your AI agent (Claude, Cursor, VS Code) to the hierarchical router URL.
+  </Step>
+
+  <Step title="Start Using">
+    Your AI can now discover and use tools from ALL your MCP servers!
+  </Step>
+</Steps>
+
+### Setting Up Direct MCP Endpoint
+
+<Steps>
+  <Step title="Find Your Instance">
+    Go to DeployStack dashboard → Your MCP Servers
+
+    Find the specific server you want to connect to.
+  </Step>
+
+  <Step title="Copy Instance URL and Token">
+    Click on the server to see its details:
+
+    - **Instance Path**: `bold-penguin-42a3`
+    - **Instance Token**: `ds_inst_abc123...` (copy this!)
+
+    Your URL will be:
+    ```
+    https://satellite.deploystack.io/i/bold-penguin-42a3/mcp?token=ds_inst_abc123...
+    ```
+  </Step>
+
+  <Step title="Connect Your Application">
+    Use this URL in your MCP client:
+
+    ```typescript
+    await client.connect(url);
+    ```
+  </Step>
+
+  <Step title="Start Using">
+    Your application can now access all tools from that specific server!
+  </Step>
+</Steps>
+
+## Common Questions
+
+### Can I use both methods at the same time?
+
+**Yes!** You can use:
+- Hierarchical router for Claude Desktop (access to all servers)
+- Direct endpoint for a custom script (access to one server)
+
+They work independently and don't interfere with each other.
+
+### Which one is faster?
+
+**Direct endpoint** is slightly faster for single-server scenarios (no search step).
+
+**Hierarchical router** is faster overall when you need multiple servers (no need to connect to each one separately).
+
+### Do I need different tokens?
+
+**Yes:**
+- **Hierarchical Router**: Uses your DeployStack user OAuth2 token (automatic login)
+- **Direct Endpoint**: Uses instance-specific token (shown in dashboard, copy once)
+
+### What if I'm not sure which to use?
+
+**Rule of thumb:**
+- **AI agent with multiple servers?** → Use Hierarchical Router
+- **Workflow automation (n8n, Zapier, Make)?** → Use Direct MCP Endpoint
+- **Claude Desktop or Cursor?** → Use Hierarchical Router
+- **Custom script or app?** → Use Direct MCP Endpoint
+- **No-code platform integration?** → Use Direct MCP Endpoint
+
+Still confused? Start with **Hierarchical Router** for AI agents, **Direct Endpoint** for automation tools.
+
+## Security Notes
+
+<Warning>
+**Treat tokens like passwords!**
+
+- Direct endpoint tokens give full access to that MCP server
+- Don't share tokens publicly
+- Regenerate tokens if compromised
+- Use HTTPS in production (always)
+</Warning>
+
+**Token Security:**
+- Hierarchical router: OAuth2 tokens are short-lived and auto-refreshed
+- Direct endpoint: Instance tokens are long-lived (manual rotation)
+
+Both methods are secure when used correctly with HTTPS.
+
+## Summary: Quick Decision Guide
+
+```
+What are you connecting?
+├─ AI Agent (Claude, Cursor, VS Code)
+│  └─ Use Hierarchical Router ✅
+│
+├─ Workflow Automation (n8n, Zapier, Make.com)
+│  └─ Use Direct MCP Endpoint ✅
+│
+├─ Custom Script/App (Node.js, Python, etc.)
+│  └─ Use Direct MCP Endpoint ✅
+│
+└─ No-Code Platform Integration
+   └─ Use Direct MCP Endpoint ✅
+```
+
+## Need Help?
+
+- 📚 **Technical Docs**: See [Hierarchical Router](/development/satellite/hierarchical-router) or [Instance Router](/development/satellite/instance-router) for developer details
+- 💬 **Discord**: Join our [community](https://discord.gg/42Ce3S7b3b) for help
+- 🐛 **Issues**: Report bugs on [GitHub](https://github.com/deploystackio/deploystack/issues)
+
+## Related Documentation
+
+- [MCP Server Installation](/general/mcp-installation) - How to install MCP servers
+- [Team Management](/general/teams) - Managing team access
+- [Quick Start Guide](/general/quick-start) - Getting started with DeployStack
+- [Architecture Overview](/general/architecture) - How DeployStack works

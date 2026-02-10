@@ -202,30 +202,82 @@ export default async function sseRoute(server: FastifyInstance) {
 
 ## Polling Pattern with Async Operations
 
-When using `setInterval` with async database queries or API calls, you **must** check connection state **after** the async operation completes to prevent crashes:
+When using `setInterval` with async database queries or API calls, you **must** check connection state **after** the async operation completes to prevent crashes.
+
+### Critical: Timestamp Tracking with Array Mutations
+
+**⚠️ COMMON BUG**: When polling for new records and reversing arrays for chronological order, you **must** capture the newest timestamp **before** reversing the array:
 
 ```typescript
+// ❌ WRONG: Captures oldest timestamp after reverse
+const newItems = await db.query().orderBy(desc(created_at))
+for (const item of newItems.reverse()) {  // reverse() MUTATES the array
+  reply.sse.send({ event: 'item', data: item })
+}
+lastSentTimestamp = newItems[0].created_at  // BUG: Now points to OLDEST item!
+
+// ✅ CORRECT: Capture newest timestamp before reversing
+const newItems = await db.query().orderBy(desc(created_at))
+const newestTimestamp = newItems[0].created_at  // Capture FIRST (newest)
+for (const item of newItems.reverse()) {
+  reply.sse.send({ event: 'item', data: item })
+}
+lastSentTimestamp = newestTimestamp  // Use captured newest timestamp
+```
+
+**Why this matters:**
+- Query returns items in **descending order** (newest first): `[newest, ..., oldest]`
+- `array.reverse()` **mutates** the array: `[oldest, ..., newest]`
+- After reversal, `array[0]` points to the **oldest** item
+- Using `array[0].created_at` after reversal sets `lastSentTimestamp` to the oldest timestamp
+- Next poll finds the same items again → **infinite duplicate stream**
+
+**The Fix:**
+Always capture the newest timestamp from `array[0]` **before** calling `reverse()`.
+
+### Complete Polling Pattern Example
+
+```typescript
+import { type FastifyInstance } from 'fastify'
+import { getDb, getSchema } from '../../../db'
+import { eq, and, desc, gt } from 'drizzle-orm'
+
 export default async function pollingStreamRoute(server: FastifyInstance) {
-  server.get('/metrics/stream', {
+  server.get('/logs/stream', {
     sse: true,
-    preValidation: requirePermission('metrics.view'),
+    preValidation: requirePermission('logs.view'),
     schema: {
-      tags: ['Metrics'],
-      summary: 'Stream metrics via SSE with polling',
+      tags: ['Logs'],
+      summary: 'Stream logs via SSE with polling',
       security: [{ cookieAuth: [] }]
     }
   }, async (request, reply) => {
     const userId = request.user!.id
     let pollInterval: NodeJS.Timeout | null = null
 
+    const db = getDb()
+    const { logs } = getSchema()
+
     // Keep connection open
     reply.sse.keepAlive()
 
     // Send initial snapshot
-    const initialData = await fetchMetrics(userId)
-    reply.sse.send({ event: 'snapshot', data: initialData })
+    const initialLogs = await db
+      .select()
+      .from(logs)
+      .where(eq(logs.user_id, userId))
+      .orderBy(desc(logs.created_at))
+      .limit(50)
 
-    // Poll for updates every 3 seconds
+    reply.sse.send({
+      event: 'snapshot',
+      data: { logs: initialLogs }
+    })
+
+    // Track last sent timestamp for polling
+    let lastSentTimestamp = initialLogs[0]?.created_at || new Date(0)
+
+    // Poll for new logs every 3 seconds
     pollInterval = setInterval(async () => {
       // Check #1: Before starting async work
       if (!reply.sse.isConnected) {
@@ -234,8 +286,16 @@ export default async function pollingStreamRoute(server: FastifyInstance) {
       }
 
       try {
-        // Async database query or API call
-        const data = await fetchMetrics(userId)
+        // Query for new logs (newest first)
+        const newLogs = await db
+          .select()
+          .from(logs)
+          .where(and(
+            eq(logs.user_id, userId),
+            gt(logs.created_at, lastSentTimestamp)
+          ))
+          .orderBy(desc(logs.created_at))
+          .limit(100)
 
         // ⚠️ CRITICAL: Check #2 after async operation completes
         if (!reply.sse.isConnected) {
@@ -243,16 +303,29 @@ export default async function pollingStreamRoute(server: FastifyInstance) {
           return
         }
 
-        // If sending multiple items in a loop, check before each send
-        for (const item of data) {
-          if (!reply.sse.isConnected) {
-            if (pollInterval) clearInterval(pollInterval)
-            return
+        if (newLogs.length > 0) {
+          // ⚠️ CRITICAL: Capture newest timestamp BEFORE reversing
+          const newestTimestamp = newLogs[0].created_at
+
+          // Send logs in chronological order (oldest first)
+          for (const log of newLogs.reverse()) {
+            // Check before each send
+            if (!reply.sse.isConnected) {
+              if (pollInterval) clearInterval(pollInterval)
+              return
+            }
+            reply.sse.send({
+              id: log.id,
+              event: 'log',
+              data: log
+            })
           }
-          reply.sse.send({ event: 'update', data: item })
+
+          // Update to newest timestamp (captured before reversal)
+          lastSentTimestamp = newestTimestamp
         }
       } catch (error) {
-        server.log.error(error, 'Failed to fetch metrics')
+        server.log.error(error, 'Failed to poll for new logs')
         // Don't crash - just log the error
       }
     }, 3000)
@@ -263,7 +336,7 @@ export default async function pollingStreamRoute(server: FastifyInstance) {
         clearInterval(pollInterval)
         pollInterval = null
       }
-      server.log.debug({ userId }, 'Metrics stream closed')
+      server.log.debug({ userId }, 'Log stream closed')
     })
   })
 }
@@ -288,6 +361,23 @@ Time 100ms: Query completes → Check #2 ✅ (disconnected) → Return early ✅
 ```
 
 The client can disconnect **during** async operations, so checking only at the start of the interval is insufficient.
+
+### Key Takeaways for Polling Patterns
+
+When implementing SSE with polling:
+
+1. **✅ Always check `reply.sse.isConnected` after async operations** - Client can disconnect during queries
+2. **✅ Capture timestamps before array mutations** - `array.reverse()` mutates the array
+3. **✅ Use `gt()` (greater than) for timestamp filtering** - Prevents re-sending same items
+4. **✅ Clear interval on disconnect** - Prevent memory leaks and unnecessary queries
+5. **✅ Send in chronological order** - Oldest first for natural reading experience
+6. **✅ Wrap polling logic in try-catch** - Don't crash on database errors
+
+**Common Pitfalls:**
+- ❌ Using `lastSentTimestamp = array[0]` after `array.reverse()`
+- ❌ Only checking `isConnected` before async operations
+- ❌ Forgetting to clear interval in `onClose` handler
+- ❌ Not handling database errors gracefully
 
 ## Frontend Client
 

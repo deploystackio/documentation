@@ -52,6 +52,16 @@ The catalog contains servers from two sources:
 - **Flexibility**: Full control over all server properties
 - **Team Servers**: Can be created by team administrators
 
+#### GitHub-Deployed Servers
+- **Source**: Deployed directly from GitHub repositories by teams
+- **Identification**: Marked with `source='github'` in the database
+- **Deployment**: Team admins deploy their own MCP servers via the `/deploy` endpoint
+- **Transport Type**: Always STDIO (HTTP/SSE deployments not supported)
+- **Visibility**: Team-scoped servers (`visibility='team'`, `owner_team_id` set)
+- **Management**: Fully managed by the deploying team
+
+Team administrators can deploy MCP servers directly from their GitHub repositories, providing a self-serve deployment experience. These servers are automatically configured with the latest commit SHA and can be updated through GitHub webhooks. For complete details on deploying MCP servers from GitHub, see the GitHub Deployment documentation.
+
 ### Categories
 
 Servers are organized into categories for easy discovery and filtering. Categories are simple organizational labels that group servers by their purpose or functionality.
