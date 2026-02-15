@@ -76,7 +76,7 @@ MCP Client                    Satellite (MCP SDK)
     │                            │
     │──── POST /mcp ────────────▶│  (JSON-RPC tools/list)
     │                            │
-    │◀─── 2 meta-tools ─────────│  (Hierarchical router)
+    │◀─── 4 meta-tools ─────────│  (Hierarchical router)
 ```
 
 ### Core SDK Components
@@ -90,7 +90,7 @@ MCP Client                    Satellite (MCP SDK)
 **Client Communication:**
 - StreamableHTTPClientTransport for external server communication
 - Automatic connection establishment and cleanup
-- Standard MCP method execution (listTools, callTool)
+- Standard MCP method execution (listTools, callTool, listResources, readResource)
 - Built-in error handling and retry logic
 
 ### MCP Protocol Implementation
@@ -98,14 +98,15 @@ MCP Client                    Satellite (MCP SDK)
 **Supported MCP Methods:**
 - `initialize` - MCP session initialization (SDK automatic)
 - `notifications/initialized` - Client initialization complete
-- `tools/list` - List available meta-tools (hierarchical router: 2 tools only)
+- `tools/list` - List available meta-tools (hierarchical router: 4 meta-tools)
 - `tools/call` - Execute meta-tools or route to actual MCP servers
-- `resources/list` - List available resources (returns empty array)
-- `resources/templates/list` - List resource templates (returns empty array)
+- `resources/list` - List available resources from all connected MCP servers
+- `resources/templates/list` - List resource templates from all connected MCP servers
+- `resources/read` - Read resource content (proxied on-demand to origin server)
 - `prompts/list` - List available prompts (returns empty array)
 
 <Info>
-**Hierarchical Router**: The satellite exposes only 2 meta-tools to MCP clients (`discover_mcp_tools` and `execute_mcp_tool`) instead of all available tools. This solves the MCP context window consumption problem by reducing token usage by 95%+. See [Hierarchical Router Implementation](/development/satellite/hierarchical-router) for details.
+**Hierarchical Router**: The satellite exposes only 4 meta-tools to MCP clients (`discover_mcp_tools`, `execute_mcp_tool`, `list_mcp_resources`, and `read_mcp_resource`) instead of all available tools and resources. This solves the MCP context window consumption problem by reducing token usage by 95%+. Resources and `_meta` metadata are also proxied through the hierarchical router for MCP Apps support. See [Hierarchical Router Implementation](/development/satellite/hierarchical-router) for details.
 </Info>
 
 For detailed information about internal tool discovery and caching, see [Tool Discovery Implementation](/development/satellite/tool-discovery).

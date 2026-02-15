@@ -4,12 +4,12 @@ description: Technical implementation of MCP server tool discovery in DeployStac
 ---
 
 
-DeployStack Satellite implements automatic tool discovery from MCP servers across both HTTP/SSE remote endpoints and stdio subprocess servers. This unified system provides dynamic tool availability without manual configuration.
+DeployStack Satellite implements automatic tool and resource discovery from MCP servers across both HTTP/SSE remote endpoints and stdio subprocess servers. This unified system provides dynamic tool and resource availability without manual configuration.
 
 <Info>
-**Current Implementation**: Tool discovery fully supports both HTTP/SSE remote MCP servers and stdio subprocess servers through a unified architecture. The `UnifiedToolDiscoveryManager` coordinates discovery across both transport types, merging tools into a single cache.
+**Current Implementation**: Tool and resource discovery fully supports both HTTP/SSE remote MCP servers and stdio subprocess servers through a unified architecture. The `UnifiedToolDiscoveryManager` coordinates tool discovery across both transport types, while `UnifiedResourceDiscoveryManager` handles resource discovery alongside tools.
 
-This document focuses on the **internal** tool discovery mechanism. To learn how tools are exposed to MCP clients through the hierarchical router pattern, see [Hierarchical Router Implementation](/development/satellite/hierarchical-router).
+This document focuses on the **internal** discovery mechanism. To learn how tools and resources are exposed to MCP clients through the hierarchical router pattern, see [Hierarchical Router Implementation](/development/satellite/hierarchical-router).
 </Info>
 
 The overall satellite architecture is documented in [Satellite Architecture Design](/development/satellite/architecture). MCP transport protocol details can be found in [MCP Transport Protocols](/development/satellite/mcp-transport).
@@ -22,13 +22,14 @@ Tool discovery operates through three coordinated managers that handle different
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                     Unified Tool Discovery Architecture                         │
+│                   Unified Tool & Resource Discovery Architecture                │
 │                                                                                 │
 │  ┌─────────────────────────────────────────────────────────────────┐           │
 │  │              UnifiedToolDiscoveryManager                        │           │
 │  │                                                                 │           │
 │  │  • Coordinates both HTTP and stdio discovery                   │           │
 │  │  • Merges tools from both managers                            │           │
+│  │  • Wires resource discovery callbacks                         │           │
 │  │  • Single interface for MCP clients                           │           │
 │  └─────────────────────────────────────────────────────────────────┘           │
 │                            │                  │                                 │
@@ -39,8 +40,18 @@ Tool discovery operates through three coordinated managers that handle different
 │  │ • HTTP/SSE servers        │    │ • stdio subprocesses      │               │
 │  │ • Startup discovery       │    │ • Post-spawn discovery    │               │
 │  │ • SSE parsing             │    │ • JSON-RPC over stdin/out │               │
-│  │ • Static configuration    │    │ • Process lifecycle aware │               │
+│  │ • Discovers resources too │    │ • Discovers resources too │               │
 │  └───────────────────────────┘    └───────────────────────────┘               │
+│                            │                  │                                 │
+│                            ▼                  ▼                                 │
+│  ┌─────────────────────────────────────────────────────────────────┐           │
+│  │            UnifiedResourceDiscoveryManager                      │           │
+│  │                                                                 │           │
+│  │  • Caches resource metadata (URI, name, mimeType, _meta)      │           │
+│  │  • URI namespacing with pipe separator (serverSlug|uri)        │           │
+│  │  • Preserves _meta for MCP Apps support                        │           │
+│  │  • Content never cached (proxied on-demand)                    │           │
+│  └─────────────────────────────────────────────────────────────────┘           │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -49,20 +60,30 @@ Tool discovery operates through three coordinated managers that handle different
 **UnifiedToolDiscoveryManager:**
 - Coordinates tool discovery across both HTTP/SSE and stdio transport types
 - Merges discovered tools from both managers into a unified cache
+- Wires resource discovery callbacks to `UnifiedResourceDiscoveryManager`
 - Routes discovery requests to the appropriate transport type
 - Provides single interface for MCP protocol handlers
 
 **RemoteToolDiscoveryManager:**
 - Queries remote HTTP/SSE MCP servers during startup
 - Parses Server-Sent Events responses
+- Discovers resources alongside tools (same connection, extra JSON-RPC call)
 - Maintains in-memory cache with namespacing
 - Handles differential configuration updates
 
 **StdioToolDiscoveryManager:**
 - Discovers tools from stdio subprocess MCP servers
 - Executes discovery after process spawn and handshake
+- Discovers resources alongside tools via `resources/list` and `resources/templates/list`
 - **Tools persist in cache even when processes go dormant**
 - Tracks tools by server with namespacing
+
+**UnifiedResourceDiscoveryManager:**
+- Caches resource metadata (URI, name, description, mimeType, `_meta`) from both transport types
+- URI namespacing with pipe separator: `serverSlug|originalUri`
+- Preserves `_meta` fields for MCP Apps support
+- Resource content is **never cached** — always proxied on-demand via `McpResourceExecutor`
+- Shares server status map with `UnifiedToolDiscoveryManager` for per-user filtering
 
 ## Discovery Process by Transport Type
 
@@ -127,6 +148,7 @@ interface UnifiedCachedTool {
   inputSchema: object;          // JSON Schema
   transport: 'stdio' | 'http';  // Transport type for routing
   discoveredAt?: Date;          // Discovery timestamp (HTTP only)
+  _meta?: Record<string, unknown>;  // Preserved metadata for MCP Apps support
 }
 ```
 
@@ -160,6 +182,66 @@ stdio Tool Example:
 - **User Display**: Friendly namespaced names shown to clients
 
 For team-based server resolution, see [Team Isolation Implementation](/development/satellite/team-isolation).
+
+## Resource Discovery
+
+Resources are discovered alongside tools during the same connection to each MCP server. This avoids extra round-trips and ensures resource metadata is always in sync with tool metadata.
+
+### Discovery Flow
+
+Both `RemoteToolDiscoveryManager` and `StdioToolDiscoveryManager` discover resources after tool discovery completes:
+
+1. **Tool discovery**: `tools/list` JSON-RPC call (existing flow)
+2. **Resource discovery**: `resources/list` JSON-RPC call (same connection)
+3. **Template discovery**: `resources/templates/list` JSON-RPC call (same connection)
+4. **Callback**: Results passed to `UnifiedResourceDiscoveryManager` for caching
+
+Resource discovery is **non-fatal** — if a server doesn't support resources (most don't), discovery silently continues without error.
+
+### UnifiedResourceDiscoveryManager
+
+Caches resource metadata with URI namespacing:
+
+```typescript
+interface UnifiedCachedResource {
+  serverName: string;           // Installation name
+  originalUri: string;          // Original URI from server
+  namespacedUri: string;        // serverSlug|originalUri
+  name: string;                 // Resource name
+  description?: string;         // Resource description
+  mimeType?: string;            // Content type
+  annotations?: object;         // Resource annotations
+  _meta?: Record<string, unknown>;  // Preserved for MCP Apps
+  transport: 'stdio' | 'http' | 'sse';
+  serverSlug: string;           // Server identifier
+  discoveredAt: Date;           // Discovery timestamp
+}
+```
+
+### URI Namespacing
+
+Resources use a pipe separator (`|`) instead of the colon (`:`) used for tools, because resource URIs frequently contain colons:
+
+```
+Tool namespacing:     serverSlug:toolName           → "github:create_issue"
+Resource namespacing: serverSlug|originalUri         → "excalidraw|ui://excalidraw/mcp-app.html"
+```
+
+### Content Proxying
+
+Resource **content is never cached**. When `read_mcp_resource` is called, `McpResourceExecutor` proxies the request on-demand to the origin MCP server:
+
+- **stdio servers**: Sends `resources/read` JSON-RPC to the subprocess
+- **HTTP/SSE servers**: Sends `resources/read` via MCP SDK client (with OAuth token injection if needed)
+
+### _meta Preservation
+
+The `_meta` field is preserved through the entire discovery and response chain using the pattern:
+```typescript
+...(item._meta ? { _meta: item._meta } : {})
+```
+
+This is applied at every stage: discovery caching, resource listing, and tool search results. The `_meta.ui.resourceUri` field is rewritten to use the namespaced URI format so MCP Apps clients can read resources through the hierarchical router.
 
 ## Configuration Management
 
@@ -277,7 +359,7 @@ The satellite uses `estimateMcpServerTokens()` from `token-counter.ts` to calcul
 
 **Purpose:**
 - Store tool metadata in backend database for team visibility
-- Calculate hierarchical router token savings (traditional vs 2-meta-tool approach)
+- Calculate hierarchical router token savings (traditional vs 4-meta-tool approach)
 - Enable frontend tool catalog display with token consumption metrics
 - Provide analytics on MCP server complexity and context window usage
 

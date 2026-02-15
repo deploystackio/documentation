@@ -99,8 +99,13 @@ This ensures MCP clients (Cursor, VS Code, Claude.ai) maintain stable connection
 For detailed information about tool discovery and execution, see [Tool Discovery Implementation](/development/satellite/tool-discovery).
 
 ### Resources
-- `resources/list` - List available resources (returns empty array)
-- `resources/templates/list` - List resource templates (returns empty array)
+- `resources/list` - List available resources from connected MCP servers
+- `resources/templates/list` - List resource templates from connected MCP servers
+- `resources/read` - Read resource content (proxied on-demand to origin server)
+
+<Info>
+**_meta Preservation**: Resource metadata including `_meta` fields is preserved through the proxy for MCP Apps support. Resource content is never cached — always proxied on-demand to the origin MCP server.
+</Info>
 
 ### Prompts
 - `prompts/list` - List available prompts (returns empty array)

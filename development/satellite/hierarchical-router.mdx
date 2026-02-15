@@ -1,9 +1,9 @@
 ---
 title: Hierarchical Router Implementation
-description: Technical solution to MCP context window consumption. DeployStack's hierarchical router pattern reduces token usage by 99.5% using just 2 meta-tools.
+description: Technical solution to MCP context window consumption. DeployStack's hierarchical router pattern reduces token usage by 99.5% using just 4 meta-tools.
 ---
 
-DeployStack Satellite implements a hierarchical router pattern to solve the MCP context window consumption problem. Instead of exposing hundreds of tools directly to MCP clients, the satellite exposes only 2 meta-tools that enable dynamic tool discovery and execution.
+DeployStack Satellite implements a hierarchical router pattern to solve the MCP context window consumption problem. Instead of exposing hundreds of tools directly to MCP clients, the satellite exposes only 4 meta-tools that enable dynamic tool discovery, execution, and resource access.
 
 <Info>
 **Problem Solved**: Traditional MCP implementations expose all tools directly, consuming 40-80% of the context window before any actual work begins. The hierarchical router reduces this to \<1% while maintaining full functionality.
@@ -49,7 +49,7 @@ This metadata is valuable but consumes massive context space when multiplied acr
 
 ### Architecture Overview
 
-Instead of exposing all tools directly, the satellite exposes only 2 meta-tools:
+Instead of exposing all tools directly, the satellite exposes only 4 meta-tools:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -57,9 +57,11 @@ Instead of exposing all tools directly, the satellite exposes only 2 meta-tools:
 │                                                              │
 │  Connects to: http://satellite.deploystack.io/mcp          │
 │                                                              │
-│  Sees: "This server has 2 tools!"                          │
+│  Sees: "This server has 4 tools!"                          │
 │        1. discover_mcp_tools                                 │
 │        2. execute_mcp_tool                                   │
+│        3. list_mcp_resources                                 │
+│        4. read_mcp_resource                                  │
 └─────────────────────────────────────────────────────────────┘
                               │
                               │ MCP Protocol (JSON-RPC)
@@ -67,11 +69,12 @@ Instead of exposing all tools directly, the satellite exposes only 2 meta-tools:
 ┌─────────────────────────────▼───────────────────────────────┐
 │  DeployStack Satellite (Hierarchical Router)                │
 │                                                              │
-│  Exposes: 2 static meta-tools (NEVER change)               │
+│  Exposes: 4 static meta-tools (NEVER change)               │
 │                                                              │
 │  Behind the scenes:                                          │
 │  • Manages 20+ actual MCP servers                           │
 │  • Each with 5-10 tools = 100+ real tools                   │
+│  • Resources from servers that support them                  │
 │  • Search index with Fuse.js                                │
 │  • Client never knows about this complexity                  │
 └──────────────────────────────────────────────────────────────┘
@@ -84,9 +87,9 @@ Instead of exposing all tools directly, the satellite exposes only 2 meta-tools:
 - 37.5% of 200k context consumed
 
 **After (Hierarchical):**
-- 2 tools × 686 tokens = 1372 tokens consumed
-- Result: 0.686% of context window used
-- **Token Reduction: 98.3%**
+- 4 meta-tools × ~500 tokens = ~2000 tokens consumed
+- Result: ~1.0% of context window used
+- **Token Reduction: 97.3%**
 
 ## Meta-Tool Specifications
 
@@ -243,6 +246,131 @@ Instead of exposing all tools directly, the satellite exposes only 2 meta-tools:
 - Routes to appropriate handler (stdio or HTTP/SSE)
 - Returns result in MCP content format
 
+### Tool 3: list_mcp_resources
+
+**Purpose:** List all available resources across all connected MCP servers.
+
+**Definition:**
+```typescript
+{
+  name: "list_mcp_resources",
+  description: "List all available MCP resources across all connected servers. Resources are server-provided data like files, UI components, or configuration that can be read with read_mcp_resource.",
+  inputSchema: {
+    type: "object",
+    properties: {},
+    required: []
+  }
+}
+```
+
+**Example Request:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "3",
+  "method": "tools/call",
+  "params": {
+    "name": "list_mcp_resources",
+    "arguments": {}
+  }
+}
+```
+
+**Example Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "3",
+  "result": {
+    "content": [{
+      "type": "text",
+      "text": {
+        "resources": [
+          {
+            "uri": "excalidraw|ui://excalidraw/mcp-app.html",
+            "name": "Excalidraw App",
+            "description": "Interactive drawing canvas",
+            "mimeType": "text/html",
+            "server": "excalidraw",
+            "_meta": {
+              "ui": { "resourceUri": "excalidraw|ui://excalidraw/mcp-app.html" }
+            }
+          }
+        ],
+        "resource_templates": [],
+        "total_resources": 1,
+        "total_templates": 0
+      }
+    }]
+  }
+}
+```
+
+**Implementation Details:**
+- Returns all resources from connected MCP servers with namespaced URIs
+- Resource metadata is cached during tool discovery (no extra round-trip)
+- `_meta` fields are preserved for MCP Apps support
+- `_meta.ui.resourceUri` is rewritten to use the namespaced URI format
+- Per-user filtering: only shows resources from the authenticated user's installations
+
+### Tool 4: read_mcp_resource
+
+**Purpose:** Read the content of a specific resource by its namespaced URI.
+
+**Definition:**
+```typescript
+{
+  name: "read_mcp_resource",
+  description: "Read the content of an MCP resource by its URI. Use list_mcp_resources first to discover available resources and their URIs.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      uri: {
+        type: "string",
+        description: "The resource URI from list_mcp_resources (format: serverSlug|originalUri, e.g., 'excalidraw|ui://excalidraw/mcp-app.html')"
+      }
+    },
+    required: ["uri"]
+  }
+}
+```
+
+**Example Request:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "4",
+  "method": "tools/call",
+  "params": {
+    "name": "read_mcp_resource",
+    "arguments": {
+      "uri": "excalidraw|ui://excalidraw/mcp-app.html"
+    }
+  }
+}
+```
+
+**Example Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "4",
+  "result": {
+    "content": [{
+      "type": "text",
+      "text": "<!DOCTYPE html><html>..."
+    }]
+  }
+}
+```
+
+**Implementation Details:**
+- Parses the namespaced URI (`serverSlug|originalUri`) to identify origin server
+- Content is **never cached** — always proxied on-demand to the origin MCP server
+- Routes to the correct transport (stdio subprocess or HTTP/SSE endpoint)
+- Per-user routing: resolves the authenticated user's specific installation
+- Supports both text and binary (base64) resource content
+
 ## Complete User Flow
 
 ### Step 1: Client Connects
@@ -258,7 +386,7 @@ MCP Client → POST /mcp
 Satellite → Client
 {
   "result": {
-    "capabilities": {"tools": {}},
+    "capabilities": {"tools": {}, "resources": {}},
     "serverInfo": {"name": "deploystack-satellite"}
   }
 }
@@ -289,13 +417,23 @@ Satellite → Client
         "name": "execute_mcp_tool",
         "description": "Execute a discovered MCP tool...",
         "inputSchema": {...}
+      },
+      {
+        "name": "list_mcp_resources",
+        "description": "List all available MCP resources...",
+        "inputSchema": {...}
+      },
+      {
+        "name": "read_mcp_resource",
+        "description": "Read the content of an MCP resource...",
+        "inputSchema": {...}
       }
     ]
   }
 }
 ```
 
-**Client knows:** "This server has 2 tools available"
+**Client knows:** "This server has 4 tools available"
 
 ### Step 3: User Asks for GitHub Tools
 
@@ -386,6 +524,84 @@ Satellite → Client
 
 **Client knows:** "The execute tool returned a result"
 
+### Step 5: User Lists Resources
+
+The AI agent discovers available resources:
+
+```
+MCP Client → POST /mcp
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "list_mcp_resources",
+    "arguments": {}
+  }
+}
+
+Satellite Internal Process:
+1. Queries UnifiedResourceDiscoveryManager cache
+2. Filters resources by authenticated user's installations
+3. Returns namespaced URIs with metadata
+
+Satellite → Client
+{
+  "result": {
+    "content": [{
+      "type": "text",
+      "text": {
+        "resources": [
+          {
+            "uri": "excalidraw|ui://excalidraw/mcp-app.html",
+            "name": "Excalidraw App",
+            "server": "excalidraw"
+          }
+        ],
+        "total_resources": 1
+      }
+    }]
+  }
+}
+```
+
+**Client knows:** "There is 1 resource available from the excalidraw server"
+
+### Step 6: User Reads a Resource
+
+The AI agent reads a specific resource:
+
+```
+MCP Client → POST /mcp
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "read_mcp_resource",
+    "arguments": {
+      "uri": "excalidraw|ui://excalidraw/mcp-app.html"
+    }
+  }
+}
+
+Satellite Internal Process:
+1. Parses URI: serverSlug="excalidraw", originalUri="ui://excalidraw/mcp-app.html"
+2. Resolves user's specific installation
+3. Proxies read request on-demand to origin MCP server
+4. Returns content (never cached)
+
+Satellite → Client
+{
+  "result": {
+    "content": [{
+      "type": "text",
+      "text": "<!DOCTYPE html><html>..."
+    }]
+  }
+}
+```
+
+**Client knows:** "The resource content was returned"
+
 ## Format Conversion
 
 The satellite converts between user-facing format (`serverName:toolName`) and internal routing format (`serverName-toolName`) transparently during tool discovery and execution.
@@ -439,33 +655,35 @@ Benefits:
 - No memory duplication
 - Automatic reflection of tool changes
 
-## Why Tool Notifications Are Irrelevant
+## Why Tool and Resource Notifications Are Irrelevant
 
 ### The Question
 
-> "Should we implement `notifications/tools/list_changed` when tools are added or removed?"
+> "Should we implement `notifications/tools/list_changed` or `notifications/resources/list_changed` when tools or resources are added or removed?"
 
 ### The Answer
 
-**NO.** The MCP client only sees 2 static meta-tools that NEVER change:
+**NO.** The MCP client only sees 4 static meta-tools that NEVER change:
 - `discover_mcp_tools` ✅ Always available
 - `execute_mcp_tool` ✅ Always available
+- `list_mcp_resources` ✅ Always available
+- `read_mcp_resource` ✅ Always available
 
 **What DOES change behind the scenes:**
-- New MCP servers installed → Search index updates automatically
-- MCP servers removed → Search index updates automatically
-- Tools discovered from new servers → Search index updates automatically
+- New MCP servers installed → Search index and resource cache update automatically
+- MCP servers removed → Search index and resource cache update automatically
+- Tools/resources discovered from new servers → Caches update automatically
 
 **But the client never needs to know!**
 
 When a new MCP server is installed:
 1. ✅ Backend sends configuration update to satellite
 2. ✅ Satellite spawns new MCP server process (if stdio)
-3. ✅ Tool discovery runs automatically
-4. ✅ Search index refreshed (next search uses new tools)
+3. ✅ Tool and resource discovery runs automatically
+4. ✅ Search index and resource cache refreshed
 5. ❌ **Client is NOT notified** (doesn't need to be)
 
-Next time the client calls `discover_mcp_tools`, the new tools are automatically included in search results. **No notification needed.**
+Next time the client calls `discover_mcp_tools` or `list_mcp_resources`, the new tools and resources are automatically included. **No notification needed.**
 
 ## Performance Characteristics
 
@@ -473,9 +691,9 @@ Next time the client calls `discover_mcp_tools`, the new tools are automatically
 
 | Metric | Traditional | Hierarchical | Reduction |
 |--------|-------------|--------------|-----------|
-| Tools Exposed | 150 | 2 | 98.7% |
-| Tokens Consumed | 75,000 | 1372 | 98.2% |
-| Context Available | 62.5% | 99.3% | +36.8% |
+| Tools Exposed | 150 | 4 | 97.3% |
+| Tokens Consumed | 75,000 | ~2000 | 97.3% |
+| Context Available | 62.5% | 99.0% | +36.5% |
 
 ### Search Performance
 
@@ -488,17 +706,19 @@ Next time the client calls `discover_mcp_tools`, the new tools are automatically
 
 **Claude Code Example:**
 - Before: 82,000 tokens (41%) consumed by MCP tools
-- After: 1372 tokens (0.686%) consumed by meta-tools
-- Result: **80,628 tokens freed for actual work**
+- After: ~2000 tokens (~1.0%) consumed by 4 meta-tools
+- Result: **~80,000 tokens freed for actual work**
 
 ## Implementation Status
 
 <Info>
 **Status**: ✅ Fully Operational
 
-Both meta-tools are implemented and production-ready:
+All 4 meta-tools are implemented and production-ready:
 - `discover_mcp_tools`: Full-text search with Fuse.js
 - `execute_mcp_tool`: Complete routing for stdio and HTTP/SSE transports
+- `list_mcp_resources`: Resource listing with per-user filtering and `_meta` preservation
+- `read_mcp_resource`: On-demand resource proxying to origin servers
 </Info>
 
 ### Code Locations
@@ -507,11 +727,54 @@ Both meta-tools are implemented and production-ready:
 - `/services/satellite/src/core/mcp-server-wrapper.ts` - Meta-tool handlers
 - `/services/satellite/src/services/tool-search-service.ts` - Search implementation
 - `/services/satellite/src/services/unified-tool-discovery-manager.ts` - Tool cache
+- `/services/satellite/src/services/unified-resource-discovery-manager.ts` - Resource cache
+- `/services/satellite/src/lib/mcp-resource-executor.ts` - Resource read proxying
 
 **Key Methods:**
-- `setupMcpServer()` - Registers 2 meta-tools instead of all tools
-- `handleDiscoverTools()` - Implements discovery logic
-- `handleExecuteTool()` - Implements execution routing
+- `setupMcpServer()` - Registers 4 meta-tools instead of all tools
+- `handleDiscoverTools()` - Implements tool discovery logic
+- `handleExecuteTool()` - Implements tool execution routing
+- `handleListResources()` - Implements resource listing with per-user filtering
+- `handleReadResource()` - Implements on-demand resource proxying
+
+## Resource Support & _meta Preservation
+
+### Resource Discovery
+
+Resources are discovered alongside tools during the same connection — no extra round-trip per server. When the satellite connects to an MCP server (stdio or HTTP/SSE), it calls both `tools/list` and `resources/list` in sequence. Resource metadata (URI, name, description, mimeType) is cached, but resource **content is never cached** — it's always proxied on-demand via `McpResourceExecutor`.
+
+### URI Namespacing
+
+Resources use a **pipe separator** (`|`) for URI namespacing, different from the colon (`:`) used for tools:
+
+```
+Tool format:     serverSlug:toolName        (e.g., "github:create_issue")
+Resource format: serverSlug|originalUri     (e.g., "excalidraw|ui://excalidraw/mcp-app.html")
+```
+
+The pipe separator was chosen because resource URIs frequently contain colons (e.g., `ui://`, `file://`, `https://`), which would conflict with the tool namespacing format.
+
+### _meta Preservation
+
+The `_meta` field is preserved through the entire cache and response chain. This is important for **MCP Apps support**, where `_meta` carries UI rendering hints (e.g., `_meta.ui.resourceUri` tells the client which resource to load for an app-like experience).
+
+**Preservation chain:**
+1. Origin MCP server returns `_meta` on tools and resources
+2. Discovery managers preserve `_meta` when caching (`...(item._meta ? { _meta: item._meta } : {})`)
+3. `discover_mcp_tools` includes `_meta` in tool search results
+4. `list_mcp_resources` includes `_meta` in resource listings
+5. `_meta.ui.resourceUri` is rewritten to use the namespaced URI format so clients can read the resource through the hierarchical router
+
+### Resource vs Tool Flow
+
+| Aspect | Tools | Resources |
+|--------|-------|-----------|
+| Discovery meta-tool | `discover_mcp_tools` | `list_mcp_resources` |
+| Execution meta-tool | `execute_mcp_tool` | `read_mcp_resource` |
+| URI separator | `:` (colon) | `\|` (pipe) |
+| Content caching | N/A (executed on-demand) | Never cached (proxied on-demand) |
+| Metadata caching | Yes (tool definitions) | Yes (URI, name, mimeType) |
+| `_meta` support | Yes | Yes |
 
 ## Benefits Summary
 
@@ -522,7 +785,7 @@ Both meta-tools are implemented and production-ready:
 - Transparent - works like any MCP server
 
 **For Developers:**
-- Simple 2-tool interface
+- Simple 4-tool interface
 - Automatic tool discovery
 - No client modifications needed
 - Standard MCP protocol compliance
