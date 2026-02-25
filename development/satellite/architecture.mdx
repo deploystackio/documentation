@@ -351,7 +351,7 @@ See [Log Capture](/development/satellite/log-capture) for buffering implementati
 
 **Resource Management (stdio processes):**
 - **nsjail Isolation**: PID, network, filesystem isolation in production
-- **Resource Quotas**: 512MB physical RAM (cgroup), 2048MB virtual (rlimit), 60s CPU time, 1000 processes
+- **Resource Quotas**: virtual RAM unlimited (rlimit_as=inf), 512MB physical RAM via cgroup when enabled, 60s CPU time, 1000 processes
 - **Development Mode**: Direct spawn() without isolation for cross-platform development
 
 **Authentication & Authorization:**
@@ -375,10 +375,10 @@ See [Team Isolation](/development/satellite/team-isolation) for complete impleme
 - **Instance Isolation**: Processes tracked by `team_id` AND `user_id` with independent lifecycles
 - **ProcessId Format**: `{server_slug}-{team_slug}-{user_slug}-{installation_id}`
 - **Tool Discovery**: Automatic tool caching with per-user namespacing
-- **Resource Limits**: nsjail in production with cgroup enforcement
-  - 512MB physical memory (cgroup_mem_max) - Precise control over actual memory usage
-  - 2048MB virtual memory (rlimit_as) - Fallback for systems without cgroup support
-  - 1000 processes (cgroup_pids_max) - Adequate for package managers
+- **Resource Limits**: nsjail in production with auto-detected cgroup enforcement
+  - Virtual memory unlimited (rlimit_as=inf) — Node.js WASM requires ~10GB virtual address space
+  - 512MB physical memory (cgroup_mem_max) — active only when systemd `Delegate=yes` is configured
+  - 1000 processes (cgroup_pids_max + rlimit_nproc) — adequate for package managers
   - 60s CPU time limit
   - Runtime-specific cache directories: `/mcp-cache/node/{team_id}`, `/mcp-cache/python/{team_id}`
 - **Development Mode**: Plain spawn() on all platforms for easy debugging
@@ -420,12 +420,12 @@ Configuration → Spawn → Monitor → Health Check → Restart/Terminate
 - **Error Handling**: Complete HTTP status code mapping
 
 ### Current Resource Isolation Specifications
-- **Physical Memory Limit**: 512MB RAM per MCP server process via cgroup (precise enforcement)
-- **Virtual Memory Limit**: 2048MB RAM via rlimit (fallback for non-cgroup systems)
+- **Virtual Memory Limit**: unlimited (rlimit_as=inf) — Node.js v24 WASM (undici HTTP parser) reserves ~10GB virtual address space; this is virtual, not physical RAM
+- **Physical Memory Limit**: 512MB per MCP server process via cgroup — active only when satellite runs as a systemd service with `Delegate=yes`; falls back to rlimit-only otherwise
 - **CPU Limit**: 60s CPU time limit
 - **Process Limit**: 1000 processes per MCP server (accommodates package managers like npm, uvx)
 - **Process Timeout**: 3-minute idle timeout for automatic cleanup
-- **Isolation Method**: nsjail with Linux namespaces (PID, mount, UTS, IPC) and cgroup enforcement
+- **Isolation Method**: nsjail with Linux namespaces (PID, mount, UTS, IPC); cgroup v2 auto-detected at startup
 - **Runtime-Aware Caching**: Separate cache directories per runtime (`/mcp-cache/node/{team_id}`, `/mcp-cache/python/{team_id}`)
 
 ### Technology Stack
