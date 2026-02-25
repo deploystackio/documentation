@@ -57,7 +57,7 @@ The system automatically selects the appropriate spawning mode based on environm
 
 **nsjail Spawn (Production Linux):**
 - **Resource limits** (rlimit-based):
-  - Virtual memory: 2048MB (rlimit_as)
+  - Virtual memory: unlimited (rlimit_as=inf — required for Node.js WASM, which reserves ~10GB virtual address space)
   - CPU time: 60 seconds (rlimit_cpu)
   - Processes: 1000 (rlimit_nproc)
   - File descriptors: 1024 (rlimit_nofile)
@@ -527,7 +527,7 @@ TeamIsolationService provides:
 - Handshake timeout: 30 seconds
 
 **Resource Usage:**
-- Memory per process: Base ~10-20MB (application-dependent, limited to 2048MB virtual via rlimit_as)
+- Memory per process: Base ~10-20MB (application-dependent; virtual address space unlimited, physical RAM capped at 512MB via cgroup when enabled)
 - Runtime-aware cache isolation: Separate cache directories per runtime (`/mcp-cache/node/{team_id}`, `/mcp-cache/python/{team_id}`)
 - Event-driven architecture: Handles multiple processes concurrently
 - CPU overhead: Minimal (background event loop processing)
@@ -572,16 +572,16 @@ LOG_LEVEL=debug npm run dev
 
 **Resource Limits (Production):**
 - nsjail enforces hard limits via rlimits:
-  - Virtual memory: 2048MB (rlimit_as)
+  - Virtual memory: unlimited (rlimit_as=inf — Node.js WASM requires ~10GB virtual address space)
   - CPU time: 60 seconds (rlimit_cpu)
   - Processes: 1000 (rlimit_nproc)
   - File descriptors: 1024 (rlimit_nofile)
   - File size: 50MB (rlimit_fsize)
 - tmpfs for /tmp: 100MB limit
 - tmpfs for GitHub deployments (/app): 300MB kernel-enforced quota
+- Physical memory: 512MB per process via cgroup — auto-detected at startup; active only when satellite runs as a systemd service with `Delegate=yes` (see [Enable Cgroup Limits](/self-hosted/production-satellite#enable-cgroup-limits))
 - Prevents resource exhaustion attacks
 - Runtime-specific cache directories prevent cross-runtime contamination
-- **Note**: Cgroup limits (physical memory 512MB) are currently disabled due to systemd delegation permissions
 
 **Namespace Isolation (Production):**
 - Complete process isolation per team and runtime
