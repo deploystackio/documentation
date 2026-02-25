@@ -196,9 +196,9 @@ The satellite must be deployed separately after completing the setup wizard:
 
    <Info>
    **When to set `DEPLOYSTACK_SATELLITE_URL`:**
-   - Required when MCP clients (Claude Code, VS Code, etc.) connect via a domain or IP address
-   - Not needed for local development on localhost
-   - Use base URL only (e.g., `https://satellite.example.com`) - no `/mcp` or `/sse` paths
+   - The Docker image defaults to `http://localhost:3001` which works for local development
+   - Override with `-e DEPLOYSTACK_SATELLITE_URL="https://satellite.example.com"` when MCP clients connect via a domain or IP address
+   - Use base URL only — no `/mcp` or `/sse` paths
    - Required for OAuth authentication to work with remote MCP clients
    </Info>
 

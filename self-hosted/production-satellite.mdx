@@ -21,7 +21,7 @@ For **development or single-team** usage, the [Docker Compose setup](/self-hoste
 Production satellites provide enterprise-grade security through:
 
 - **nsjail Process Isolation**: Complete process separation per team with Linux namespaces and cgroup enforcement
-- **Resource Limits**: CPU, memory, and process limits per MCP server (512MB physical RAM via cgroup, 2GB virtual RAM via rlimit, 60s CPU, 1000 processes)
+- **Resource Limits**: CPU, memory, and process limits per MCP server (virtual RAM unlimited via rlimit, 512MB physical RAM via cgroup when enabled, 60s CPU, 1000 processes)
 - **Multi-Runtime Support**: Node.js (npx) and Python (uvx) with runtime-aware isolation
 - **Filesystem Jailing**: Read-only system directories, isolated writable spaces per runtime
 - **Non-Root Execution**: Satellite runs as dedicated `deploystack` user
@@ -327,8 +327,8 @@ EVENT_BATCH_INTERVAL_MS=3000
 EVENT_MAX_BATCH_SIZE=100
 
 # nsjail Resource Limits
-NSJAIL_MEMORY_LIMIT_MB=2048              # Virtual memory limit (rlimit fallback)
-NSJAIL_CGROUP_MEM_MAX_BYTES=536870912    # Physical memory limit: 512MB (cgroup)
+NSJAIL_MEMORY_LIMIT_MB=inf               # Virtual memory limit — "inf" required for Node.js WASM (undici reserves ~10GB virtual address space)
+NSJAIL_CGROUP_MEM_MAX_BYTES=536870912    # Physical memory limit: 512MB (cgroup, only active with Delegate=yes in systemd unit)
 NSJAIL_CPU_TIME_LIMIT_SECONDS=60         # CPU time limit
 NSJAIL_MAX_PROCESSES=1000                # Process limit (rlimit)
 NSJAIL_CGROUP_PIDS_MAX=1000              # Process limit (cgroup)
@@ -543,16 +543,17 @@ Production satellites use nsjail to provide:
 
 Each MCP server process is limited to:
 
-- **Virtual Memory**: 2048MB (enforced via rlimit_as)
+- **Virtual Memory**: unlimited (rlimit_as = `inf` — required because Node.js v24 uses WASM internally which reserves ~10GB of virtual address space; this is virtual, not physical RAM)
+- **Physical Memory**: 512MB via cgroup (only active when `Delegate=yes` is set in the systemd unit — see below)
 - **CPU Time**: 60 seconds (enforced via rlimit_cpu)
-- **Processes**: 1000 (enforced via rlimit_nproc, required for package managers like npm and uvx)
+- **Processes**: 1000 (enforced via rlimit_nproc and cgroup pids.max, required for package managers like npm and uvx)
 - **File Descriptors**: 1024 (enforced via rlimit_nofile)
 - **Maximum File Size**: 50MB (enforced via rlimit_fsize)
 - **tmpfs /tmp**: 100MB (enforced via tmpfs mount)
 
-<Warning>
-**Cgroup Limits Currently Disabled**: Physical memory (512MB) and process count cgroup limits are disabled due to systemd cgroup delegation permissions. The satellite uses rlimit-based resource controls instead, which provide equivalent DoS protection. See the Future Enhancement section below for re-enabling cgroup limits via systemd delegation.
-</Warning>
+<Info>
+**Cgroup limits are auto-detected**: The satellite automatically detects whether cgroup v2 is available and delegated. When running as a systemd service with `Delegate=yes`, physical memory (512MB) and PID limits are enforced via cgroup in addition to rlimits. Without `Delegate=yes`, the satellite falls back to rlimit-only mode — nsjail still runs safely with full namespace isolation. See the [Enable Cgroup Limits](#enable-cgroup-limits) section below to activate precise physical memory enforcement.
+</Info>
 
 <Info>
 **Primary Security = Namespace Isolation**: The satellite's security model relies on Linux namespaces (PID, Mount, User, IPC, UTS) to isolate MCP servers from each other and the host system. Resource limits (rlimits) provide secondary DoS protection. With user namespace active, all privilege escalation attacks (including setuid-based rlimit bypasses) are prevented.
@@ -771,9 +772,9 @@ Monitor and plan for:
 - Log disk usage growth
 - Network bandwidth for backend communication
 
-## Future Enhancement: Enable Cgroup Limits
+## Enable Cgroup Limits
 
-Currently, cgroup limits are disabled due to systemd cgroup delegation permissions. To re-enable precise physical memory (512MB) and process count limits in the future:
+By default the satellite runs in rlimit-only mode. Adding `Delegate=yes` to the systemd unit gives the satellite ownership of its cgroup subtree, which activates precise physical memory (512MB) and PID enforcement per MCP process. **No code changes are needed** — the satellite auto-detects cgroup availability at startup.
 
 ### 1. Modify Systemd Service File
 
@@ -796,32 +797,37 @@ sudo systemctl daemon-reload
 sudo systemctl restart deploystack-satellite
 ```
 
-### 3. Update Satellite Code
+### 3. Verify Cgroup Limits Are Active
 
-The satellite code will need to be updated to re-enable cgroup v2 flags:
-- `--use_cgroupv2`
-- `--cgroupv2_mount /sys/fs/cgroup`
-- `--cgroup_mem_max 536870912` (512MB)
-- `--cgroup_pids_max 1000`
-
-Contact DeployStack support or check the GitHub repository for updated releases that support cgroup delegation.
-
-### 4. Verify Cgroup Limits
-
-After restart, verify cgroup limits are active:
+Check the startup log for confirmation:
 
 ```bash
-# Find running MCP process
+sudo grep "cgroup_detection" /var/log/deploystack-satellite/satellite.log
+```
+
+You should see a line like:
+```
+Cgroup v2 available at /sys/fs/cgroup/system.slice/deploystack-satellite.service — memory/PID limits will be enforced
+```
+
+If you see `Cgroup v2 unavailable` instead, verify that `Delegate=yes` is in the service file and that you reloaded systemd.
+
+You can also check active limits on a running MCP process:
+
+```bash
+# Find a running MCP process PID
 ps aux | grep "npx.*mcp"
 
-# Check cgroup limits (replace {pid} with actual PID)
+# Check its cgroup assignment (replace {pid} with actual PID)
 cat /proc/{pid}/cgroup
-cat /sys/fs/cgroup/NSJAIL.*/memory.max
-cat /sys/fs/cgroup/NSJAIL.*/pids.max
+
+# Check enforced limits
+cat /sys/fs/cgroup/system.slice/deploystack-satellite.service/NSJAIL.*/memory.max
+cat /sys/fs/cgroup/system.slice/deploystack-satellite.service/NSJAIL.*/pids.max
 ```
 
 <Info>
-**Note**: This enhancement is optional. The current rlimit-based approach provides strong security through namespace isolation and adequate DoS protection. Cgroup limits add precision to resource accounting but don't change the fundamental security model.
+**Cgroup limits are optional.** The rlimit-only default provides strong security through namespace isolation and adequate DoS protection. Cgroup limits add precise physical memory enforcement per MCP process, which is useful in high-density multi-team environments where a single runaway process consuming all RAM would otherwise affect other teams.
 </Info>
 
 ## Next Steps
